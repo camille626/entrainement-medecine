@@ -3,10 +3,42 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 
+class StudyYear(models.Model):
+    name = models.CharField(max_length=20)
+    order = models.IntegerField()
+
+    class Meta:
+        ordering = ["order"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class Semester(models.Model):
+    study_year = models.ForeignKey(
+        StudyYear, on_delete=models.CASCADE, related_name="semesters"
+    )
+    name = models.CharField(max_length=20)
+    order = models.IntegerField()
+
+    class Meta:
+        ordering = ["order"]
+
+    def __str__(self) -> str:
+        return f"{self.study_year} — {self.name}"
+
+
 class Course(models.Model):
     name = models.CharField(max_length=255)
     short_name = models.CharField(max_length=50)
     moodle_id = models.IntegerField(unique=True, null=True, blank=True)
+    semester = models.ForeignKey(
+        Semester,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="courses",
+    )
 
     class Meta:
         ordering = ["name"]

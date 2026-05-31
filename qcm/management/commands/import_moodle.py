@@ -2,13 +2,16 @@
 
 from django.core.management.base import BaseCommand
 
-from qcm.models import Answer, Category, Course, Question
+from qcm.models import Answer, Category, Course, Question, Semester
 
 from .moodle_parser import build_context_to_course, parse_sql_dump
 
 
 COURSE_IDS = {11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}
 DEFAULT_DUMP = "data/raw/plateforme-medecine_moodlecloud.sql"
+
+S1_MOODLE_IDS = {11, 12, 13, 14, 15, 16, 17, 18}
+S2_MOODLE_IDS = {19, 20, 21, 22, 23}
 
 
 class Command(BaseCommand):
@@ -42,17 +45,26 @@ class Command(BaseCommand):
             )
         )
 
+    def _get_semester(self, moodle_id: int) -> "Semester | None":
+        if moodle_id in S1_MOODLE_IDS:
+            return Semester.objects.filter(study_year__name="P2", name="S1").first()
+        if moodle_id in S2_MOODLE_IDS:
+            return Semester.objects.filter(study_year__name="P2", name="S2").first()
+        return None
+
     def _import_courses(self, data: dict) -> int:
         created = 0
         for row in data.get("m_course", []):
             moodle_id = int(row["id"])
             if moodle_id not in COURSE_IDS:
                 continue
-            _, is_new = Course.objects.get_or_create(
+            semester = self._get_semester(moodle_id)
+            _, is_new = Course.objects.update_or_create(
                 moodle_id=moodle_id,
                 defaults={
                     "name": row["fullname"],
                     "short_name": row["shortname"],
+                    "semester": semester,
                 },
             )
             if is_new:

@@ -23,10 +23,12 @@ tests/                         # Tests pytest
 ### Hiérarchie des contenus
 
 ```
-Course
-  └── Category (moodle_id unique)
-        └── Question (moodle_id unique, texte HTML)
-              └── Answer (fraction 0.0–1.0, is_correct)
+StudyYear (P2, P3...)
+  └── Semester (S1, S2)
+        └── Course (moodle_id unique, nullable semester)
+              └── Category (moodle_id unique)
+                    └── Question (moodle_id unique, texte HTML)
+                          └── Answer (fraction 0.0–1.0, is_correct)
 ```
 
 ### Suivi des réponses utilisateurs
