@@ -62,6 +62,17 @@ class Category(models.Model):
         return self.name
 
 
+class Tag(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    moodle_id = models.IntegerField(unique=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Question(models.Model):
     MULTICHOICE = "multichoice"
     SHORTANSWER = "shortanswer"
@@ -79,6 +90,7 @@ class Question(models.Model):
     qtype = models.CharField(max_length=50, choices=QTYPE_CHOICES, default=MULTICHOICE)
     moodle_id = models.IntegerField(unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    tags = models.ManyToManyField(Tag, blank=True, related_name="questions")
 
     class Meta:
         ordering = ["moodle_id"]

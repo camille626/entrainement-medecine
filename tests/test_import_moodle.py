@@ -1,7 +1,7 @@
 import pytest
 from django.core.management import call_command
 
-from qcm.models import Answer, Category, Course, Question
+from qcm.models import Answer, Category, Course, Question, Tag
 
 
 MINI_DUMP = """\
@@ -58,6 +58,18 @@ COPY "public"."m_question_answers" ("id", "question", "answer", "answerformat", 
 305\t201\t<p>Collagène</p>\t1\t0.0000000\t\t1
 306\t201\t<p>Réponse à moitié juste</p>\t1\t0.5000000\t\t1
 \\.
+
+COPY "public"."m_tag" ("id", "userid", "name", "rawname", "description", "descriptionformat", "flag", "timemodified") FROM stdin;
+10\t2\tannale 2024\tannale 2024\t\t1\t0\t1609459200
+11\t2\timmuno\timmuno\t\t1\t0\t1609459200
+12\t2\tle chat\tle chat\t\t1\t0\t1609459200
+\\.
+
+COPY "public"."m_tag_instance" ("id", "tagid", "component", "itemtype", "itemid", "contextid", "tiuserid", "ordering", "timecreated", "timemodified") FROM stdin;
+1\t10\tcore_question\tquestion\t200\t110\t0\t0\t1609459200\t1609459200
+2\t11\tcore_question\tquestion\t200\t110\t0\t1\t1609459200\t1609459200
+3\t12\tcore_question\tquestion\t201\t110\t0\t0\t1609459200\t1609459200
+\\.
 """
 
 
@@ -104,17 +116,20 @@ class TestImportMoodleCommand:
 
     def test_imports_multichoice_questions_only(self, mini_dump):
         call_command("import_moodle", dump=mini_dump)
-        assert Question.objects.count() == 2
+        # Q201 is tagged 'le chat' without 'annale' → excluded
+        assert Question.objects.count() == 1
         assert not Question.objects.filter(qtype="shortanswer").exists()
 
     def test_questions_linked_to_category(self, mini_dump):
         call_command("import_moodle", dump=mini_dump)
         assert Question.objects.filter(moodle_id=200).exists()
-        assert Question.objects.filter(moodle_id=201).exists()
+        # Q201 excluded (le chat without annale)
+        assert not Question.objects.filter(moodle_id=201).exists()
 
     def test_imports_answers(self, mini_dump):
         call_command("import_moodle", dump=mini_dump)
-        assert Answer.objects.count() == 6
+        # Only answers for Q200 (Q201 excluded)
+        assert Answer.objects.count() == 3
 
     def test_answer_is_correct_from_fraction(self, mini_dump):
         call_command("import_moodle", dump=mini_dump)
@@ -125,19 +140,48 @@ class TestImportMoodleCommand:
 
     def test_partial_fraction_is_correct(self, mini_dump):
         call_command("import_moodle", dump=mini_dump)
+        # Q200 has a partial answer (0.333) — Q201 is excluded (le chat)
         partial_third = Answer.objects.get(
             question__moodle_id=200, text="<p>Proposition partiellement correcte</p>"
         )
-        partial_half = Answer.objects.get(
-            question__moodle_id=201, text="<p>Réponse à moitié juste</p>"
-        )
         assert partial_third.is_correct is True
-        assert partial_half.is_correct is True
 
     def test_idempotent(self, mini_dump):
         call_command("import_moodle", dump=mini_dump)
         call_command("import_moodle", dump=mini_dump)
         assert Course.objects.count() == 1
         assert Category.objects.count() == 2
-        assert Question.objects.count() == 2
-        assert Answer.objects.count() == 6
+        assert Question.objects.count() == 1  # Q201 excluded
+        assert Answer.objects.count() == 3
+
+
+@pytest.mark.django_db
+class TestImportTags:
+    def test_imports_tags(self, mini_dump):
+        call_command("import_moodle", dump=mini_dump)
+        # annale 2024 and immuno should be imported, le chat excluded
+        assert Tag.objects.filter(name="annale 2024").exists()
+        assert Tag.objects.filter(name="immuno").exists()
+
+    def test_excludes_le_chat(self, mini_dump):
+        call_command("import_moodle", dump=mini_dump)
+        assert not Tag.objects.filter(name="le chat").exists()
+
+    def test_tags_linked_to_question(self, mini_dump):
+        call_command("import_moodle", dump=mini_dump)
+        q200 = Question.objects.get(moodle_id=200)
+        tag_names = set(q200.tags.values_list("name", flat=True))
+        assert "annale 2024" in tag_names
+        assert "immuno" in tag_names
+
+    def test_le_chat_question_excluded(self, mini_dump):
+        # Q201 tagged 'le chat' without 'annale' → not imported at all
+        call_command("import_moodle", dump=mini_dump)
+        assert not Question.objects.filter(moodle_id=201).exists()
+
+    def test_tags_idempotent(self, mini_dump):
+        call_command("import_moodle", dump=mini_dump)
+        call_command("import_moodle", dump=mini_dump)
+        assert Tag.objects.count() == 2  # annale 2024 + immuno only
+        q200 = Question.objects.get(moodle_id=200)
+        assert q200.tags.count() == 2
