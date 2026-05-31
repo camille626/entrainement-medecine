@@ -84,6 +84,7 @@ class Question(models.Model):
     ]
 
     text = models.TextField()
+    feedback = models.TextField(blank=True)
     category = models.ForeignKey(
         Category, on_delete=models.CASCADE, related_name="questions"
     )
@@ -123,20 +124,49 @@ class QuizSession(models.Model):
     ]
 
     user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="quiz_sessions"
+        User,
+        on_delete=models.CASCADE,
+        related_name="quiz_sessions",
+        null=True,
+        blank=True,
     )
     course = models.ForeignKey(
         Course, on_delete=models.CASCADE, related_name="sessions", null=True, blank=True
     )
     mode = models.CharField(max_length=20, choices=MODE_CHOICES, default=TRAINING)
+    shuffle_answers = models.BooleanField(default=True)
     started_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    questions: models.ManyToManyField = models.ManyToManyField(
+        "Question",
+        through="QuizSessionQuestion",
+        related_name="sessions",
+        blank=True,
+    )
 
     class Meta:
         ordering = ["-started_at"]
 
     def __str__(self) -> str:
-        return f"Session {self.mode} de {self.user} — {self.started_at:%d/%m/%Y}"
+        user_str = str(self.user) if self.user else "anonyme"
+        return f"Session {self.mode} de {user_str} — {self.started_at:%d/%m/%Y}"
+
+
+class QuizSessionQuestion(models.Model):
+    session = models.ForeignKey(
+        QuizSession, on_delete=models.CASCADE, related_name="session_questions"
+    )
+    question = models.ForeignKey(
+        "Question", on_delete=models.CASCADE, related_name="session_questions"
+    )
+    order = models.IntegerField()
+
+    class Meta:
+        ordering = ["order"]
+        unique_together = [("session", "question")]
+
+    def __str__(self) -> str:
+        return f"Session {self.session_id} Q#{self.question_id} (ordre {self.order})"
 
 
 class UserAnswer(models.Model):

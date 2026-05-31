@@ -1,0 +1,68 @@
+{% extends "qcm/base.html" %}
+{% block title %}Question {{ position }}/{{ total }}{% endblock %}
+
+{% block content %}
+<div class="row">
+  <!-- Panneau gauche -->
+  <div class="col-md-3 mb-3">
+    <div class="card">
+      <div class="card-body">
+        <h6 class="fw-bold">Question <span class="text-primary">{{ position }}</span></h6>
+        <p class="text-muted small mb-1">{{ total }} questions au total</p>
+        <hr>
+        <p class="small mb-1">
+          <span id="status-label" class="text-secondary">Non répondue</span>
+        </p>
+        <p class="small mb-0">
+          <span id="score-label"></span>
+        </p>
+      </div>
+    </div>
+    <a href="/entrainement/" class="btn btn-outline-secondary btn-sm mt-2 w-100">Nouvelle session</a>
+  </div>
+
+  <!-- Zone principale -->
+  <div class="col-md-9">
+    <div class="card mb-3 border-info" style="background-color: #e8f4f8;">
+      <div class="card-body">
+        <!-- Énoncé -->
+        <div class="mb-3">{{ question.text|safe }}</div>
+
+        <p class="text-muted small">Sélectionner une ou plusieurs réponses :</p>
+
+        <!-- Formulaire réponses (caché après Check via HTMX swap) -->
+        <div id="answers-zone">
+          <form id="answer-form"
+                hx-post="/entrainement/session/{{ session.pk }}/check/"
+                hx-target="#answers-zone"
+                hx-swap="innerHTML"
+                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+            {% csrf_token %}
+            {% for answer in answers %}
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="checkbox"
+                     name="answers" value="{{ answer.pk }}"
+                     id="answer_{{ answer.pk }}">
+              <label class="form-check-label" for="answer_{{ answer.pk }}">
+                {{ answer.text|safe }}
+              </label>
+            </div>
+            {% endfor %}
+
+            {% if mode == "training" %}
+            <button type="submit" class="btn btn-secondary mt-3">Check</button>
+            {% endif %}
+          </form>
+        </div>
+
+        {% if mode != "training" %}
+        <!-- En mode différé : bouton next directement -->
+        <div class="mt-3 text-end">
+          <a href="/entrainement/session/{{ session.pk }}/" class="btn btn-primary">Page suivante →</a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

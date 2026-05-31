@@ -11,6 +11,7 @@ Plateforme web de QCMs interactifs pour l'apprentissage des cours de médecine (
 - **Environnement de développement**: VS Code Dev Container
 - **Qualité de Code**: pre-commit hooks avec ruff, mypy (avec django-stubs)
 - **Tests**: pytest + pytest-django
+- **Frontend**: Bootstrap 5 + HTMX (CDN, pas de build step)
 - **Documentation**: MkDocs & mkdocs-material
 
 ## Structure du Projet
@@ -100,6 +101,12 @@ uv run --active python manage.py makemigrations
 
 # Importer les données depuis le dump Moodle (idempotent, relançable)
 uv run --active python manage.py import_moodle --dump data/raw/plateforme-medecine_moodlecloud.sql
+
+# URLs de l'application
+# /                          → accueil (cours par semestre)
+# /entrainement/             → configuration d'une session
+# /entrainement/session/<id>/ → question courante
+# /entrainement/session/<id>/fin/ → résultats
 ```
 
 **Important** : toujours utiliser `uv run --active` pour éviter de créer un environnement `.venv` parasite.
