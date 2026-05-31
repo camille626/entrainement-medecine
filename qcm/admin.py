@@ -1,6 +1,15 @@
 from django.contrib import admin
 
-from .models import Answer, Category, Course, Question, QuizSession, UserAnswer
+from .models import (
+    Answer,
+    Category,
+    Course,
+    Question,
+    QuizSession,
+    Semester,
+    StudyYear,
+    UserAnswer,
+)
 
 
 @admin.register(Course)
@@ -43,3 +52,14 @@ class UserAnswerAdmin(admin.ModelAdmin):
     list_display = ["session", "question", "is_correct", "answered_at"]
     list_filter = ["is_correct"]
     raw_id_fields = ["session", "question", "answer"]
+
+
+@admin.register(StudyYear)
+class StudyYearAdmin(admin.ModelAdmin):
+    list_display = ["name", "order"]
+
+
+@admin.register(Semester)
+class SemesterAdmin(admin.ModelAdmin):
+    list_display = ["name", "study_year", "order"]
+    list_filter = ["study_year"]
