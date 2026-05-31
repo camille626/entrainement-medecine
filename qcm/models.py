@@ -6,6 +6,7 @@ from django.db import models
 class Course(models.Model):
     name = models.CharField(max_length=255)
     short_name = models.CharField(max_length=50)
+    moodle_id = models.IntegerField(unique=True, null=True, blank=True)
 
     class Meta:
         ordering = ["name"]

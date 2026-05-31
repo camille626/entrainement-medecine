@@ -97,6 +97,9 @@ uv run --active python manage.py createsuperuser
 
 # Générer de nouvelles migrations après modification des modèles
 uv run --active python manage.py makemigrations
+
+# Importer les données depuis le dump Moodle (idempotent, relançable)
+uv run --active python manage.py import_moodle --dump data/raw/plateforme-medecine_moodlecloud.sql
 ```
 
 **Important** : toujours utiliser `uv run --active` pour éviter de créer un environnement `.venv` parasite.

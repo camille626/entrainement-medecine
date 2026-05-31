@@ -7,12 +7,15 @@ La plateforme est une application Django connectée à une base de données SQLi
 ## Structure des répertoires
 
 ```
-config/          # Configuration Django (settings, urls, wsgi)
-qcm/             # App Django principale
-├── models.py    # Modèles de données
-├── admin.py     # Interface d'administration
-└── migrations/  # Migrations de base de données
-tests/           # Tests pytest
+config/                        # Configuration Django (settings, urls, wsgi)
+qcm/                           # App Django principale
+├── models.py                  # Modèles de données
+├── admin.py                   # Interface d'administration
+├── migrations/                # Migrations de base de données
+└── management/commands/
+    ├── moodle_parser.py       # Parser du dump SQL Moodle
+    └── import_moodle.py       # Commande d'import
+tests/                         # Tests pytest
 ```
 
 ## Modèles de données
@@ -108,3 +111,46 @@ uv run --active pytest tests/ -v
 ```
 
 Les tests utilisent `pytest-django` avec `DJANGO_SETTINGS_MODULE = "config.settings"` configuré dans `pyproject.toml`. La base de données de test est créée et détruite automatiquement pour chaque session.
+
+## Import des données Moodle
+
+### Prérequis
+
+Le dump source `data/raw/plateforme-medecine_moodlecloud.sql` doit être présent (format binaire PostgreSQL 17, non versionné). PostgreSQL 17 doit être installé pour la conversion du dump binaire.
+
+### Commande
+
+```bash
+uv run --active python manage.py import_moodle --dump data/raw/plateforme-medecine_moodlecloud.sql
+```
+
+La commande est **idempotente** : elle peut être relancée sans créer de doublons. Les réponses existantes sont mises à jour via `update_or_create`.
+
+### Résultat attendu
+
+```
+13 cours, 139 catégories, 6 454 questions, 32 131 réponses
+```
+
+### Règles de mapping
+
+| Champ | Règle |
+|-------|-------|
+| `Course.moodle_id` | `m_course.id` (filtré sur ids 11–23) |
+| `Category` | `m_question_categories` excluant les catégories `top` |
+| `Question` | `m_question` avec `qtype = multichoice` uniquement |
+| `Answer.is_correct` | `fraction > 0.0` (toute fraction positive est correcte, y compris 0.33, 0.5...) |
+
+### Chaîne de liaison cours → catégories
+
+La liaison cours → catégories passe par trois tables intermédiaires :
+
+```
+m_course → m_course_modules → m_context (contextlevel=70) → m_question_categories.contextid
+```
+
+La liaison catégorie → question passe par :
+
+```
+m_question_versions.questionid → m_question_bank_entries.questioncategoryid
+```
