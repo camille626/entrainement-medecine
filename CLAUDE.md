@@ -1,14 +1,16 @@
 # Project: entrainement medecine
 
 ## Description
-Description de votre projet de Data Science
+Plateforme web de QCMs interactifs pour l'apprentissage des cours de médecine (P2). Basée sur un export de 6 493 questions depuis MoodleCloud, réparties sur 13 cours P2.
 
 ## La Stack Technique
 - **Langage**: Python 3.11
+- **Framework web**: Django 5+
+- **Base de données**: SQLite (dev) / PostgreSQL (prod via `DATABASE_URL`)
 - **Gestionnaire de dépendances**: uv & pyproject.toml
 - **Environnement de développement**: VS Code Dev Container
-- **Qualité de Code**: pre-commit hooks avec ruff
-- **Tests**: pytest
+- **Qualité de Code**: pre-commit hooks avec ruff, mypy (avec django-stubs)
+- **Tests**: pytest + pytest-django
 - **Documentation**: MkDocs & mkdocs-material
 
 ## Structure du Projet
@@ -19,8 +21,12 @@ Description de votre projet de Data Science
 │   └── commands/          # Commandes slash personnalisées
 ├── .devcontainer/          # Configuration du dev container
 ├── .github/workflows/      # CI/CD GitHub Actions
+├── config/                 # Configuration Django
+│   ├── settings.py        # Paramètres (SQLite dev / PostgreSQL prod)
+│   ├── urls.py            # Routing principal
+│   └── wsgi.py            # Point d'entrée WSGI
 ├── data/
-│   ├── raw/               # Données brutes (non versionnées)
+│   ├── raw/               # Données brutes (export Moodle, non versionnées)
 │   └── processed/         # Données traitées
 ├── docs/                   # Documentation MkDocs
 │   ├── index.md           # Page d'accueil de la documentation
@@ -29,8 +35,15 @@ Description de votre projet de Data Science
 │   └── claude/
 │       └── memory/        # Mémoire projet (décisions, apprentissages)
 ├── notebooks/             # Notebooks Jupyter pour l'exploration
-├── src/                   # Code source Python
+├── qcm/                   # App Django principale
+│   ├── migrations/        # Migrations de base de données
+│   ├── admin.py           # Interface d'administration
+│   ├── apps.py
+│   └── models.py          # Course, Category, Question, Answer, QuizSession, UserAnswer
+├── src/                   # Code source Python (utilitaires, scripts)
 ├── tests/                 # Tests unitaires et d'intégration
+│   └── test_models.py     # Tests des modèles Django (18 tests)
+├── manage.py              # Point d'entrée Django
 ├── .gitignore
 ├── .pre-commit-config.yaml
 ├── CLAUDE.md              # Ce fichier - Documentation pour Claude Code
@@ -69,6 +82,24 @@ uv run --active mkdocs build --strict
 # Precommit
 pre-commit run --all-files
 ```
+
+### Commandes Django
+
+```bash
+# Lancer le serveur de développement
+uv run --active python manage.py runserver
+
+# Appliquer les migrations
+uv run --active python manage.py migrate
+
+# Créer un superuser
+uv run --active python manage.py createsuperuser
+
+# Générer de nouvelles migrations après modification des modèles
+uv run --active python manage.py makemigrations
+```
+
+**Important** : toujours utiliser `uv run --active` pour éviter de créer un environnement `.venv` parasite.
 
 ## Qualité du Code
 

@@ -20,12 +20,15 @@ classifiers = [
 
 dependencies = [
     "ipykernel",
-    "ipywidgets", 
+    "ipywidgets",
     "python-dotenv",
     "gitpython",
     "pandas",
     "numpy",
     "matplotlib",
+    "django>=5.0",
+    "psycopg2-binary",
+    "whitenoise",
 ]
 
 [project.optional-dependencies]
@@ -33,6 +36,9 @@ dev = [
     "cruft",
     "pre-commit",
     "pytest",
+    "pytest-cov",
+    "pytest-django",
+    "django-stubs[compatible-mypy]",
     "ruff",
     "mypy",
     "mkdocs>=1.5.0",
@@ -44,7 +50,7 @@ dev = [
     "mkdocs-awesome-nav",
     "pymdown-extensions",
     "mkdocs-rtd-dropdown",
-    "nbdev>=2.4.6"    
+    "nbdev>=2.4.6"
 ]
 
 [project.urls]
@@ -72,7 +78,16 @@ dev = ["pytest",]
 
 # Configuration Ruff - Linter et formateur Python moderne
 [tool.ruff]
-# Règles activées
+line-length = 88
+extend-exclude = [
+    "data/*",
+    "models/*",
+    "logs/*",
+    ".jupyter/*",
+]
+target-version = "py311"
+
+[tool.ruff.lint]
 extend-select = [
     "E",      # pycodestyle errors
     "W",      # pycodestyle warnings
@@ -89,28 +104,11 @@ extend-select = [
     "PD",     # pandas-vet
     "NPY",    # numpy-specific rules
 ]
-
-# Règles ignorées (adaptées Data Science)
 ignore = [
-    "E501",   # Line too long (black/ruff format s'en occupe)
+    "E501",   # Line too long (ruff format s'en occupe)
     "B905",   # zip() sans strict= (Python 3.10+)
-    "PD901",  # Avoid `df` as variable name (commun en DS)
     "RET504", # Assign + return -> return direct (parfois moins lisible)
 ]
-
-# Longueur de ligne (cohérent avec black)
-line-length = 88
-
-# Fichiers à exclure
-extend-exclude = [
-    "data/*",
-    "models/*", 
-    "logs/*",
-    ".jupyter/*",
-]
-
-# Version Python cible
-target-version = "py311"
 
 [tool.ruff.format]
 # Style de formatage
@@ -137,12 +135,10 @@ classmethod-decorators = ["classmethod", "pydantic.validator"]
 
 # Configuration MyPy - Vérification de types statique
 [tool.mypy]
-# Version Python et compatibilité
 python_version = "3.11"
 platform = "linux"
-
-# Chemins à analyser : exclure src/ car déjà dans sys.path via editable install
-files = ["tests"]
+files = ["tests", "qcm", "config"]
+plugins = ["mypy_django_plugin.main"]
 
 # Ne pas chercher de namespace packages pour éviter la détection en double
 namespace_packages = false
@@ -157,7 +153,7 @@ warn_unreachable = true
 
 # Configuration stricte progressive
 disallow_any_generics = false        # Autorisé au début
-disallow_untyped_calls = false       # Autorisé au début  
+disallow_untyped_calls = false       # Autorisé au début
 disallow_untyped_defs = false        # Autorisé au début
 disallow_incomplete_defs = true      # Fonctions partiellement typées interdites
 disallow_untyped_decorators = false  # Autorisé au début
@@ -172,7 +168,7 @@ follow_imports = "normal"
 [[tool.mypy.overrides]]
 module = [
     "matplotlib.*",
-    "seaborn.*", 
+    "seaborn.*",
     "sklearn.*",
     "scipy.*",
     "plotly.*",
@@ -185,7 +181,7 @@ module = "notebooks.*"
 ignore_errors = true
 
 # Configuration tests
-[[tool.mypy.overrides]] 
+[[tool.mypy.overrides]]
 module = [
     "tests.*",
     "pytest",
@@ -193,6 +189,14 @@ module = [
 ignore_missing_imports = true
 disallow_untyped_defs = false
 
+[[tool.mypy.overrides]]
+module = "qcm.migrations.*"
+ignore_errors = true
+
+[tool.django-stubs]
+django_settings_module = "config.settings"
+
 [tool.pytest.ini_options]
 pythonpath = "."
 testpaths = ["tests"]
+DJANGO_SETTINGS_MODULE = "config.settings"
