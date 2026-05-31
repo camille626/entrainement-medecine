@@ -1,0 +1,110 @@
+# Architecture
+
+## Vue d'ensemble
+
+La plateforme est une application Django connectée à une base de données SQLite (développement) ou PostgreSQL (production). Les données proviennent d'un export de QCMs médicaux organisés en cours et catégories.
+
+## Structure des répertoires
+
+```
+config/          # Configuration Django (settings, urls, wsgi)
+qcm/             # App Django principale
+├── models.py    # Modèles de données
+├── admin.py     # Interface d'administration
+└── migrations/  # Migrations de base de données
+tests/           # Tests pytest
+```
+
+## Modèles de données
+
+### Hiérarchie des contenus
+
+```
+Course
+  └── Category (moodle_id unique)
+        └── Question (moodle_id unique, texte HTML)
+              └── Answer (fraction 0.0–1.0, is_correct)
+```
+
+### Suivi des réponses utilisateurs
+
+```
+User
+  └── QuizSession (mode: training | review, course optionnel)
+        └── UserAnswer (question, answer choisie, is_correct, timestamp)
+```
+
+### Détail des modèles
+
+**`Course`** — un cours P2 (ex: "P2 - La cellule")
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `name` | CharField(255) | Nom complet du cours |
+| `short_name` | CharField(50) | Identifiant court (ex: "cell") |
+
+**`Category`** — une thématique à l'intérieur d'un cours
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `name` | CharField(255) | Nom de la catégorie |
+| `course` | FK → Course | Cours parent |
+| `moodle_id` | IntegerField (unique) | ID d'origine Moodle (import idempotent) |
+
+**`Question`** — une question QCM
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `text` | TextField | Énoncé en HTML |
+| `category` | FK → Category | Catégorie parente |
+| `qtype` | CharField | `multichoice`, `shortanswer`, `match` |
+| `moodle_id` | IntegerField (unique) | ID d'origine Moodle |
+
+**`Answer`** — une proposition de réponse
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `text` | TextField | Texte en HTML |
+| `question` | FK → Question | Question parente |
+| `fraction` | FloatField [0.0–1.0] | 1.0 = correcte, 0.0 = incorrecte |
+| `is_correct` | BooleanField | Raccourci booléen |
+
+**`QuizSession`** — une session d'entraînement d'un utilisateur
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `user` | FK → User | Utilisateur Django |
+| `course` | FK → Course (nullable) | Cours ciblé (null = multi-cours) |
+| `mode` | CharField | `training` ou `review` |
+| `started_at` | DateTimeField | Début de session |
+| `completed_at` | DateTimeField (nullable) | Fin de session |
+
+**`UserAnswer`** — la réponse d'un utilisateur à une question
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `session` | FK → QuizSession (CASCADE) | Session parente |
+| `question` | FK → Question (PROTECT) | Question répondue |
+| `answer` | FK → Answer (PROTECT) | Réponse choisie |
+| `is_correct` | BooleanField | Résultat |
+| `answered_at` | DateTimeField | Horodatage |
+
+## Configuration de la base de données
+
+La base de données est sélectionnée via la variable d'environnement `DATABASE_URL` :
+
+```bash
+# Développement (SQLite par défaut, aucune config nécessaire)
+uv run --active python manage.py runserver
+
+# Production (PostgreSQL)
+DATABASE_URL=postgresql://user:pass@host:5432/dbname python manage.py runserver  # pragma: allowlist secret
+```
+
+## Lancer les tests
+
+```bash
+uv run --active pytest tests/ -v
+```
+
+Les tests utilisent `pytest-django` avec `DJANGO_SETTINGS_MODULE = "config.settings"` configuré dans `pyproject.toml`. La base de données de test est créée et détruite automatiquement pour chaque session.
