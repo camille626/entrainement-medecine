@@ -2,7 +2,7 @@
 
 from django.core.management.base import BaseCommand
 
-from qcm.models import Answer, Category, Course, Question, Semester
+from qcm.models import Answer, Category, Course, Question, Semester, Tag
 
 from .moodle_parser import build_context_to_course, parse_sql_dump
 
@@ -12,6 +12,8 @@ DEFAULT_DUMP = "data/raw/plateforme-medecine_moodlecloud.sql"
 
 S1_MOODLE_IDS = {11, 12, 13, 14, 15, 16, 17, 18}
 S2_MOODLE_IDS = {19, 20, 21, 22, 23}
+
+EXCLUDED_TAGS = {"le chat"}
 
 
 class Command(BaseCommand):
@@ -29,11 +31,13 @@ class Command(BaseCommand):
         self.stdout.write(f"Parsing dump: {dump_path}")
         data = parse_sql_dump(dump_path)
 
+        excluded_q_ids = self._compute_ai_only_question_ids(data)
         courses_created = self._import_courses(data)
         context_to_course = build_context_to_course(data)
         cats_created = self._import_categories(data, context_to_course)
-        questions_created = self._import_questions(data)
+        questions_created = self._import_questions(data, excluded_q_ids)
         answers_created = self._import_answers(data)
+        tags_created, links_created = self._import_tags(data)
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -41,7 +45,8 @@ class Command(BaseCommand):
                 f"  Cours       : {courses_created} créés\n"
                 f"  Catégories  : {cats_created} créées\n"
                 f"  Questions   : {questions_created} créées\n"
-                f"  Réponses    : {answers_created} créées"
+                f"  Réponses    : {answers_created} créées\n"
+                f"  Tags        : {tags_created} créés, {links_created} liaisons"
             )
         )
 
@@ -92,15 +97,37 @@ class Command(BaseCommand):
                 created += 1
         return created
 
-    def _import_questions(self, data: dict) -> int:
+    def _compute_ai_only_question_ids(self, data: dict) -> set[int]:
+        """Return moodle_ids of questions tagged 'le chat' but not 'annale'."""
+        tag_by_id = {row["id"]: row.get("rawname", "") for row in data.get("m_tag", [])}
+        le_chat_ids = {k for k, v in tag_by_id.items() if v == "le chat"}
+        annale_ids = {k for k, v in tag_by_id.items() if v == "annale"}
+
+        q_tags: dict[str, set[str]] = {}
+        for row in data.get("m_tag_instance", []):
+            if row.get("itemtype") != "question":
+                continue
+            q_tags.setdefault(row["itemid"], set()).add(row["tagid"])
+
+        return {
+            int(qid)
+            for qid, tags in q_tags.items()
+            if le_chat_ids & tags and not (annale_ids & tags)
+        }
+
+    def _import_questions(
+        self, data: dict, excluded_ids: set[int] | None = None
+    ) -> int:
         created = 0
-        # Build category lookup: moodle_id → Category instance
+        excluded_ids = excluded_ids or set()
         cat_by_moodle: dict[int, Category] = {
             c.moodle_id: c for c in Category.objects.all()
         }
 
         for row in data.get("m_question", []):
             if row.get("qtype") != "multichoice":
+                continue
+            if int(row["id"]) in excluded_ids:
                 continue
             # Find which category this question belongs to via m_question_bank_entries
             # Moodle doesn't store category directly on m_question — we need
@@ -171,3 +198,44 @@ class Command(BaseCommand):
             if is_new:
                 created += 1
         return created
+
+    def _import_tags(self, data: dict) -> tuple[int, int]:
+        tags_created = 0
+        links_created = 0
+
+        tag_by_moodle: dict[int, Tag] = {}
+        for row in data.get("m_tag", []):
+            if row.get("rawname") in EXCLUDED_TAGS:
+                continue
+            moodle_id = int(row["id"])
+            tag, is_new = Tag.objects.get_or_create(
+                moodle_id=moodle_id,
+                defaults={"name": row["rawname"]},
+            )
+            tag_by_moodle[moodle_id] = tag
+            if is_new:
+                tags_created += 1
+
+        q_by_moodle: dict[int, Question] = {
+            q.moodle_id: q for q in Question.objects.all()
+        }
+
+        q_to_tags: dict[int, list[Tag]] = {}
+        for row in data.get("m_tag_instance", []):
+            if row.get("itemtype") != "question":
+                continue
+            tag_moodle_id = int(row["tagid"])
+            found_tag: Tag | None = tag_by_moodle.get(tag_moodle_id)
+            if found_tag is None:
+                continue
+            q_moodle_id = int(row["itemid"])
+            q_to_tags.setdefault(q_moodle_id, []).append(found_tag)
+
+        for q_moodle_id, tags in q_to_tags.items():
+            question = q_by_moodle.get(q_moodle_id)
+            if question is None:
+                continue
+            question.tags.set(tags)
+            links_created += len(tags)
+
+        return tags_created, links_created

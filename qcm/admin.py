@@ -8,6 +8,7 @@ from .models import (
     QuizSession,
     Semester,
     StudyYear,
+    Tag,
     UserAnswer,
 )
 
@@ -25,12 +26,19 @@ class CategoryAdmin(admin.ModelAdmin):
     search_fields = ["name"]
 
 
+@admin.register(Tag)
+class TagAdmin(admin.ModelAdmin):
+    list_display = ["name", "moodle_id"]
+    search_fields = ["name"]
+
+
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):
     list_display = ["moodle_id", "category", "qtype"]
-    list_filter = ["qtype", "category__course"]
+    list_filter = ["qtype", "category__course", "tags"]
     search_fields = ["text", "moodle_id"]
     raw_id_fields = ["category"]
+    filter_horizontal = ["tags"]
 
 
 @admin.register(Answer)

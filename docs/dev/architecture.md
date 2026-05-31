@@ -28,7 +28,8 @@ StudyYear (P2, P3...)
         └── Course (moodle_id unique, nullable semester)
               └── Category (moodle_id unique)
                     └── Question (moodle_id unique, texte HTML)
-                          └── Answer (fraction 0.0–1.0, is_correct)
+                          ├── Answer (fraction 0.0–1.0, is_correct)
+                          └── Tag (M2M — annale 2024, immuno, semio...)
 ```
 
 ### Suivi des réponses utilisateurs
