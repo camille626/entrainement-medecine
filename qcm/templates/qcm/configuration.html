@@ -1,0 +1,103 @@
+{% extends "qcm/base.html" %}
+{% block title %}Configuration — Entraînement Médecine{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-lg-8">
+    <h1 class="mb-4">Configurer une session</h1>
+    <form method="post" action="/entrainement/">
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+      <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+      {% endif %}
+
+      <div class="card mb-3">
+        <div class="card-header fw-bold">Cours</div>
+        <div class="card-body">
+          {% for semester in semesters %}
+          <h6 class="text-primary">{{ semester.study_year.name }} — {{ semester.name }}</h6>
+          <div class="row row-cols-1 row-cols-md-2 mb-3">
+            {% for course in semester.courses.all %}
+            <div class="col">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox"
+                       name="courses" value="{{ course.pk }}"
+                       id="course_{{ course.pk }}"
+                       {% if course.pk|stringformat:"s" in form.courses.value|default_if_none:"" %}checked{% endif %}>
+                <label class="form-check-label" for="course_{{ course.pk }}">
+                  {{ course.name }}
+                </label>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% endfor %}
+          {% if form.courses.errors %}
+          <div class="text-danger">{{ form.courses.errors }}</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="row mb-3">
+        <div class="col-md-6">
+          <div class="card">
+            <div class="card-header fw-bold">Mode</div>
+            <div class="card-body">
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="mode" value="training" id="mode_flash" checked>
+                <label class="form-check-label" for="mode_flash">
+                  <strong>Flash</strong> — correction immédiate
+                </label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="mode" value="deferred" id="mode_deferred">
+                <label class="form-check-label" for="mode_deferred">
+                  <strong>Différé</strong> — correction à la fin
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card">
+            <div class="card-header fw-bold">Nombre de questions</div>
+            <div class="card-body">
+              <input type="number" name="nb_questions" class="form-control" value="10" min="1" max="100">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-body">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="shuffle_answers" id="shuffle_answers" checked>
+            <label class="form-check-label" for="shuffle_answers">
+              Propositions en ordre aléatoire <span class="text-muted small">(non alphabétique)</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-4">
+        <div class="card-header fw-bold">Filtrer par tags <small class="text-muted">(optionnel)</small></div>
+        <div class="card-body">
+          <div class="row row-cols-2 row-cols-md-4 g-1" style="max-height: 200px; overflow-y: auto;">
+            {% for tag in form.tags.field.queryset %}
+            <div class="col">
+              <div class="form-check form-check-sm">
+                <input class="form-check-input" type="checkbox" name="tags" value="{{ tag.pk }}" id="tag_{{ tag.pk }}">
+                <label class="form-check-label small" for="tag_{{ tag.pk }}">{{ tag.name }}</label>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-lg">Démarrer la session</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

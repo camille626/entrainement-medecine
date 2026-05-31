@@ -29,6 +29,7 @@ dependencies = [
     "django>=5.0",
     "psycopg2-binary",
     "whitenoise",
+    "django-htmx",
 ]
 
 [project.optional-dependencies]

@@ -138,10 +138,19 @@ class Command(BaseCommand):
             category = self._find_category_for_question(row, data, cat_by_moodle)
             if category is None:
                 continue
-            _, is_new = Question.objects.get_or_create(
+            raw_feedback = row.get("generalfeedback") or ""
+            # Decode PostgreSQL COPY escape sequences: \r\n → <br>, \n → <br>
+            feedback = (
+                raw_feedback.replace("\\r\\n", "<br>")
+                .replace("\\n", "<br>")
+                .replace("\\r", "")
+                .strip()
+            )
+            _, is_new = Question.objects.update_or_create(
                 moodle_id=int(row["id"]),
                 defaults={
                     "text": row.get("questiontext", ""),
+                    "feedback": feedback,
                     "category": category,
                     "qtype": "multichoice",
                 },
