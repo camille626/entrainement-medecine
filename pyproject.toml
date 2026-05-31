@@ -36,6 +36,7 @@ dev = [
     "cruft",
     "pre-commit",
     "pytest",
+    "pytest-cov",
     "pytest-django",
     "django-stubs[compatible-mypy]",
     "ruff",
