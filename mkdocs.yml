@@ -1,6 +1,7 @@
 site_name: entrainement medecine
 site_description: Description de votre projet de Data Science
 site_url: https://camille626.github.io/entrainement-medecine
+repo_url: https://github.com/camille626/entrainement-medecine
 use_directory_urls: true
 
 # Exclude internal directories from documentation
