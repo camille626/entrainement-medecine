@@ -1,7 +1,10 @@
 # entrainement medecine
 
-Description de votre projet de Data Science
-
+Projet de création d'une plateforme en ligne permettant de réaliser des entrainements interactifs permettant d'apprendre des cours de medecine.
+- application associée
+- les questions sont triées selon les cours auxquelles elles font reference
+- un compte admin qui permet d'ajouter des questions et de modifier les pages
+- plusieurs utilisateurs ayant chacun leur propre compte
 ## pyfoundry-template
 
 Ce projet a été instancié depuis un template.
