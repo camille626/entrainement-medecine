@@ -1,38 +1,91 @@
 {% extends "qcm/base.html" %}
-{% block title %}Accueil — Entraînement Médecine{% endblock %}
+{% block title %}Accueil — StudyMed{% endblock %}
 
 {% block content %}
 <div class="row">
-  <div class="col-lg-8">
-    <h1 class="mb-2">Entraînement Médecine</h1>
-    <p class="text-muted mb-4">Sélectionnez vos cours et lancez une session d'entraînement.</p>
-    <a href="/entrainement/" class="btn btn-primary btn-lg mb-4">Démarrer une session</a>
+  <div class="col-12">
 
-    {% if not filtered_years %}
-    <div class="alert alert-info">
-      Vous n'êtes inscrit à aucun cours pour l'instant. Contactez l'administrateur.
+    <!-- Salutation -->
+    <div class="mb-4">
+      <h1 class="h3">Bonjour, {{ user.get_full_name|default:user.username }} 👋</h1>
+      <p class="text-muted">Bienvenue sur votre espace d'entraînement médical.</p>
     </div>
-    {% endif %}
 
-    {% for item in filtered_years %}
-    <h2 class="mt-4">{{ item.year.name }}</h2>
-    {% for sem_item in item.semesters %}
-    <div class="card mb-3">
-      <div class="card-header fw-bold">{{ sem_item.semester.name }}</div>
-      <div class="card-body">
-        <div class="row row-cols-1 row-cols-md-2 g-2">
-          {% for course in sem_item.courses %}
-          <div class="col">
-            <div class="border rounded p-2">
-              <span class="fw-semibold">{{ course.name }}</span>
-            </div>
+    <div class="row g-4">
+
+      <!-- Bloc "Démarrer une session" -->
+      <div class="col-md-4">
+        <div class="card h-100 border-primary">
+          <div class="card-body d-flex flex-column">
+            <h5 class="card-title">🎯 Entraînement</h5>
+            <p class="card-text text-muted flex-grow-1">Lancez une session de QCMs sur vos cours.</p>
+            <a href="/entrainement/" class="btn btn-primary mt-2">Démarrer une session</a>
           </div>
-          {% endfor %}
         </div>
       </div>
+
+      <!-- Bloc "Ma progression" (placeholder) -->
+      <div class="col-md-4">
+        <div class="card h-100 border-warning">
+          <div class="card-body d-flex flex-column">
+            <h5 class="card-title">📊 Ma progression</h5>
+            <p class="card-text text-muted flex-grow-1 small">
+              Les statistiques détaillées seront disponibles prochainement.
+            </p>
+            <span class="badge bg-warning text-dark mt-2 align-self-start">Bientôt disponible</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bloc "Historique" (placeholder) -->
+      <div class="col-md-4">
+        <div class="card h-100 border-secondary">
+          <div class="card-body d-flex flex-column">
+            <h5 class="card-title">📋 Historique</h5>
+            <p class="card-text text-muted flex-grow-1 small">
+              Retrouvez vos sessions passées et vos résultats.
+            </p>
+            <span class="badge bg-secondary mt-2 align-self-start">Bientôt disponible</span>
+          </div>
+        </div>
+      </div>
+
     </div>
-    {% endfor %}
-    {% endfor %}
+
+    <!-- Mes cours -->
+    <div class="mt-4">
+      <h4 class="mb-3">📚 Mes cours</h4>
+      {% if filtered_years %}
+      {% for item in filtered_years %}
+      <h6 class="text-primary mt-3">{{ item.year.name }}</h6>
+      {% for sem_item in item.semesters %}
+      <div class="card mb-3">
+        <div class="card-header py-2 fw-semibold">{{ sem_item.semester.name }}</div>
+        <div class="card-body py-2">
+          <div class="row row-cols-1 row-cols-md-3 g-2">
+            {% for course in sem_item.courses %}
+            <div class="col">
+              <div class="d-flex align-items-center border rounded p-2 bg-white h-100">
+                <div class="text-primary me-2 fs-4">🎓</div>
+                <div>
+                  <div class="fw-semibold small">{{ course.name }}</div>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+      {% endfor %}
+      {% else %}
+      <div class="alert alert-info">
+        Vous n'êtes inscrit à aucun cours pour l'instant.
+        {% if user.is_staff %}Assignez des cours depuis l'<a href="/admin/">interface admin</a>.{% endif %}
+      </div>
+      {% endif %}
+    </div>
+
   </div>
 </div>
 {% endblock %}
