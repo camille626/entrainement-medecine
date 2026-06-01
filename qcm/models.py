@@ -241,3 +241,29 @@ class UserAnswer(models.Model):
 
     def __str__(self) -> str:
         return f"Réponse de {self.session.user} à Q#{self.question_id}"
+
+
+class RegistrationRequest(models.Model):
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+    STATUS_CHOICES = [
+        (PENDING, "En attente"),
+        (ACCEPTED, "Acceptée"),
+        (REJECTED, "Refusée"),
+    ]
+
+    first_name = models.CharField(max_length=150, verbose_name="Prénom")
+    last_name = models.CharField(max_length=150, verbose_name="Nom")
+    email = models.EmailField(unique=True, verbose_name="Email")
+    message = models.TextField(blank=True, verbose_name="Message")
+    created_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDING)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Demande d'inscription"
+        verbose_name_plural = "Demandes d'inscription"
+
+    def __str__(self) -> str:
+        return f"{self.first_name} {self.last_name} <{self.email}> — {self.get_status_display()}"
