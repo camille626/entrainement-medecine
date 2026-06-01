@@ -1,0 +1,25 @@
+{% with current_tags=e.question.tags.all %}
+{% if current_tags %}
+<div class="mb-3">
+  <span class="fw-semibold small">Tags actuels :</span>
+  {% for tag in current_tags %}
+  <span class="badge bg-light text-dark border me-1 small">
+    {{ tag.name }}{% if tag.category %} <span class="text-muted">({{ tag.category.name }})</span>{% endif %}
+  </span>
+  {% endfor %}
+</div>
+{% endif %}
+{% endwith %}
+
+<hr class="my-2">
+
+<div class="mb-1">
+  <span class="fw-semibold small">Type d'errata :</span>
+  <span class="small">{{ e.get_error_type_display }}</span>
+</div>
+{% if e.description %}
+<div class="mb-2">
+  <span class="fw-semibold small">Description signalée :</span>
+  <span class="small text-muted">{{ e.description }}</span>
+</div>
+{% endif %}

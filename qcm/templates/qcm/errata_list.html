@@ -1,0 +1,359 @@
+{% extends "qcm/base.html" %}
+{% block title %}Erratas — StudyMed{% endblock %}
+
+{% block extra_head %}
+<link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+<style>
+  .ql-container { font-size: 0.875rem; }
+  .ql-toolbar { border-radius: 4px 4px 0 0; }
+  .ql-container { border-radius: 0 0 4px 4px; }
+  .ql-editor { min-height: 80px; max-height: 260px; overflow-y: auto; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12">
+    <h2 class="mb-4">⚠&#xFE0E; Erratas signalés</h2>
+
+    <!-- Filtres -->
+    <form method="get" class="mb-4 d-flex gap-2 flex-wrap align-items-center">
+      <select name="course" class="form-select form-select-sm" style="max-width:260px;" onchange="this.form.submit()">
+        <option value="">Tous les cours</option>
+        {% for c in courses %}
+        <option value="{{ c.pk }}" {% if selected_course == c.pk|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
+        {% endfor %}
+      </select>
+      <select name="status" class="form-select form-select-sm" style="max-width:180px;" onchange="this.form.submit()">
+        <option value="pending" {% if selected_status == 'pending' or not selected_status %}selected{% endif %}>En attente</option>
+        <option value="accepted" {% if selected_status == 'accepted' %}selected{% endif %}>Acceptés</option>
+        <option value="rejected" {% if selected_status == 'rejected' %}selected{% endif %}>Refusés</option>
+        <option value="">Tous les statuts</option>
+      </select>
+      {% if selected_course %}<a href="/errata/" class="btn btn-sm btn-outline-secondary">✕ Réinitialiser</a>{% endif %}
+    </form>
+
+    {% if erratas %}
+    <div class="accordion" id="errataAccordion">
+      {% for e in erratas %}
+      <div class="accordion-item border mb-2 rounded {% if e.status == 'accepted' %}border-success{% elif e.status == 'rejected' %}border-danger{% else %}border-warning{% endif %}">
+
+        <!-- En-tête -->
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed py-2 px-3" type="button"
+                  data-bs-toggle="collapse" data-bs-target="#errata-detail-{{ e.pk }}" aria-expanded="false">
+            <div class="d-flex w-100 justify-content-between align-items-center pe-2">
+              <div>
+                <span class="fw-bold">{{ e.question.text|safe|striptags|truncatewords:10 }}</span>
+                <div class="small text-muted mt-1">
+                  {{ e.question.category.course.name }} — signalé par <em>{{ e.reported_by.username }}</em> le {{ e.created_at|date:"d/m/Y" }}
+                </div>
+              </div>
+              <span class="badge ms-3 flex-shrink-0 {% if e.status == 'accepted' %}bg-success{% elif e.status == 'rejected' %}bg-danger{% else %}bg-warning text-dark{% endif %}">
+                {{ e.get_status_display }}
+              </span>
+            </div>
+          </button>
+        </h2>
+
+        <!-- Détail -->
+        <div id="errata-detail-{{ e.pk }}" class="accordion-collapse collapse">
+          <div class="accordion-body pt-2">
+
+            <!-- Énoncé (toujours visible) -->
+            <div class="p-2 mb-3 rounded small" style="background:#f0f7ff; border-left:3px solid #93c5fd;">
+              {{ e.question.text|safe }}
+            </div>
+
+            {# ================================================================ #}
+            {# BRANCHE 1 — Correction interactive (type=correction, pending)    #}
+            {# ================================================================ #}
+            {% if user.is_staff and e.status == 'pending' and e.error_type == 'correction' %}
+
+            <form id="correction-form-{{ e.pk }}" method="post" action="/errata/{{ e.pk }}/accept/">
+              {% csrf_token %}
+              <input type="hidden" name="general_feedback" class="quill-sync-input" data-errata-id="{{ e.pk }}">
+
+              <div class="mb-3">
+                <div class="fw-semibold small mb-1">Modifier la correction :</div>
+                {% for answer in e.question.answers.all %}
+                <div id="ans-row-{{ answer.pk }}-{{ e.pk }}"
+                     class="d-flex align-items-center mb-1 p-1 rounded small border
+                       {% if answer.is_correct %}border-success bg-success bg-opacity-10
+                       {% elif answer.fraction < 0 %}border-danger bg-danger bg-opacity-10
+                       {% else %}border-secondary-subtle{% endif %}">
+                  <span id="ans-icon-{{ answer.pk }}-{{ e.pk }}" class="me-2 fw-bold" style="min-width:1.2em;">
+                    {% if answer.is_correct %}✓{% elif answer.fraction < 0 %}✗{% else %}○{% endif %}
+                  </span>
+                  <span class="flex-grow-1">{{ answer.text|safe|striptags }}</span>
+                  <span id="ans-frac-{{ answer.pk }}-{{ e.pk }}"
+                        class="ms-2 text-muted" style="white-space:nowrap; font-size:0.75rem; min-width:3.5rem; text-align:right;">
+                    {% if answer.fraction > 0 %}+{% endif %}{{ answer.fraction|floatformat:2 }}
+                  </span>
+                  <input type="hidden" id="ans-input-{{ answer.pk }}-{{ e.pk }}"
+                         name="answer_{{ answer.pk }}" value="{{ answer.is_correct|yesno:'1,0' }}">
+                  <button type="button" class="btn btn-sm btn-outline-secondary ms-2 py-0 px-2"
+                          style="font-size:0.7rem; white-space:nowrap;"
+                          onclick="toggleCorrectionAnswer({{ answer.pk }}, {{ e.pk }})">↕ Changer</button>
+                </div>
+                {% endfor %}
+              </div>
+
+              {% include "qcm/_errata_tags_and_meta.html" with e=e %}
+
+              <div class="d-flex gap-2 flex-wrap mt-2">
+                <button type="submit" class="btn btn-sm btn-success">✅ Appliquer la correction</button>
+                <a href="/admin/qcm/question/{{ e.question_id }}/change/"
+                   class="btn btn-sm btn-outline-primary" target="_blank">✏️ Modifier dans admin</a>
+              </div>
+            </form>
+            <form method="post" action="/errata/{{ e.pk }}/reject/" class="mt-2 d-flex gap-1">
+              {% csrf_token %}
+              <input type="text" name="admin_note" class="form-control form-control-sm"
+                     placeholder="Motif de refus (optionnel)" style="max-width:240px;">
+              <button type="submit" class="btn btn-sm btn-outline-danger">✗ Refuser</button>
+            </form>
+
+            {# ================================================================ #}
+            {# BRANCHE 2 — Fractions manuelles (type=points, pending)           #}
+            {# ================================================================ #}
+            {% elif user.is_staff and e.status == 'pending' and e.error_type == 'points' %}
+
+            <form id="points-form-{{ e.pk }}" method="post" action="/errata/{{ e.pk }}/accept/">
+              {% csrf_token %}
+              <input type="hidden" name="general_feedback" class="quill-sync-input" data-errata-id="{{ e.pk }}">
+
+              <div class="mb-3">
+                <div class="fw-semibold small mb-2">Modifier les fractions de point :</div>
+                {% for answer in e.question.answers.all %}
+                <div class="d-flex align-items-center mb-1 p-1 rounded small border
+                     {% if answer.is_correct %}border-success bg-success bg-opacity-10
+                     {% elif answer.fraction < 0 %}border-danger bg-danger bg-opacity-10
+                     {% else %}border-secondary-subtle{% endif %}">
+                  <span class="me-2 fw-bold" style="min-width:1.2em;">
+                    {% if answer.is_correct %}✓{% elif answer.fraction < 0 %}✗{% else %}○{% endif %}
+                  </span>
+                  <span class="flex-grow-1">{{ answer.text|safe|striptags }}</span>
+                  <span class="ms-2 text-muted" style="white-space:nowrap; font-size:0.75rem; min-width:3.5rem; text-align:right;">
+                    actuel&nbsp;: {% if answer.fraction > 0 %}+{% endif %}{{ answer.fraction|floatformat:2 }}
+                  </span>
+                  <span class="mx-1 text-muted small">→</span>
+                  <input type="number" name="fraction_{{ answer.pk }}"
+                         value="{{ answer.fraction }}"
+                         step="0.01" min="-1" max="1"
+                         class="form-control form-control-sm text-end"
+                         style="max-width:80px;">
+                </div>
+                {% endfor %}
+                <div class="text-muted small mt-1">Valeurs entre -1 et 1 · Positif = correct · Négatif = pénalité</div>
+              </div>
+
+              {% include "qcm/_errata_tags_and_meta.html" with e=e %}
+
+              <div class="d-flex gap-2 flex-wrap mt-2">
+                <button type="submit" class="btn btn-sm btn-success">✅ Appliquer les fractions</button>
+                <a href="/admin/qcm/question/{{ e.question_id }}/change/"
+                   class="btn btn-sm btn-outline-primary" target="_blank">✏️ Modifier dans admin</a>
+              </div>
+            </form>
+            <form method="post" action="/errata/{{ e.pk }}/reject/" class="mt-2 d-flex gap-1">
+              {% csrf_token %}
+              <input type="text" name="admin_note" class="form-control form-control-sm"
+                     placeholder="Motif de refus (optionnel)" style="max-width:240px;">
+              <button type="submit" class="btn btn-sm btn-outline-danger">✗ Refuser</button>
+            </form>
+
+            {# ================================================================ #}
+            {# BRANCHE 3 — Affichage standard (tag / image / autre)             #}
+            {# ================================================================ #}
+            {% else %}
+
+            <!-- Propositions (lecture seule) -->
+            <div class="mb-3">
+              {% for answer in e.question.answers.all %}
+              <div class="d-flex align-items-start mb-1 p-1 rounded small
+                {% if answer.is_correct %}border border-success bg-success bg-opacity-10
+                {% elif answer.fraction < 0 %}border border-danger bg-danger bg-opacity-10
+                {% else %}border border-light{% endif %}">
+                <span class="me-2 fw-bold" style="min-width:1.2em;">
+                  {% if answer.is_correct %}✓{% elif answer.fraction < 0 %}✗{% else %}○{% endif %}
+                </span>
+                <span class="flex-grow-1">{{ answer.text|safe|striptags }}</span>
+                {% if answer.fraction != 0 %}
+                <span class="ms-2 text-muted" style="white-space:nowrap; font-size:0.75rem;">
+                  {% if answer.fraction > 0 %}+{% endif %}{{ answer.fraction|floatformat:2 }}
+                </span>
+                {% endif %}
+              </div>
+              {% endfor %}
+            </div>
+
+            {% include "qcm/_errata_tags_and_meta.html" with e=e %}
+
+            <!-- Signalement détail -->
+            {% if e.error_type == 'tag' and e.suggested_tags.exists %}
+            <div class="mb-2">
+              <span class="fw-semibold small">Tags suggérés :</span>
+              <div class="small mt-1">
+                {% for tag in e.suggested_tags.all %}
+                <span class="badge bg-light text-dark border me-1">{{ tag.name }}
+                  {% if tag.category %}<small class="text-muted">({{ tag.category.name }})</small>{% endif %}
+                </span>
+                {% endfor %}
+              </div>
+            </div>
+            {% elif e.error_type == 'correction' and e.concerned_answers.exists %}
+            <div class="mb-2">
+              <span class="fw-semibold small">Propositions signalées :</span>
+              <div class="small mt-1">
+                {% for ans in e.concerned_answers.all %}
+                <div class="badge bg-light text-dark border mb-1">{{ ans.text|safe|striptags|truncatewords:10 }}</div>
+                {% endfor %}
+              </div>
+            </div>
+            {% endif %}
+
+            {% if e.description %}
+            <div class="mb-2">
+              <span class="fw-semibold small">Description :</span>
+              <span class="small">{{ e.description }}</span>
+            </div>
+            {% endif %}
+
+            <!-- Actions standard (staff, en attente) -->
+            {% if user.is_staff and e.status == 'pending' %}
+            <hr class="my-2">
+
+            {% if e.error_type == 'image' %}
+            <div class="alert alert-info py-2 small mb-2">
+              💡 L'upload d'image sera disponible prochainement (issue <a href="https://github.com/camille626/entrainement-medecine/issues/29" target="_blank">#29</a>).
+              En attendant, vous pouvez modifier la question manuellement dans l'admin.
+            </div>
+            {% endif %}
+
+            <div class="d-flex gap-2 flex-wrap align-items-center">
+              {% if e.error_type == 'tag' and e.suggested_tags.exists %}
+              <form method="post" action="/errata/{{ e.pk }}/accept/" class="m-0">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-success">✅ Accepter la suggestion</button>
+              </form>
+              {% else %}
+              <form method="post" action="/errata/{{ e.pk }}/accept/" class="m-0">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-success">✅ Accepter le signalement</button>
+              </form>
+              {% endif %}
+              <a href="/admin/qcm/question/{{ e.question_id }}/change/"
+                 class="btn btn-sm btn-outline-primary" target="_blank">✏️ Modifier la question</a>
+              <form method="post" action="/errata/{{ e.pk }}/reject/" class="m-0 ms-auto d-flex gap-1">
+                {% csrf_token %}
+                <input type="text" name="admin_note" class="form-control form-control-sm"
+                       placeholder="Motif de refus (optionnel)" style="max-width:200px;">
+                <button type="submit" class="btn btn-sm btn-outline-danger">✗ Refuser</button>
+              </form>
+            </div>
+            {% elif e.status != 'pending' and e.admin_note %}
+            <div class="mt-2 small text-muted fst-italic">Note admin : {{ e.admin_note }}</div>
+            {% endif %}
+
+            {% endif %}{# end branches #}
+
+            {# ================================================================ #}
+            {# CORRECTION GÉNÉRALE (Quill) — tous types, staff uniquement       #}
+            {# ================================================================ #}
+            {% if user.is_staff %}
+            <hr class="my-3">
+            <div class="mb-2">
+              <label class="fw-semibold small mb-1 d-block">
+                Correction générale
+                <span class="text-muted fw-normal">(affichée aux étudiants après réponse)</span>
+              </label>
+              <div id="quill-{{ e.pk }}" class="bg-white"></div>
+              <template id="feedback-tpl-{{ e.pk }}">{{ e.question.feedback|safe }}</template>
+            </div>
+            <form id="feedback-form-{{ e.pk }}" method="post" action="/errata/{{ e.pk }}/feedback/" class="mt-2">
+              {% csrf_token %}
+              <input type="hidden" name="general_feedback" class="quill-sync-input" data-errata-id="{{ e.pk }}">
+              <button type="submit" class="btn btn-sm btn-outline-secondary">💾 Sauvegarder la correction</button>
+            </form>
+            {% endif %}
+
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="alert alert-info">Aucun errata pour les filtres sélectionnés.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+<script>
+// --- Toggle correction answers ---
+function toggleCorrectionAnswer(answerId, errataId) {
+  const input = document.getElementById(`ans-input-${answerId}-${errataId}`);
+  const row   = document.getElementById(`ans-row-${answerId}-${errataId}`);
+  const icon  = document.getElementById(`ans-icon-${answerId}-${errataId}`);
+  const wasCorrect = input.value === '1';
+  input.value = wasCorrect ? '0' : '1';
+  row.classList.remove('border-success','border-danger','border-secondary-subtle','bg-success','bg-danger','bg-opacity-10');
+  if (!wasCorrect) {
+    row.classList.add('border-success','bg-success','bg-opacity-10');
+    icon.textContent = '✓';
+  } else {
+    row.classList.add('border-danger','bg-danger','bg-opacity-10');
+    icon.textContent = '✗';
+  }
+  const form = document.getElementById(`correction-form-${errataId}`);
+  const allInputs = Array.from(form.querySelectorAll('input[name^="answer_"]'));
+  const nCorrect = allInputs.filter(i => i.value === '1').length;
+  allInputs.forEach(inp => {
+    const aId = inp.name.replace('answer_', '');
+    const fracSpan = document.getElementById(`ans-frac-${aId}-${errataId}`);
+    if (!fracSpan) return;
+    fracSpan.textContent = inp.value === '1'
+      ? `+${nCorrect > 0 ? (1/nCorrect).toFixed(2) : '0.00'}`
+      : '-1.00';
+  });
+}
+
+// --- Quill: initialisation paresseuse à l'ouverture ---
+const quillInstances = {};
+
+document.querySelectorAll('.accordion-collapse').forEach(function(collapse) {
+  collapse.addEventListener('show.bs.collapse', function() {
+    const errataId = this.id.replace('errata-detail-', '');
+    if (quillInstances[errataId]) return;
+
+    const quillEl = document.getElementById('quill-' + errataId);
+    if (!quillEl) return;
+
+    const tpl = document.getElementById('feedback-tpl-' + errataId);
+    const quill = new Quill(quillEl, {
+      theme: 'snow',
+      modules: {
+        toolbar: [
+          ['bold', 'italic', 'underline', 'strike'],
+          [{ script: 'sub' }, { script: 'super' }],
+          [{ list: 'ordered' }, { list: 'bullet' }],
+          ['clean']
+        ]
+      }
+    });
+    quill.root.innerHTML = tpl ? tpl.innerHTML : '';
+    quillInstances[errataId] = quill;
+
+    // Sync Quill → tous les hidden inputs quill-sync-input de cet errata
+    document.querySelectorAll(`.quill-sync-input[data-errata-id="${errataId}"]`).forEach(function(input) {
+      input.closest('form').addEventListener('submit', function() {
+        input.value = quill.root.innerHTML;
+      });
+    });
+  });
+});
+</script>
+{% endblock %}

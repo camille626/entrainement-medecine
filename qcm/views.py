@@ -13,6 +13,8 @@ from .forms import InscriptionForm, SessionConfigForm
 from .models import (
     Answer,
     Course,
+    Errata,
+    Question,
     QuizSession,
     QuizSessionQuestion,
     RegistrationRequest,
@@ -25,6 +27,8 @@ from .models import (
 
 
 if TYPE_CHECKING:
+    from typing import Any
+
     from .models import Question as QuestionModel
 
 
@@ -37,7 +41,7 @@ def get_answers(question: "QuestionModel", shuffle: bool = True) -> list:
 
 
 def _apply_question_filter(
-    qs, question_filter: str, user, nb_questions: int
+    qs: "Any", question_filter: str, user: "Any", nb_questions: int
 ) -> list[int]:
     """Return a list of question IDs based on the filter mode."""
     all_ids = list(qs.values_list("id", flat=True))
@@ -868,6 +872,246 @@ class HistoryView(LoginRequiredMixin, View):
                 "session_data": session_data,
                 "courses": courses,
                 "selected_course": course_filter,
+            },
+        )
+
+
+class ErrataAcceptView(LoginRequiredMixin, View):
+    """Staff-only: accept an errata and apply changes."""
+
+    def post(self, request, pk):
+        from django.utils import timezone
+
+        if not request.user.is_staff:
+            from django.http import Http404
+
+            raise Http404
+        errata = get_object_or_404(Errata, pk=pk)
+        errata.status = Errata.ACCEPTED
+        errata.resolved_by = request.user
+        errata.resolved_at = timezone.now()
+        errata.save()
+
+        if errata.error_type == Errata.TAG and errata.suggested_tags.exists():
+            errata.question.tags.set(errata.suggested_tags.all())
+
+        elif errata.error_type == Errata.CORRECTION:
+            question = errata.question
+            all_answers = list(question.answers.all())
+            correct_pks = {
+                ans.pk
+                for ans in all_answers
+                if request.POST.get(f"answer_{ans.pk}") == "1"
+            }
+            n_correct = len(correct_pks)
+            for ans in all_answers:
+                if ans.pk in correct_pks:
+                    ans.is_correct = True
+                    ans.fraction = round(1.0 / n_correct, 4) if n_correct > 0 else 0.0
+                else:
+                    ans.is_correct = False
+                    ans.fraction = -1.0
+            Answer.objects.bulk_update(all_answers, ["is_correct", "fraction"])
+
+            feedback = request.POST.get("general_feedback", "").strip()
+            question.feedback = feedback
+            question.save(update_fields=["feedback"])
+
+        elif errata.error_type == Errata.POINTS:
+            question = errata.question
+            all_answers = list(question.answers.all())
+            for ans in all_answers:
+                raw = request.POST.get(f"fraction_{ans.pk}")
+                if raw is not None:
+                    try:
+                        frac = max(-1.0, min(1.0, float(raw)))
+                        ans.fraction = round(frac, 4)
+                        ans.is_correct = frac > 0
+                    except ValueError:
+                        pass
+            Answer.objects.bulk_update(all_answers, ["fraction", "is_correct"])
+
+            feedback = request.POST.get("general_feedback", "").strip()
+            question.feedback = feedback
+            question.save(update_fields=["feedback"])
+
+        from .models import Notification
+
+        Notification.objects.create(
+            user=errata.reported_by,
+            message=(
+                f"✅ Votre signalement « {errata.get_error_type_display()} » "
+                f"a été accepté — merci pour votre contribution !"
+            ),
+            link="/",
+        )
+        return redirect("qcm:errata_list")
+
+
+class ErrataRejectView(LoginRequiredMixin, View):
+    """Staff-only: reject an errata."""
+
+    def post(self, request, pk):
+        from django.utils import timezone
+
+        if not request.user.is_staff:
+            from django.http import Http404
+
+            raise Http404
+        errata = get_object_or_404(Errata, pk=pk)
+        errata.status = Errata.REJECTED
+        errata.resolved_by = request.user
+        errata.resolved_at = timezone.now()
+        errata.admin_note = request.POST.get("admin_note", "")
+        errata.save()
+        return redirect("qcm:errata_list")
+
+
+class ErrataFeedbackView(LoginRequiredMixin, View):
+    """Staff-only: save general feedback on the question associated with an errata."""
+
+    def post(self, request, pk):
+        if not request.user.is_staff:
+            from django.http import Http404
+
+            raise Http404
+        errata = get_object_or_404(Errata, pk=pk)
+        errata.question.feedback = request.POST.get("general_feedback", "")
+        errata.question.save(update_fields=["feedback"])
+        return redirect("qcm:errata_list")
+
+
+class NotificationMarkReadView(LoginRequiredMixin, View):
+    def post(self, request, pk):
+        from .models import Notification
+
+        Notification.objects.filter(pk=pk, user=request.user).update(read=True)
+        return HttpResponse(status=204)
+
+
+class ErrataListView(LoginRequiredMixin, View):
+    """Public list of erratas, filterable by course and status."""
+
+    template_name = "qcm/errata_list.html"
+
+    def get(self, request):
+        qs = (
+            Errata.objects.select_related("question__category__course", "reported_by")
+            .prefetch_related(
+                "concerned_answers",
+                "suggested_tags__category",
+                "question__tags__category",
+                "question__answers",
+            )
+            .order_by("-created_at")
+        )
+
+        course_filter = request.GET.get("course")
+        status_filter = request.GET.get("status", "pending")  # default: pending
+        if course_filter:
+            qs = qs.filter(question__category__course_id=course_filter)
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+
+        from .models import UserEnrollment
+
+        if request.user.is_staff:
+            courses = Course.objects.order_by("name")
+        else:
+            courses = [
+                e.course
+                for e in UserEnrollment.objects.filter(
+                    user=request.user
+                ).select_related("course")
+            ]
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "erratas": qs[:100],
+                "courses": courses,
+                "selected_course": course_filter,
+                "selected_status": status_filter,
+                "status_choices": Errata.STATUS_CHOICES,
+            },
+        )
+
+
+class ErrataSubmitView(LoginRequiredMixin, View):
+    """HTMX endpoint to submit an errata report."""
+
+    def post(self, request, question_id):
+        question = get_object_or_404(Question, pk=question_id)
+        error_type = request.POST.get("error_type", Errata.OTHER)
+        description = request.POST.get("description", "").strip()
+
+        # Description required only for correction and autre
+        requires_description = error_type in (Errata.CORRECTION, Errata.OTHER)
+        if requires_description and not description:
+            return render(
+                request,
+                "qcm/_errata_form.html",
+                {
+                    "question": question,
+                    "error": "La description est obligatoire pour ce type d'erreur.",
+                    "existing": Errata.objects.filter(
+                        question=question, status=Errata.PENDING
+                    ).first(),
+                },
+            )
+
+        errata = Errata.objects.create(
+            question=question,
+            reported_by=request.user,
+            error_type=error_type,
+            description=description,
+        )
+
+        # Link concerned answers (for correction errors)
+        answer_ids = request.POST.getlist("concerned_answers")
+        if answer_ids:
+            errata.concerned_answers.set(
+                Answer.objects.filter(pk__in=answer_ids, question=question)
+            )
+
+        # Link suggested tags (for tag errors)
+        tag_ids = request.POST.getlist("suggested_tags")
+        if tag_ids:
+            errata.suggested_tags.set(Tag.objects.filter(pk__in=tag_ids))
+
+        return render(request, "qcm/_errata_success.html", {"errata": errata})
+
+    def get(self, request, question_id):
+        question = get_object_or_404(Question, pk=question_id)
+        existing = Errata.objects.filter(
+            question=question, status=Errata.PENDING
+        ).first()
+        ec_tags = (
+            Tag.objects.filter(
+                category__tag_type="souscategorie",
+                questions__category__course=question.category.course,
+            )
+            .distinct()
+            .order_by("name")
+        )
+        chapter_tags = (
+            Tag.objects.filter(
+                category__tag_type="chapitre",
+                questions__category__course=question.category.course,
+            )
+            .distinct()
+            .order_by("name")
+        )
+        return render(
+            request,
+            "qcm/_errata_form.html",
+            {
+                "question": question,
+                "existing": existing,
+                "ec_tags": ec_tags,
+                "chapter_tags": chapter_tags,
+                "error_types": Errata.TYPE_CHOICES,
             },
         )
 
