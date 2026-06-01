@@ -1,0 +1,116 @@
+{% extends "qcm/base.html" %}
+{% block title %}Historique — StudyMed{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12">
+    <h2 class="mb-4">📋 Historique des tentatives</h2>
+
+    <!-- Filtre par cours -->
+    <form method="get" class="mb-3 d-flex gap-2 align-items-center">
+      <select name="course" class="form-select form-select-sm" style="max-width:280px;"
+              onchange="this.form.submit()">
+        <option value="">Tous les cours</option>
+        {% for c in courses %}
+        <option value="{{ c.pk }}" {% if selected_course == c.pk|stringformat:"s" %}selected{% endif %}>
+          {{ c.name }}
+        </option>
+        {% endfor %}
+      </select>
+      {% if selected_course %}
+      <a href="/historique/" class="btn btn-sm btn-outline-secondary">✕ Réinitialiser</a>
+      {% endif %}
+    </form>
+
+    {% if session_data %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Date</th>
+            <th>Cours</th>
+            <th class="text-center pe-4">Avancement</th>
+            <th class="text-center" style="min-width:80px; white-space:nowrap;">Note /20</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in session_data %}
+          <tr>
+            <td class="small text-muted" style="white-space:nowrap;">
+              {{ item.session.started_at|date:"d/m/Y H:i" }}
+            </td>
+            <td class="small">
+              {% for c in item.session_courses %}
+              {% if forloop.counter <= 2 %}
+              <span class="d-block fw-semibold">{{ c.name }}</span>
+              {% endif %}
+              {% endfor %}
+              {% if item.session_courses|length > 2 %}
+              <span class="text-muted" id="more-{{ forloop.counter }}" style="display:none;">
+                {% for c in item.session_courses %}
+                {% if forloop.counter > 2 %}
+                <span class="d-block fw-semibold">{{ c.name }}</span>
+                {% endif %}
+                {% endfor %}
+              </span>
+              <button class="btn btn-link btn-sm p-0 text-muted"
+                      onclick="toggleMore('more-{{ forloop.counter }}', this)">
+                +{{ item.session_courses|length|add:"-2" }} cours
+              </button>
+              {% endif %}
+              {% if not item.session_courses %}
+              <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td class="text-center small pe-4">
+              {{ item.nb_answered_distinct }}/{{ item.nb_questions }}
+              {% if not item.is_complete %}
+              <span class="badge bg-warning text-dark ms-1" style="font-size:0.65rem;">En cours</span>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              {% if item.is_complete and item.note_20 is not None %}
+              <span class="fw-bold {% if item.note_20 >= 14 %}text-success{% elif item.note_20 >= 10 %}text-warning{% else %}text-danger{% endif %}">
+                {{ item.note_20 }}
+              </span>
+              {% else %}
+              <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td style="white-space:nowrap; width:110px;">
+              {% if not item.is_complete %}
+              <a href="/entrainement/session/{{ item.session.pk }}/"
+                 class="btn btn-sm btn-outline-primary w-100">▶ Reprendre</a>
+              {% elif item.nb_answered_distinct > 0 %}
+              <a href="/historique/session/{{ item.session.pk }}/"
+                 class="btn btn-sm btn-outline-primary w-100">🔍 Relecture</a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+      Aucune session trouvée. <a href="/entrainement/">Démarrer une session</a> pour commencer.
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+function toggleMore(id, btn) {
+  const el = document.getElementById(id);
+  if (el.style.display === 'none') {
+    el.style.display = '';
+    btn.textContent = 'Réduire';
+  } else {
+    el.style.display = 'none';
+    const n = el.querySelectorAll('span').length;
+    btn.textContent = '+' + n + ' cours';
+  }
+}
+</script>
+{% endblock %}

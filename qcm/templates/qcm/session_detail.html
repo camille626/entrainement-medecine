@@ -1,0 +1,106 @@
+{% extends "qcm/base.html" %}
+{% block title %}Relecture — StudyMed{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-lg-9">
+    <nav aria-label="breadcrumb" class="mb-3">
+      <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/historique/">Historique</a></li>
+        <li class="breadcrumb-item active">Session du {{ session.started_at|date:"d/m/Y H:i" }}</li>
+      </ol>
+    </nav>
+
+    <h2 class="mb-3">Relecture — {{ session.course.name|default:"Session" }}</h2>
+
+    <!-- Note globale -->
+    <div class="card mb-4 border-primary text-center">
+      <div class="card-body py-3">
+        <div class="display-4 fw-bold text-primary">{{ note_20 }}<small class="fs-4 text-muted">/20</small></div>
+        <div class="text-muted small mt-1">{{ total_score }}/{{ total }}</div>
+      </div>
+    </div>
+
+    <!-- Compteurs -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <div class="row text-center">
+          <div class="col">
+            <div class="fs-3 text-success fw-bold">{{ correct }}</div>
+            <div class="small text-muted">Correctes</div>
+          </div>
+          <div class="col">
+            <div class="fs-3 text-warning fw-bold">{{ partial }}</div>
+            <div class="small text-muted">Partielles</div>
+          </div>
+          <div class="col">
+            <div class="fs-3 text-danger fw-bold">{{ incorrect }}</div>
+            <div class="small text-muted">Incorrectes</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Questions -->
+    <div class="accordion mb-4" id="revisionAccordion">
+      {% for result in question_results %}
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed
+            {% if result.status == 'correct' %}text-success
+            {% elif result.status == 'partial' %}text-warning
+            {% elif result.status == 'incorrect' %}text-danger
+            {% else %}text-muted{% endif %}"
+            type="button" data-bs-toggle="collapse"
+            data-bs-target="#q{{ forloop.counter }}">
+            <span class="me-2">
+              {% if result.status == 'correct' %}✓
+              {% elif result.status == 'partial' %}~
+              {% elif result.status == 'incorrect' %}✗
+              {% else %}—{% endif %}
+            </span>
+            Question {{ forloop.counter }}
+            <span class="ms-auto me-3 small fw-normal">{{ result.score|floatformat:2 }}/{{ result.max_score|floatformat:2 }}</span>
+          </button>
+        </h2>
+        <div id="q{{ forloop.counter }}" class="accordion-collapse collapse">
+          <div class="accordion-body">
+            <div class="mb-3 p-3 rounded" style="background-color: #e8f4f8;">
+              {{ result.question.text|safe }}
+            </div>
+            {% for answer in result.answers %}
+            <div class="mb-1 p-2 rounded d-flex align-items-start
+              {% if answer.pk in result.selected_ids and answer.is_correct %}border border-success bg-success bg-opacity-10
+              {% elif answer.pk in result.selected_ids and not answer.is_correct %}border border-danger bg-danger bg-opacity-10
+              {% elif answer.is_correct %}border border-success
+              {% else %}border border-light{% endif %}">
+              <span class="me-2 fw-bold" style="min-width:1.2em;">
+                {% if answer.pk in result.selected_ids %}
+                  {% if answer.is_correct %}✓{% else %}✗{% endif %}
+                {% elif answer.is_correct %}○{% else %}&nbsp;{% endif %}
+              </span>
+              <span class="flex-grow-1">{{ answer.text|safe }}</span>
+              {% if answer.fraction > 0 %}
+              <span class="ms-3 small text-success" style="white-space:nowrap;">(+{{ answer.fraction|floatformat:2 }})</span>
+              {% elif answer.fraction < 0 %}
+              <span class="ms-3 small text-danger" style="white-space:nowrap;">({{ answer.fraction|floatformat:2 }})</span>
+              {% endif %}
+            </div>
+            {% endfor %}
+            {% if result.question.feedback %}
+            <div class="mt-3 p-3 rounded" style="background-color: #fff3cd; border: 1px solid #ffc107;">
+              <strong class="text-warning-emphasis">Correction</strong>
+              <div class="mt-2">{{ result.question.feedback|safe }}</div>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <a href="/historique/" class="btn btn-outline-secondary">← Retour à l'historique</a>
+    <a href="/entrainement/" class="btn btn-primary ms-2">Nouvelle session</a>
+  </div>
+</div>
+{% endblock %}
