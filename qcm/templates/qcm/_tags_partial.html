@@ -1,0 +1,39 @@
+{% if no_courses %}
+<p class="text-muted small fst-italic">Sélectionnez d'abord un ou plusieurs cours pour voir les filtres disponibles.</p>
+{% elif not tag_groups %}
+<p class="text-muted small fst-italic">Aucun filtre disponible pour les cours sélectionnés.</p>
+{% else %}
+{% for group in tag_groups %}
+<div class="mb-3">
+  <div class="fw-semibold small text-secondary mb-1">
+    {{ group.category.name }}
+    {% if group.category.tag_type == "annee" %}<span class="badge bg-secondary ms-1 fw-normal">Annales</span>{% endif %}
+    {% if group.category.tag_type == "souscategorie" %}<span class="badge bg-info text-dark ms-1 fw-normal">EC</span>{% endif %}
+    {% if group.category.tag_type == "chapitre" %}<span class="badge bg-light text-dark ms-1 fw-normal border">Chapitre</span>{% endif %}
+  </div>
+  <div class="row row-cols-2 row-cols-md-3 g-1
+    {% if group.category.tag_type == 'souscategorie' %}ec-group{% endif %}">
+    {% for tag in group.tags %}
+    <div class="col">
+      <div class="form-check form-check-sm">
+        <input class="form-check-input
+          {% if group.category.tag_type == 'souscategorie' %}ec-tag{% endif %}"
+               type="checkbox"
+               name="tags" value="{{ tag.pk }}" id="tag_{{ tag.pk }}"
+               {% if group.category.tag_type == 'souscategorie' %}
+               hx-trigger="change"
+               hx-get="/entrainement/chapters/"
+               hx-target="#chapters-zone"
+               hx-include=".ec-tag"
+               {% endif %}>
+        <label class="form-check-label small" for="tag_{{ tag.pk }}">{{ tag.name }}</label>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}
+
+<!-- Zone chapitres (mise à jour quand une EC est cochée) -->
+<div id="chapters-zone"></div>
+{% endif %}

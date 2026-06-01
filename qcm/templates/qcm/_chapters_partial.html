@@ -1,0 +1,21 @@
+{% if chapter_groups %}
+{% for group in chapter_groups %}
+<div class="mb-3">
+  <div class="fw-semibold small text-secondary mb-1">
+    {{ group.category.name }}
+    <span class="badge bg-light text-dark ms-1 fw-normal border">Chapitre</span>
+  </div>
+  <div class="row row-cols-2 row-cols-md-3 g-1">
+    {% for tag in group.tags %}
+    <div class="col">
+      <div class="form-check form-check-sm">
+        <input class="form-check-input" type="checkbox"
+               name="tags" value="{{ tag.pk }}" id="tag_{{ tag.pk }}">
+        <label class="form-check-label small" for="tag_{{ tag.pk }}">{{ tag.name }}</label>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}
+{% endif %}
