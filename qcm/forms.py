@@ -49,10 +49,18 @@ class InscriptionForm(forms.Form):
     last_name = forms.CharField(max_length=150, label="Nom")
     email = forms.EmailField(label="Email")
     message = forms.CharField(
-        widget=forms.Textarea(attrs={"rows": 3}),
-        required=False,
-        label="Message (optionnel)",
-        help_text="Ex : Je suis étudiant en P2, promo 2026...",
+        widget=forms.Textarea(attrs={"rows": 4}),
+        required=True,
+        label="Message",
+        help_text=(
+            "Indiquez votre année (P2, D1...) et votre parcours (ex-PASS, ex-LAS...). "
+            "Ex : Je suis en P2, ex-LAS, promo 2026."
+        ),
+    )
+    certificate = forms.FileField(
+        required=True,
+        label="Certificat de scolarité (PDF)",
+        help_text="Fichier PDF uniquement — justifie votre appartenance à l'université.",
     )
 
     def clean_email(self):
@@ -62,3 +70,12 @@ class InscriptionForm(forms.Form):
                 "Une demande avec cet email existe déjà. Contactez l'administrateur."
             )
         return email
+
+    def clean_certificate(self):
+        cert = self.cleaned_data.get("certificate")
+        if cert:
+            if not cert.name.lower().endswith(".pdf"):
+                raise forms.ValidationError("Seuls les fichiers PDF sont acceptés.")
+            if cert.size > 5 * 1024 * 1024:  # 5 MB
+                raise forms.ValidationError("Le fichier ne doit pas dépasser 5 Mo.")
+        return cert

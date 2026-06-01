@@ -481,13 +481,14 @@ class InscriptionView(View):
         return render(request, self.template_name, {"form": form})
 
     def post(self, request):
-        form = InscriptionForm(request.POST)
+        form = InscriptionForm(request.POST, request.FILES)
         if form.is_valid():
             RegistrationRequest.objects.create(
                 first_name=form.cleaned_data["first_name"],
                 last_name=form.cleaned_data["last_name"],
                 email=form.cleaned_data["email"],
-                message=form.cleaned_data.get("message", ""),
+                message=form.cleaned_data["message"],
+                certificate=form.cleaned_data["certificate"],
             )
             return redirect("qcm:inscription_done")
         return render(request, self.template_name, {"form": form})

@@ -3,8 +3,15 @@
 import pytest
 from django.contrib.auth.models import User
 from django.core import mail
+from django.core.files.uploadedfile import SimpleUploadedFile
 
 from qcm.models import RegistrationRequest
+
+
+def _fake_pdf() -> SimpleUploadedFile:
+    return SimpleUploadedFile(
+        "certificat.pdf", b"%PDF-1.4 fake pdf content", content_type="application/pdf"
+    )
 
 
 @pytest.mark.django_db
@@ -27,12 +34,14 @@ class TestInscriptionPage:
                 "first_name": "Camille",
                 "last_name": "Martin",
                 "email": "camille@example.com",
-                "message": "Je suis en P2",
+                "message": "Je suis en P2, ex-LAS, promo 2026.",
+                "certificate": _fake_pdf(),
             },
         )
         assert RegistrationRequest.objects.filter(email="camille@example.com").exists()
         req = RegistrationRequest.objects.get(email="camille@example.com")
         assert req.status == "pending"
+        assert req.certificate  # file was uploaded
 
     def test_valid_submission_redirects(self, client):
         response = client.post(
@@ -41,6 +50,8 @@ class TestInscriptionPage:
                 "first_name": "Camille",
                 "last_name": "Martin",
                 "email": "camille@example.com",
+                "message": "Je suis en P2, ex-LAS.",
+                "certificate": _fake_pdf(),
             },
         )
         assert response.status_code == 302
@@ -50,6 +61,7 @@ class TestInscriptionPage:
             first_name="Camille",
             last_name="Martin",
             email="camille@example.com",
+            message="P2 ex-LAS",
             status="pending",
         )
         response = client.post(
@@ -58,6 +70,8 @@ class TestInscriptionPage:
                 "first_name": "Autre",
                 "last_name": "Personne",
                 "email": "camille@example.com",
+                "message": "P2 ex-PASS",
+                "certificate": _fake_pdf(),
             },
         )
         assert response.status_code == 200  # reste sur la page avec erreur
@@ -73,6 +87,7 @@ class TestRegistrationRequestModel:
             first_name="Alice",
             last_name="Dupont",
             email="alice@example.com",
+            message="P2 ex-LAS",
         )
         assert req.pk is not None
         assert req.status == "pending"
@@ -83,6 +98,7 @@ class TestRegistrationRequestModel:
             first_name="Alice",
             last_name="Dupont",
             email="alice@example.com",
+            message="P2 ex-LAS",
         )
         assert "alice@example.com" in str(req) or "Alice" in str(req)
 
@@ -103,6 +119,7 @@ class TestAdminActions:
             first_name="Bob",
             last_name="Durand",
             email="bob@example.com",
+            message="P2 ex-PASS",
             status="pending",
         )
 

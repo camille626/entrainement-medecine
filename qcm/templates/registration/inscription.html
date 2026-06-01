@@ -8,50 +8,58 @@
 </head>
 <body class="bg-light">
   <div class="container d-flex justify-content-center align-items-center py-5">
-    <div class="card shadow-sm" style="width: 100%; max-width: 480px;">
+    <div class="card shadow-sm" style="width: 100%; max-width: 520px;">
       <div class="card-body p-4">
         <h1 class="h4 text-center fw-bold text-primary mb-1">📚 Entraînement Médecine</h1>
         <p class="text-center text-muted small mb-4">Demande d'accès à la plateforme</p>
 
         <p class="text-muted small mb-3">
-          Remplissez ce formulaire pour demander l'accès. L'administrateur vous contactera par email.
+          Remplissez ce formulaire pour demander l'accès. L'administrateur vérifiera votre dossier et vous contactera par email.
         </p>
 
         {% if form.errors %}
         <div class="alert alert-danger py-2 small">
-          {% for field in form %}{% for error in field.errors %}<div>{{ error }}</div>{% endfor %}{% endfor %}
+          {% for field in form %}{% for error in field.errors %}<div><strong>{{ field.label }} :</strong> {{ error }}</div>{% endfor %}{% endfor %}
           {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
         </div>
         {% endif %}
 
-        <form method="post">
+        <form method="post" enctype="multipart/form-data">
           {% csrf_token %}
           <div class="row mb-3">
             <div class="col">
-              <label for="id_first_name" class="form-label fw-semibold">Prénom</label>
+              <label for="id_first_name" class="form-label fw-semibold">Prénom <span class="text-danger">*</span></label>
               <input type="text" name="first_name" id="id_first_name"
                      class="form-control" value="{{ form.first_name.value|default:'' }}" required>
             </div>
             <div class="col">
-              <label for="id_last_name" class="form-label fw-semibold">Nom</label>
+              <label for="id_last_name" class="form-label fw-semibold">Nom <span class="text-danger">*</span></label>
               <input type="text" name="last_name" id="id_last_name"
                      class="form-control" value="{{ form.last_name.value|default:'' }}" required>
             </div>
           </div>
           <div class="mb-3">
-            <label for="id_email" class="form-label fw-semibold">Email</label>
+            <label for="id_email" class="form-label fw-semibold">Email <span class="text-danger">*</span></label>
             <input type="email" name="email" id="id_email"
                    class="form-control" value="{{ form.email.value|default:'' }}" required>
           </div>
+          <div class="mb-3">
+            <label for="id_message" class="form-label fw-semibold">Message <span class="text-danger">*</span></label>
+            <textarea name="message" id="id_message" rows="4"
+                      class="form-control" required
+                      placeholder="Ex : Je suis en P2, parcours ex-LAS, promo 2026.">{{ form.message.value|default:'' }}</textarea>
+            <div class="form-text">Indiquez votre <strong>année</strong> (P2, D1...) et votre <strong>parcours</strong> (ex-PASS, ex-LAS, PACES...).</div>
+          </div>
           <div class="mb-4">
-            <label for="id_message" class="form-label fw-semibold">
-              Message <span class="text-muted fw-normal">(optionnel)</span>
+            <label for="id_certificate" class="form-label fw-semibold">
+              Certificat de scolarité <span class="text-danger">*</span>
             </label>
-            <textarea name="message" id="id_message" rows="3"
-                      class="form-control"
-                      placeholder="Ex : Je suis étudiant en P2, promo 2026...">{{ form.message.value|default:'' }}</textarea>
+            <input type="file" name="certificate" id="id_certificate"
+                   class="form-control" accept=".pdf" required>
+            <div class="form-text">Fichier PDF uniquement, 5 Mo maximum — justifie votre appartenance à l'université.</div>
           </div>
           <button type="submit" class="btn btn-primary w-100">Envoyer la demande</button>
+          <p class="text-center text-muted small mt-2 mb-0"><span class="text-danger">*</span> champs obligatoires</p>
         </form>
 
         <div class="text-center mt-3">
