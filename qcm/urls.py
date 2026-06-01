@@ -26,6 +26,12 @@ urlpatterns = [
     path("entrainement/tags/", views.TagsView.as_view(), name="tags"),
     path("entrainement/chapters/", views.ChaptersView.as_view(), name="chapters"),
     path("statistiques/", views.StatsView.as_view(), name="stats"),
+    path("historique/", views.HistoryView.as_view(), name="history"),
+    path(
+        "historique/session/<int:pk>/",
+        views.SessionDetailView.as_view(),
+        name="session_detail",
+    ),
     path(
         "statistiques/cours/<int:course_id>/",
         views.CourseStatsView.as_view(),

@@ -39,8 +39,8 @@
            title="Bientôt disponible" data-bs-toggle="tooltip">Flashcards</a>
       </li>
       <li class="nav-item">
-        <a class="nav-link disabled" tabindex="-1" aria-disabled="true"
-           title="Bientôt disponible" data-bs-toggle="tooltip">Historique</a>
+        <a class="nav-link {% if '/historique' in request.path %}active{% endif %}"
+           href="/historique/">Historique</a>
       </li>
       {% if user.is_staff %}
       <li class="nav-item">

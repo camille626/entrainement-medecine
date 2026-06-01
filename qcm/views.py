@@ -693,6 +693,172 @@ class StatsView(LoginRequiredMixin, View):
         )
 
 
+class HistoryView(LoginRequiredMixin, View):
+    """List of past quiz sessions for the logged-in user."""
+
+    template_name = "qcm/history.html"
+
+    def get(self, request):
+        sessions = (
+            QuizSession.objects.filter(user=request.user)
+            .select_related("course")
+            .prefetch_related("user_answers__answer")
+            .order_by("-started_at")
+        )
+
+        # Optional filter by course
+        course_filter = request.GET.get("course")
+        if course_filter:
+            sessions = sessions.filter(course_id=course_filter)
+
+        session_data = []
+        for s in sessions:
+            nb_questions = s.session_questions.count()
+            # Distinct questions with at least one answer
+            answered_q_ids = set(
+                s.user_answers.values_list("question_id", flat=True).distinct()
+            )
+            nb_answered_distinct = len(answered_q_ids)
+            is_complete = nb_answered_distinct >= nb_questions
+
+            # Note: aggregate per question (correct for multichoice)
+            if answered_q_ids:
+                total_q_score = 0.0
+                for q_id in answered_q_ids:
+                    q_ans = s.user_answers.filter(question_id=q_id).select_related(
+                        "answer"
+                    )
+                    q_score = min(
+                        1.0, max(0.0, sum(ua.answer.fraction for ua in q_ans))
+                    )
+                    total_q_score += q_score
+                note = (
+                    round(total_q_score / nb_questions * 20, 1)
+                    if nb_questions > 0
+                    else None
+                )
+            else:
+                note = None
+
+            # Courses: get from questions in session (supports multi-course)
+            from .models import Course
+
+            course_ids = s.session_questions.values_list(
+                "question__category__course_id", flat=True
+            ).distinct()
+            session_courses = list(
+                Course.objects.filter(pk__in=course_ids).order_by("name")
+            )
+
+            session_data.append(
+                {
+                    "session": s,
+                    "nb_questions": nb_questions,
+                    "nb_answered_distinct": nb_answered_distinct,
+                    "is_complete": is_complete,
+                    "note_20": note,
+                    "session_courses": session_courses,
+                }
+            )
+
+        # Courses for filter dropdown
+        from .models import UserEnrollment
+
+        if request.user.is_staff:
+            from .models import Course
+
+            courses = Course.objects.order_by("name")
+        else:
+            courses = [
+                e.course
+                for e in UserEnrollment.objects.filter(
+                    user=request.user
+                ).select_related("course")
+            ]
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "session_data": session_data,
+                "courses": courses,
+                "selected_course": course_filter,
+            },
+        )
+
+
+class SessionDetailView(LoginRequiredMixin, View):
+    """Detailed review of a past session — same logic as FinView."""
+
+    template_name = "qcm/session_detail.html"
+
+    def get(self, request, pk):
+        session = QuizSession.objects.filter(user=request.user, pk=pk).first()
+        if session is None:
+            from django.http import Http404
+
+            raise Http404
+
+        total = session.session_questions.count()
+        question_results = []
+        total_score = 0.0
+
+        for sq in session.session_questions.order_by("order"):
+            q = sq.question
+            user_answers = list(
+                session.user_answers.filter(question=q).select_related("answer")
+            )
+            selected_ids = {ua.answer_id for ua in user_answers}
+            raw_score = sum(ua.answer.fraction for ua in user_answers)
+            score = max(0.0, min(1.0, raw_score))
+            total_score += score
+            max_score = sum(a.fraction for a in q.answers.filter(fraction__gt=0))
+            ratio = score / max_score if max_score > 0 else 0.0
+
+            if not user_answers:
+                status = "unanswered"
+            elif ratio >= 1.0:
+                status = "correct"
+            elif ratio > 0:
+                status = "partial"
+            else:
+                status = "incorrect"
+
+            question_results.append(
+                {
+                    "question": q,
+                    "answers": get_answers(q, shuffle=session.shuffle_answers),
+                    "selected_ids": selected_ids,
+                    "score": score,
+                    "max_score": max_score,
+                    "status": status,
+                    "answered": bool(user_answers),
+                }
+            )
+
+        answered = sum(1 for r in question_results if r["answered"])
+        correct = sum(1 for r in question_results if r["status"] == "correct")
+        partial = sum(1 for r in question_results if r["status"] == "partial")
+        incorrect = sum(1 for r in question_results if r["status"] == "incorrect")
+        note_20 = round(total_score / total * 20, 1) if total > 0 else 0.0
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "session": session,
+                "question_results": question_results,
+                "total": total,
+                "answered": answered,
+                "correct": correct,
+                "partial": partial,
+                "incorrect": incorrect,
+                "total_score": round(total_score, 2),
+                "note_20": note_20,
+            },
+        )
+
+
 class CourseStatsView(LoginRequiredMixin, View):
     """Stats breakdown by EC for a specific course."""
 
