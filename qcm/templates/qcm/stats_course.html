@@ -1,0 +1,207 @@
+{% extends "qcm/base.html" %}
+{% block title %}{{ course.name }} — Statistiques — StudyMed{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12">
+    <nav aria-label="breadcrumb" class="mb-3">
+      <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/statistiques/">Statistiques</a></li>
+        <li class="breadcrumb-item active">{{ course.name }}</li>
+      </ol>
+    </nav>
+
+    <h2 class="mb-4">{{ course.name }}</h2>
+
+    <!-- Résumé du cours -->
+    <div class="row g-3 mb-4">
+      <div class="col-md-3">
+        <div class="card text-center border-primary">
+          <div class="card-body">
+            <div class="display-6 fw-bold text-primary">{{ course_block.note_20 }}<small class="fs-5">/20</small></div>
+            <div class="small text-muted">Note moyenne</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card text-center">
+          <div class="card-body">
+            <div class="display-6 fw-bold">{{ course_block.nb_done }}<small class="fs-6 text-muted">/{{ course_block.nb_available }}</small></div>
+            <div class="small text-muted">Questions réalisées</div>
+            <div class="progress mt-1" style="height:6px;">
+              <div class="progress-bar" style="width:{{ course_block.pct_done }}%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card text-center border-warning">
+          <div class="card-body">
+            <div class="display-6 fw-bold text-warning">{{ course_block.nb_anchored }}</div>
+            <div class="small text-muted">Ancrées ⚓</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card text-center border-success">
+          <div class="card-body">
+            <div class="display-6 fw-bold text-success">{{ course_block.pct_correct }}%</div>
+            <div class="small text-muted">Correctes</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Décomposition par EC — cartes avec doughnuts -->
+    <h5 class="mb-3">Par EC (enseignement de compétence)</h5>
+    {% if ec_stats %}
+    <div class="row g-3">
+      {% for s in ec_stats %}
+      <div class="col-md-6 col-lg-4">
+        <div class="card h-100">
+          <div class="card-body">
+            <h6 class="card-title fw-bold mb-3 text-center">{{ s.tag.name }}</h6>
+
+            <!-- Doughnuts -->
+            <div class="d-flex justify-content-around align-items-center mb-3">
+
+              <!-- Progression -->
+              <div class="text-center">
+                <div style="position:relative; width:110px; height:110px;">
+                  <canvas id="prog-{{ forloop.counter }}" width="110" height="110"></canvas>
+                  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;line-height:1.2;">
+                    <div class="fw-bold" style="font-size:1rem;">{{ s.pct_done }}%</div>
+                  </div>
+                </div>
+                <div class="small text-muted mt-1">Progression</div>
+                <div class="small">{{ s.nb_done }}/{{ s.nb_available }}</div>
+              </div>
+
+              <!-- Ancrage -->
+              <div class="text-center">
+                <div style="position:relative; width:110px; height:110px;">
+                  <canvas id="anc-{{ forloop.counter }}" width="110" height="110"></canvas>
+                  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;line-height:1.2;">
+                    <div class="fw-bold" style="font-size:1rem;">{{ s.pct_anchored }}%</div>
+                  </div>
+                </div>
+                <div class="small text-muted mt-1">Ancrage ⚓</div>
+                <div class="small">{{ s.nb_anchored }}/{{ s.nb_available }}</div>
+              </div>
+            </div>
+
+            <!-- Stats texte -->
+            <hr class="my-2">
+            <div class="d-flex justify-content-between small text-muted">
+              <span>Réponses totales</span>
+              <span class="fw-bold">{{ s.nb_total_sessions }}</span>
+            </div>
+            <div class="d-flex justify-content-between small text-muted">
+              <span>Note moyenne</span>
+              <span class="fw-bold {% if s.note_20 >= 14 %}text-success{% elif s.note_20 >= 10 %}text-warning{% elif s.note_20 > 0 %}text-danger{% else %}text-muted{% endif %}">
+                {% if s.nb_done > 0 %}{{ s.note_20 }}/20{% else %}—{% endif %}
+              </span>
+            </div>
+            <div class="d-flex justify-content-between small text-muted">
+              <span>% Correctes</span>
+              <span class="fw-bold">{% if s.nb_done > 0 %}{{ s.pct_correct }}%{% else %}—{% endif %}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Données JSON pour Chart.js -->
+    <script id="ec-data" type="application/json">{{ ec_json|safe }}</script>
+
+    {% else %}
+    <div class="alert alert-info">Aucune EC configurée pour ce cours.</div>
+    {% endif %}
+
+    <div class="mt-4">
+      <a href="/statistiques/" class="btn btn-outline-secondary">← Retour aux statistiques</a>
+      <a href="/entrainement/" class="btn btn-primary ms-2">S'entraîner sur ce cours</a>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const ecData = JSON.parse(document.getElementById('ec-data').textContent);
+const GREEN = 'rgba(144,238,144,0.75)';
+const RED   = 'rgba(255,182,193,0.75)';
+const BORDER_GREEN = 'rgba(100,180,100,0.9)';
+const BORDER_RED   = 'rgba(220,130,140,0.9)';
+
+const tooltipDefaults = {
+  backgroundColor: 'rgba(30,30,30,0.92)',
+  titleColor: 'transparent',
+  titleFont: { size: 0 },
+  titleMarginBottom: 0,
+  padding: 10,
+  clip: false,
+  callbacks: {}
+};
+
+ecData.forEach((ec, i) => {
+  const n = i + 1;
+
+  // Progression donut
+  const progNotDone = ec.nb_available - ec.nb_done;
+  new Chart(document.getElementById('prog-' + n), {
+    type: 'doughnut',
+    data: {
+      labels: ['Réalisées', 'Restantes'],
+      datasets: [{
+        data: [ec.nb_done, progNotDone > 0 ? progNotDone : 0],
+        backgroundColor: [GREEN, RED],
+        borderColor: [BORDER_GREEN, BORDER_RED],
+        borderWidth: 1,
+      }]
+    },
+    options: {
+      cutout: '60%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          ...tooltipDefaults,
+          callbacks: {
+            title: () => '',
+            label: (ctx) => ' ' + ctx.parsed
+          }
+        }
+      }
+    }
+  });
+
+  // Ancrage donut
+  const ancNotAnchored = ec.nb_available - ec.nb_anchored;
+  new Chart(document.getElementById('anc-' + n), {
+    type: 'doughnut',
+    data: {
+      labels: ['Ancrées', 'Non ancrées'],
+      datasets: [{
+        data: [ec.nb_anchored, ancNotAnchored > 0 ? ancNotAnchored : 0],
+        backgroundColor: [GREEN, RED],
+        borderColor: [BORDER_GREEN, BORDER_RED],
+        borderWidth: 1,
+      }]
+    },
+    options: {
+      cutout: '60%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          ...tooltipDefaults,
+          callbacks: {
+            title: () => '',
+            label: (ctx) => ' ' + ctx.parsed
+          }
+        }
+      }
+    }
+  });
+});
+</script>
+{% endblock %}
