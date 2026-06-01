@@ -501,6 +501,295 @@ class ChaptersView(LoginRequiredMixin, View):
         )
 
 
+def _compute_anchored_count(user_answers_qs):
+    """
+    Return the number of anchored questions.
+    A question is anchored if it has been answered fully correctly (all selected
+    answers have is_correct=True) at least 3 times total across any sessions.
+    """
+    # Build dict: (session_id, question_id) -> all_correct
+    pair_correct: dict[tuple[int, int], bool] = {}
+    for ua in user_answers_qs.select_related():
+        key = (ua.session_id, ua.question_id)
+        if key not in pair_correct:
+            pair_correct[key] = True
+        if not ua.is_correct:
+            pair_correct[key] = False
+
+    # Count correct attempts per question
+    q_correct_count: dict = {}
+    for (_, question_id), is_correct in pair_correct.items():
+        if is_correct:
+            q_correct_count[question_id] = q_correct_count.get(question_id, 0) + 1
+
+    return sum(1 for count in q_correct_count.values() if count >= 3)
+
+
+def _compute_course_block(course, all_answers):
+    """Return stats dict for a single course."""
+    from .models import Question
+
+    answers = all_answers.filter(question__category__course=course)
+    nb_available = Question.objects.filter(
+        category__course=course, qtype="multichoice"
+    ).count()
+    nb_done = answers.values("question_id").distinct().count()
+    nb_total_sessions = (
+        answers.count()
+    )  # total attempts (same question can appear multiple times)
+
+    if nb_total_sessions > 0:
+        score = sum(
+            min(1.0, max(0.0, ua.answer.fraction))
+            for ua in answers.select_related("answer")
+        )
+        note = round(score / nb_total_sessions * 20, 1)
+        correct = answers.filter(answer__fraction=1.0).count()
+        pct = round(correct / nb_total_sessions * 100)
+    else:
+        note = 0.0
+        pct = 0
+
+    pct_done = round(nb_done / nb_available * 100) if nb_available > 0 else 0
+    nb_anchored = _compute_anchored_count(answers)
+
+    return {
+        "course": course,
+        "nb_available": nb_available,
+        "nb_done": nb_done,
+        "nb_total_sessions": nb_total_sessions,
+        "pct_done": pct_done,
+        "note_20": note,
+        "pct_correct": pct,
+        "nb_anchored": nb_anchored,
+    }
+
+
+class StatsView(LoginRequiredMixin, View):
+    """Personal statistics page."""
+
+    template_name = "qcm/stats.html"
+
+    def get(self, request):
+        import json
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        user = request.user
+
+        # --- Global stats ---
+        all_answers = UserAnswer.objects.filter(session__user=user)
+        total_answered = all_answers.count()
+
+        if total_answered > 0:
+            correct = all_answers.filter(answer__fraction=1.0).count()
+            partial = all_answers.filter(
+                answer__fraction__gt=0.0, answer__fraction__lt=1.0
+            ).count()
+            incorrect = total_answered - correct - partial
+
+            total_score = sum(
+                min(1.0, max(0.0, ua.answer.fraction))
+                for ua in all_answers.select_related("answer")
+            )
+            note_20 = round(total_score / total_answered * 20, 1)
+
+            pct_correct = round(correct / total_answered * 100)
+            pct_partial = round(partial / total_answered * 100)
+            pct_incorrect = round(incorrect / total_answered * 100)
+        else:
+            correct = partial = incorrect = 0
+            note_20 = 0.0
+            pct_correct = pct_partial = pct_incorrect = 0
+
+        total_sessions = QuizSession.objects.filter(user=user).count()
+
+        # --- Per-course stats ---
+        from .models import Course, UserEnrollment
+
+        if user.is_staff:
+            # Staff: show courses that have at least 1 answer
+            answered_course_ids = all_answers.values_list(
+                "question__category__course_id", flat=True
+            ).distinct()
+            enrolled_courses = list(
+                Course.objects.filter(pk__in=answered_course_ids).order_by("name")
+            )
+        else:
+            enrolled_courses = [
+                e.course
+                for e in UserEnrollment.objects.filter(user=user).select_related(
+                    "course"
+                )
+            ]
+
+        course_stats = [_compute_course_block(c, all_answers) for c in enrolled_courses]
+        course_stats.sort(key=lambda x: x["course"].name)
+
+        # Global anchored count
+        from .models import Question
+
+        total_available = Question.objects.filter(
+            category__course__in=[c.pk for c in enrolled_courses],
+            qtype="multichoice",
+        ).count()
+        total_done = all_answers.values("question_id").distinct().count()
+        pct_done_global = (
+            round(total_done / total_available * 100) if total_available > 0 else 0
+        )
+        total_anchored = _compute_anchored_count(all_answers)
+        pct_anchored = (
+            round(total_anchored / total_available * 100) if total_available > 0 else 0
+        )
+
+        # --- Weekly progression (last 8 weeks) ---
+        now = timezone.now()
+        weekly_data = []
+        for i in range(7, -1, -1):
+            week_start = now - timedelta(weeks=i + 1)
+            week_end = now - timedelta(weeks=i)
+            week_answers = all_answers.filter(
+                session__started_at__gte=week_start,
+                session__started_at__lt=week_end,
+            )
+            wcount = week_answers.count()
+            if wcount > 0:
+                wscore = sum(
+                    min(1.0, max(0.0, ua.answer.fraction))
+                    for ua in week_answers.select_related("answer")
+                )
+                wnote = round(wscore / wcount * 20, 1)
+            else:
+                wnote = None
+            label = week_end.strftime("S%U")
+            weekly_data.append({"label": label, "note": wnote})
+
+        chart_labels = json.dumps([d["label"] for d in weekly_data])
+        chart_data = json.dumps([d["note"] for d in weekly_data])
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "total_answered": total_answered,
+                "total_sessions": total_sessions,
+                "correct": correct,
+                "partial": partial,
+                "incorrect": incorrect,
+                "note_20": note_20,
+                "pct_correct": pct_correct,
+                "pct_partial": pct_partial,
+                "pct_incorrect": pct_incorrect,
+                "course_stats": course_stats,
+                "chart_labels": chart_labels,
+                "chart_data": chart_data,
+                "total_available": total_available,
+                "total_done": total_done,
+                "pct_done_global": pct_done_global,
+                "total_anchored": total_anchored,
+                "pct_anchored": pct_anchored,
+            },
+        )
+
+
+class CourseStatsView(LoginRequiredMixin, View):
+    """Stats breakdown by EC for a specific course."""
+
+    template_name = "qcm/stats_course.html"
+
+    def get(self, request, course_id):
+        from .models import Course, Question, Tag
+
+        course = get_object_or_404(Course, pk=course_id)
+        user = request.user
+        all_answers = UserAnswer.objects.filter(
+            session__user=user, question__category__course=course
+        )
+
+        # Global course stats
+        course_block = _compute_course_block(
+            course, UserAnswer.objects.filter(session__user=user)
+        )
+
+        # EC tags with questions in this course
+        ec_tag_ids = (
+            Tag.objects.filter(
+                category__tag_type="souscategorie",
+                questions__category__course=course,
+            )
+            .distinct()
+            .order_by("name")
+        )
+
+        ec_stats = []
+        for tag in ec_tag_ids:
+            ec_answers = all_answers.filter(question__tags=tag)
+            nb_available = Question.objects.filter(
+                category__course=course, qtype="multichoice", tags=tag
+            ).count()
+            nb_done = ec_answers.values("question_id").distinct().count()
+            nb_total_sessions = ec_answers.count()
+            pct_done = round(nb_done / nb_available * 100) if nb_available > 0 else 0
+
+            if nb_total_sessions > 0:
+                score = sum(
+                    min(1.0, max(0.0, ua.answer.fraction))
+                    for ua in ec_answers.select_related("answer")
+                )
+                note = round(score / nb_total_sessions * 20, 1)
+                correct = ec_answers.filter(answer__fraction=1.0).count()
+                pct = round(correct / nb_total_sessions * 100)
+            else:
+                note = 0.0
+                pct = 0
+
+            nb_anchored = _compute_anchored_count(ec_answers)
+            pct_anchored = (
+                round(nb_anchored / nb_available * 100) if nb_available > 0 else 0
+            )
+
+            ec_stats.append(
+                {
+                    "tag": tag,
+                    "nb_available": nb_available,
+                    "nb_done": nb_done,
+                    "nb_total_sessions": nb_total_sessions,
+                    "pct_done": pct_done,
+                    "note_20": note,
+                    "pct_correct": pct,
+                    "nb_anchored": nb_anchored,
+                    "pct_anchored": pct_anchored,
+                }
+            )
+
+        import json
+
+        ec_json = json.dumps(
+            [
+                {
+                    "nb_available": s["nb_available"],
+                    "nb_done": s["nb_done"],
+                    "nb_anchored": s["nb_anchored"],
+                    "pct_done": s["pct_done"],
+                    "pct_anchored": s["pct_anchored"],
+                }
+                for s in ec_stats
+            ]
+        )
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "course": course,
+                "course_block": course_block,
+                "ec_stats": ec_stats,
+                "ec_json": ec_json,
+            },
+        )
+
+
 class InscriptionView(View):
     """Public registration request page — no login required."""
 

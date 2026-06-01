@@ -31,8 +31,8 @@
            href="/entrainement/">Entraînement</a>
       </li>
       <li class="nav-item">
-        <a class="nav-link disabled" tabindex="-1" aria-disabled="true"
-           title="Bientôt disponible" data-bs-toggle="tooltip">Statistiques</a>
+        <a class="nav-link {% if '/statistiques' in request.path %}active{% endif %}"
+           href="/statistiques/">Statistiques</a>
       </li>
       <li class="nav-item">
         <a class="nav-link disabled" tabindex="-1" aria-disabled="true"

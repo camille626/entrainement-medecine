@@ -1,0 +1,180 @@
+{% extends "qcm/base.html" %}
+{% block title %}Statistiques — StudyMed{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12">
+    <h2 class="mb-4">📊 Mes statistiques</h2>
+
+    {% if total_answered == 0 %}
+    <div class="alert alert-info">
+      Vous n'avez pas encore répondu à des questions. <a href="/entrainement/">Démarrer une session</a> pour voir vos statistiques.
+    </div>
+    {% else %}
+
+    <!-- Vue d'ensemble -->
+    <div class="row g-3 mb-4">
+      <div class="col-md-3">
+        <div class="card text-center border-primary">
+          <div class="card-body">
+            <div class="display-6 fw-bold text-primary">{{ note_20 }}<small class="fs-5">/20</small></div>
+            <div class="small text-muted">Note moyenne</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card text-center">
+          <div class="card-body">
+            <div class="display-6 fw-bold">{{ total_done }}<small class="fs-6 text-muted">/{{ total_available }}</small></div>
+            <div class="small text-muted">Questions réalisées</div>
+            <div class="progress mt-1" style="height:6px;">
+              <div class="progress-bar" style="width:{{ pct_done_global }}%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card text-center border-warning">
+          <div class="card-body">
+            <div class="display-6 fw-bold text-warning">{{ total_anchored }}</div>
+            <div class="small text-muted">Questions ancrées ⚓</div>
+            <div class="small text-muted">{{ pct_anchored }}% du total</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card text-center border-success">
+          <div class="card-body">
+            <div class="display-6 fw-bold text-success">{{ pct_correct }}%</div>
+            <div class="small text-muted">Correctes</div>
+            <div class="small text-muted">{{ total_sessions }} sessions</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Barre de répartition -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <h6 class="card-title mb-3">Répartition des réponses</h6>
+        <div class="progress" style="height: 24px;">
+          {% if pct_correct > 0 %}
+          <div class="progress-bar bg-success" style="width: {{ pct_correct }}%" title="{{ pct_correct }}% correctes">
+            {% if pct_correct > 8 %}{{ pct_correct }}%{% endif %}
+          </div>
+          {% endif %}
+          {% if pct_partial > 0 %}
+          <div class="progress-bar bg-warning" style="width: {{ pct_partial }}%" title="{{ pct_partial }}% partielles">
+            {% if pct_partial > 8 %}{{ pct_partial }}%{% endif %}
+          </div>
+          {% endif %}
+          {% if pct_incorrect > 0 %}
+          <div class="progress-bar bg-danger" style="width: {{ pct_incorrect }}%" title="{{ pct_incorrect }}% incorrectes">
+            {% if pct_incorrect > 8 %}{{ pct_incorrect }}%{% endif %}
+          </div>
+          {% endif %}
+        </div>
+        <div class="d-flex gap-3 mt-2 small">
+          <span><span class="badge bg-success">✓</span> {{ correct }} correctes</span>
+          <span><span class="badge bg-warning text-dark">~</span> {{ partial }} partielles</span>
+          <span><span class="badge bg-danger">✗</span> {{ incorrect }} incorrectes</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Graphe de progression -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <h6 class="card-title mb-3">Progression sur 8 semaines</h6>
+        <canvas id="progressChart" height="80"></canvas>
+      </div>
+    </div>
+
+    <!-- Décomposition par cours -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <h6 class="card-title mb-3">Par cours <small class="text-muted fw-normal">(cliquez pour le détail par EC)</small></h6>
+        {% if course_stats %}
+        <div class="table-responsive">
+          <table class="table table-hover table-sm align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Cours</th>
+                <th class="text-center">Réalisées</th>
+                <th class="text-center">Distinctes</th>
+                <th class="text-center">Disponibles</th>
+                <th class="text-center">Progression</th>
+                <th class="text-center">Note /20</th>
+                <th class="text-center">Ancrées ⚓</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s in course_stats %}
+              <tr class="{% if s.nb_done > 0 %}cursor-pointer{% endif %}"
+                  {% if s.nb_done > 0 %}onclick="location='/statistiques/cours/{{ s.course.pk }}/'"
+                  style="cursor:pointer;"{% endif %}>
+                <td class="fw-semibold small">
+                  {{ s.course.name }}
+                  {% if s.nb_done > 0 %}<span class="ms-1 text-muted small">›</span>{% endif %}
+                </td>
+                <td class="text-center">{{ s.nb_total_sessions }}</td>
+                <td class="text-center text-muted">{{ s.nb_done }}</td>
+                <td class="text-center text-muted">{{ s.nb_available }}</td>
+                <td style="width:120px;">
+                  <div class="d-flex align-items-center gap-2">
+                    <div class="progress flex-grow-1" style="height:6px;">
+                      <div class="progress-bar bg-primary" style="width:{{ s.pct_done }}%"></div>
+                    </div>
+                    <small class="text-muted">{{ s.pct_done }}%</small>
+                  </div>
+                </td>
+                <td class="text-center">
+                  <span class="fw-bold {% if s.note_20 >= 14 %}text-success{% elif s.note_20 >= 10 %}text-warning{% elif s.note_20 > 0 %}text-danger{% else %}text-muted{% endif %}">
+                    {% if s.nb_done > 0 %}{{ s.note_20 }}{% else %}—{% endif %}
+                  </span>
+                </td>
+                <td class="text-center">
+                  <span class="text-warning fw-bold">{{ s.nb_anchored }}</span>
+                  {% if s.nb_available > 0 %}<small class="text-muted">/{{ s.nb_available }}</small>{% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="text-muted small">Aucune donnée disponible.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    {% endif %}
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const labels = {{ chart_labels|safe }};
+const data = {{ chart_data|safe }};
+new Chart(document.getElementById('progressChart'), {
+  type: 'line',
+  data: {
+    labels: labels,
+    datasets: [{
+      label: 'Note /20',
+      data: data,
+      borderColor: '#0d6efd',
+      backgroundColor: 'rgba(13,110,253,0.1)',
+      tension: 0.3,
+      fill: true,
+      pointRadius: 4,
+      spanGaps: true,
+    }]
+  },
+  options: {
+    scales: { y: { min: 0, max: 20, ticks: { stepSize: 5 } } },
+    plugins: { legend: { display: false } }
+  }
+});
+</script>
+{% endblock %}
