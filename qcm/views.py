@@ -3,6 +3,7 @@
 import random
 from typing import TYPE_CHECKING
 
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
@@ -34,7 +35,7 @@ def get_answers(question: "QuestionModel", shuffle: bool = True) -> list:
     return answers
 
 
-class HomeView(TemplateView):
+class HomeView(LoginRequiredMixin, TemplateView):
     template_name = "qcm/home.html"
 
     def get_context_data(self, **kwargs):
@@ -54,7 +55,7 @@ class HomeView(TemplateView):
         return ctx
 
 
-class ConfigurationView(View):
+class ConfigurationView(LoginRequiredMixin, View):
     template_name = "qcm/configuration.html"
 
     def get(self, request):
@@ -136,6 +137,7 @@ class ConfigurationView(View):
 
         first_course = courses.first()
         session = QuizSession.objects.create(
+            user=request.user,
             course=first_course,
             mode="training" if mode == "training" else "training",
             shuffle_answers=form.cleaned_data.get("shuffle_answers", True),
@@ -148,7 +150,7 @@ class ConfigurationView(View):
         return redirect("qcm:question", pk=session.pk)
 
 
-class QuestionView(View):
+class QuestionView(LoginRequiredMixin, View):
     template_name = "qcm/question.html"
 
     def get(self, request, pk):
@@ -185,7 +187,7 @@ class QuestionView(View):
         )
 
 
-class CheckView(View):
+class CheckView(LoginRequiredMixin, View):
     def post(self, request, pk):
         session = get_object_or_404(QuizSession, pk=pk)
         answered_question_ids = set(
@@ -261,7 +263,7 @@ class CheckView(View):
         )
 
 
-class FinView(View):
+class FinView(LoginRequiredMixin, View):
     template_name = "qcm/fin.html"
 
     def get(self, request, pk):
@@ -329,7 +331,7 @@ class FinView(View):
         )
 
 
-class TagsView(View):
+class TagsView(LoginRequiredMixin, View):
     """HTMX endpoint: return tag checkboxes filtered by selected courses."""
 
     def get(self, request):
@@ -412,7 +414,7 @@ class TagsView(View):
         )
 
 
-class ChaptersView(View):
+class ChaptersView(LoginRequiredMixin, View):
     """HTMX endpoint: return chapter tags for selected EC (souscategorie) tags."""
 
     def get(self, request):

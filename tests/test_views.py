@@ -84,7 +84,18 @@ def session(course, question):
 
 
 @pytest.fixture
-def client(client):
+def logged_user(db):
+    from django.contrib.auth.models import User
+
+    return User.objects.create_user(
+        username="testuser",
+        password="pass",  # pragma: allowlist secret
+    )
+
+
+@pytest.fixture
+def client(client, logged_user):
+    client.force_login(logged_user)
     return client
 
 

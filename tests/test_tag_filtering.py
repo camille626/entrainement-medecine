@@ -1,6 +1,7 @@
 """Tests RED pour le filtrage dynamique des tags (issue #10)."""
 
 import pytest
+from django.contrib.auth.models import User
 
 from qcm.models import (
     Answer,
@@ -144,6 +145,16 @@ class TestTagCategory:
 
     def test_tag_has_category(self, tag_immuno, cat_sous_tissu):
         assert tag_immuno.category == cat_sous_tissu
+
+
+@pytest.fixture
+def client(client, db):
+    user = User.objects.create_user(
+        username="tester",
+        password="pass",  # pragma: allowlist secret
+    )
+    client.force_login(user)
+    return client
 
 
 # ---------------------------------------------------------------------------
