@@ -36,6 +36,86 @@ def get_answers(question: "QuestionModel", shuffle: bool = True) -> list:
     return answers
 
 
+def _apply_question_filter(
+    qs, question_filter: str, user, nb_questions: int
+) -> list[int]:
+    """Return a list of question IDs based on the filter mode."""
+    all_ids = list(qs.values_list("id", flat=True))
+
+    if question_filter == "never":
+        # Exclude questions already answered by this user
+        done_ids = set(
+            UserAnswer.objects.filter(session__user=user)
+            .values_list("question_id", flat=True)
+            .distinct()
+        )
+        priority = [q for q in all_ids if q not in done_ids]
+        rest = [q for q in all_ids if q in done_ids]
+        random.shuffle(priority)
+        random.shuffle(rest)
+        return (priority + rest)[
+            :nb_questions
+        ]  # never filter: priority=never done, rest=done
+
+    if question_filter == "review":
+        # Compute success rate per question for this user
+        from django.db.models import Count
+
+        answered = (
+            UserAnswer.objects.filter(session__user=user, question_id__in=all_ids)
+            .values("question_id")
+            .annotate(
+                total=Count("id"),
+                correct=Count(
+                    "id",
+                    filter=__import__("django.db.models", fromlist=["Q"]).Q(
+                        is_correct=True
+                    ),
+                ),
+            )
+        )
+        rate_map = {
+            row["question_id"]: row["correct"] / row["total"] for row in answered
+        }
+
+        # Priority: never done (rate=0) + rate < 0.5
+        never_done = [q for q in all_ids if q not in rate_map]
+        struggling = [q for q in all_ids if q in rate_map and rate_map[q] < 0.5]
+        mastered = [q for q in all_ids if q in rate_map and rate_map[q] >= 0.5]
+
+        random.shuffle(never_done)
+        random.shuffle(struggling)
+        random.shuffle(mastered)
+
+        priority = never_done + struggling
+        return (priority + mastered)[:nb_questions]
+
+    if question_filter == "anchor":
+        # Exclude anchored questions (answered fully correctly 3+ times)
+        all_ua = UserAnswer.objects.filter(
+            session__user=user, question_id__in=all_ids
+        ).select_related()
+        pair_correct: dict[tuple[int, int], bool] = {}
+        for ua in all_ua:
+            key = (ua.session_id, ua.question_id)
+            if key not in pair_correct:
+                pair_correct[key] = True
+            if not ua.is_correct:
+                pair_correct[key] = False
+        q_correct_count: dict[int, int] = {}
+        for (_, q_id), is_corr in pair_correct.items():
+            if is_corr:
+                q_correct_count[q_id] = q_correct_count.get(q_id, 0) + 1
+        anchored_ids = {q_id for q_id, cnt in q_correct_count.items() if cnt >= 3}
+        not_anchored = [q for q in all_ids if q not in anchored_ids]
+        random.shuffle(not_anchored)
+        return not_anchored[:nb_questions]
+
+    # Default: all random
+    random.shuffle(all_ids)
+    return all_ids[:nb_questions]
+
+
 class HomeView(LoginRequiredMixin, TemplateView):
     template_name = "qcm/home.html"
 
@@ -113,9 +193,9 @@ class ConfigurationView(LoginRequiredMixin, View):
             )
 
         courses = form.cleaned_data["courses"]
-        mode = form.cleaned_data["mode"]
         nb_questions = form.cleaned_data["nb_questions"]
         tags = form.cleaned_data.get("tags")
+        question_filter = form.cleaned_data.get("question_filter") or "all"
 
         # Select random questions from chosen courses
 
@@ -151,9 +231,10 @@ class ConfigurationView(LoginRequiredMixin, View):
                     | qs.exclude(tags__in=all_chapter_ids)
                 ).distinct()
 
-        question_ids = list(qs.values_list("id", flat=True))
-        random.shuffle(question_ids)
-        question_ids = question_ids[:nb_questions]
+        # Apply question filter (review / never / all)
+        question_ids = _apply_question_filter(
+            qs, question_filter, request.user, nb_questions
+        )
 
         if not question_ids:
             form.add_error(None, "Aucune question disponible pour ces critères.")
@@ -167,10 +248,14 @@ class ConfigurationView(LoginRequiredMixin, View):
             )
 
         first_course = courses.first()
+        # Determine session mode
+        session_mode = (
+            "review" if question_filter in ("review", "never") else "training"
+        )
         session = QuizSession.objects.create(
             user=request.user,
             course=first_course,
-            mode="training" if mode == "training" else "training",
+            mode=session_mode,
             shuffle_answers=form.cleaned_data.get("shuffle_answers", True),
         )
         for i, q_id in enumerate(question_ids, start=1):
