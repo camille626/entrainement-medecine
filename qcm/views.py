@@ -11,10 +11,13 @@ from django.views.generic import TemplateView
 from .forms import SessionConfigForm
 from .models import (
     Answer,
+    Course,
     QuizSession,
     QuizSessionQuestion,
     Semester,
     StudyYear,
+    Tag,
+    TagCategory,
     UserAnswer,
 )
 
@@ -83,14 +86,38 @@ class ConfigurationView(View):
         tags = form.cleaned_data.get("tags")
 
         # Select random questions from chosen courses
+
         from .models import Question
 
         qs = Question.objects.filter(
             category__course__in=courses,
             qtype="multichoice",
         )
+
         if tags:
-            qs = qs.filter(tags__in=tags).distinct()
+            # Separate tags by type: annale/EC filters are strict,
+            # chapter filters also include unclassified questions (no chapter tag)
+            tag_list = list(tags)
+            chapter_tags = [
+                t
+                for t in tag_list
+                if t.category and t.category.tag_type == TagCategory.CHAPITRE
+            ]
+            non_chapter_tags = [t for t in tag_list if t not in chapter_tags]
+
+            # Strict filter: annale + EC tags
+            if non_chapter_tags:
+                qs = qs.filter(tags__in=non_chapter_tags).distinct()
+
+            # Chapter filter: match selected chapters OR questions with no chapter tag
+            if chapter_tags:
+                all_chapter_ids = Tag.objects.filter(
+                    category__tag_type=TagCategory.CHAPITRE
+                ).values_list("id", flat=True)
+                qs = (
+                    qs.filter(tags__in=chapter_tags)
+                    | qs.exclude(tags__in=all_chapter_ids)
+                ).distinct()
 
         question_ids = list(qs.values_list("id", flat=True))
         random.shuffle(question_ids)
@@ -298,5 +325,144 @@ class FinView(View):
                 "incorrect": incorrect,
                 "total_score": round(total_score, 2),
                 "note_20": note_20,
+            },
+        )
+
+
+class TagsView(View):
+    """HTMX endpoint: return tag checkboxes filtered by selected courses."""
+
+    def get(self, request):
+        course_ids = request.GET.getlist("courses")
+
+        if not course_ids:
+            return render(
+                request,
+                "qcm/_tags_partial.html",
+                {"tag_groups": [], "no_courses": True},
+            )
+
+        # Store selected course IDs in session for ChaptersView to use
+        request.session["selected_course_ids"] = course_ids
+
+        courses = Course.objects.filter(pk__in=course_ids)
+
+        # Build tag groups
+        tag_groups = []
+
+        # Categories with course=NULL are "global" → shown for any selected course
+        # Categories with course=X → shown only if that course is selected
+        from django.db.models import Q
+
+        # 1. Annale categories (always global)
+        # 2. EC/souscategorie categories (global OR course-specific)
+        ec_cats = (
+            TagCategory.objects.filter(
+                tag_type__in=[TagCategory.ANNEE, TagCategory.SOUSCATEGORIE],
+            )
+            .filter(Q(course__isnull=True) | Q(course__in=courses))
+            .prefetch_related("tags")
+            .order_by("order", "name")
+        )
+
+        for cat in ec_cats:
+            if cat.course is None and cat.tag_type == TagCategory.SOUSCATEGORIE:
+                # Global EC category: filter tags to those with questions in selected courses
+                tags = list(
+                    cat.tags.filter(questions__category__course__in=courses)
+                    .distinct()
+                    .order_by("name")
+                )
+            else:
+                tags = list(cat.tags.all())
+            if tags:
+                tag_groups.append({"category": cat, "tags": tags})
+
+        # Chapter tags directly linked to a selected course (no EC parent)
+        # These appear immediately without needing an EC selection
+        direct_chapter_tags = (
+            Tag.objects.filter(
+                course__in=courses,
+                parent_ec__isnull=True,
+                category__tag_type=TagCategory.CHAPITRE,
+            )
+            .select_related("category")
+            .order_by("category__order", "name")
+        )
+        if direct_chapter_tags.exists():
+            from collections import defaultdict
+
+            direct_groups: dict = defaultdict(list)
+            for tag in direct_chapter_tags:
+                direct_groups[tag.category].append(tag)
+            for cat, tags in sorted(
+                direct_groups.items(),
+                key=lambda x: (x[0].order if x[0] else 999, x[0].name if x[0] else ""),
+            ):
+                tag_groups.append({"category": cat, "tags": tags})
+
+        return render(
+            request,
+            "qcm/_tags_partial.html",
+            {
+                "tag_groups": tag_groups,
+                "no_courses": False,
+                "selected_course_ids": course_ids,
+            },
+        )
+
+
+class ChaptersView(View):
+    """HTMX endpoint: return chapter tags for selected EC (souscategorie) tags."""
+
+    def get(self, request):
+        ec_tag_ids = request.GET.getlist("tags")
+
+        if not ec_tag_ids:
+            return render(request, "qcm/_chapters_partial.html", {"chapter_groups": []})
+
+        ec_tags = Tag.objects.filter(
+            pk__in=ec_tag_ids,
+            category__tag_type=TagCategory.SOUSCATEGORIE,
+        )
+
+        # Use explicit parent_ec + course relationships (configured in admin)
+        from django.db.models import Q
+
+        course_ids = request.session.get("selected_course_ids", [])
+        tag_filter = Q(parent_ec__in=ec_tags)
+        if course_ids:
+            # Show chapters matching the course, OR chapters with no course assigned
+            tag_filter &= Q(course_id__in=course_ids) | Q(course__isnull=True)
+
+        chapter_tags = (
+            Tag.objects.filter(tag_filter)
+            .select_related("category", "course")
+            .order_by("category__order", "name")
+        )
+
+        if not chapter_tags.exists():
+            return render(request, "qcm/_chapters_partial.html", {"chapter_groups": []})
+
+        # Group by category
+        from collections import defaultdict
+
+        groups: dict = defaultdict(list)
+        for tag in chapter_tags:
+            groups[tag.category].append(tag)
+
+        chapter_groups = [
+            {"category": cat, "tags": tags}
+            for cat, tags in sorted(
+                groups.items(),
+                key=lambda x: (x[0].order if x[0] else 999, x[0].name if x[0] else ""),
+            )
+        ]
+
+        return render(
+            request,
+            "qcm/_chapters_partial.html",
+            {
+                "chapter_groups": chapter_groups,
             },
         )

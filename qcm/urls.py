@@ -23,4 +23,6 @@ urlpatterns = [
         views.FinView.as_view(),
         name="fin",
     ),
+    path("entrainement/tags/", views.TagsView.as_view(), name="tags"),
+    path("entrainement/chapters/", views.ChaptersView.as_view(), name="chapters"),
 ]

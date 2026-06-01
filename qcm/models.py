@@ -62,9 +62,63 @@ class Category(models.Model):
         return self.name
 
 
+class TagCategory(models.Model):
+    ANNEE = "annee"
+    SOUSCATEGORIE = "souscategorie"
+    CHAPITRE = "chapitre"
+    TYPE_CHOICES = [
+        (ANNEE, "Annales par année"),
+        (SOUSCATEGORIE, "Sous-catégorie de cours"),
+        (CHAPITRE, "Chapitre"),
+    ]
+
+    name = models.CharField(max_length=100)
+    tag_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default=ANNEE)
+    course = models.ForeignKey(
+        "Course",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="tag_categories",
+    )
+    order = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "name"]
+        verbose_name = "catégorie de tag"
+        verbose_name_plural = "catégories de tags"
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Tag(models.Model):
     name = models.CharField(max_length=100, unique=True)
     moodle_id = models.IntegerField(unique=True)
+    category = models.ForeignKey(
+        TagCategory,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tags",
+    )
+    parent_ec = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="chapter_tags",
+        verbose_name="EC parente (pour les tags chapitres)",
+        limit_choices_to={"category__tag_type": "souscategorie"},
+    )
+    course = models.ForeignKey(
+        "Course",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="chapter_tags",
+        verbose_name="Cours (pour les tags chapitres)",
+    )
 
     class Meta:
         ordering = ["name"]

@@ -9,6 +9,7 @@ from .models import (
     Semester,
     StudyYear,
     Tag,
+    TagCategory,
     UserAnswer,
 )
 
@@ -26,10 +27,20 @@ class CategoryAdmin(admin.ModelAdmin):
     search_fields = ["name"]
 
 
+@admin.register(TagCategory)
+class TagCategoryAdmin(admin.ModelAdmin):
+    list_display = ["name", "tag_type", "course", "order"]
+    list_filter = ["tag_type", "course"]
+    search_fields = ["name"]
+    ordering = ["order", "name"]
+
+
 @admin.register(Tag)
 class TagAdmin(admin.ModelAdmin):
-    list_display = ["name", "moodle_id"]
+    list_display = ["name", "moodle_id", "category", "parent_ec", "course"]
+    list_filter = ["category__tag_type", "category", "course"]
     search_fields = ["name"]
+    raw_id_fields = ["parent_ec"]
 
 
 @admin.register(Question)

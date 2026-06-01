@@ -14,7 +14,11 @@
 
       <div class="card mb-3">
         <div class="card-header fw-bold">Cours</div>
-        <div class="card-body">
+        <div class="card-body"
+             hx-trigger="change"
+             hx-get="/entrainement/tags/"
+             hx-target="#tags-zone"
+             hx-include="[name='courses']">
           {% for semester in semesters %}
           <h6 class="text-primary">{{ semester.study_year.name }} — {{ semester.name }}</h6>
           <div class="row row-cols-1 row-cols-md-2 mb-3">
@@ -83,15 +87,8 @@
       <div class="card mb-4">
         <div class="card-header fw-bold">Filtrer par tags <small class="text-muted">(optionnel)</small></div>
         <div class="card-body">
-          <div class="row row-cols-2 row-cols-md-4 g-1" style="max-height: 200px; overflow-y: auto;">
-            {% for tag in form.tags.field.queryset %}
-            <div class="col">
-              <div class="form-check form-check-sm">
-                <input class="form-check-input" type="checkbox" name="tags" value="{{ tag.pk }}" id="tag_{{ tag.pk }}">
-                <label class="form-check-label small" for="tag_{{ tag.pk }}">{{ tag.name }}</label>
-              </div>
-            </div>
-            {% endfor %}
+          <div id="tags-zone">
+            {% include "qcm/_tags_partial.html" with no_courses=True tag_groups=None %}
           </div>
         </div>
       </div>
