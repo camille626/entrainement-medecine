@@ -9,12 +9,13 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 from django.views.generic import TemplateView
 
-from .forms import SessionConfigForm
+from .forms import InscriptionForm, SessionConfigForm
 from .models import (
     Answer,
     Course,
     QuizSession,
     QuizSessionQuestion,
+    RegistrationRequest,
     Semester,
     StudyYear,
     Tag,
@@ -468,3 +469,31 @@ class ChaptersView(LoginRequiredMixin, View):
                 "chapter_groups": chapter_groups,
             },
         )
+
+
+class InscriptionView(View):
+    """Public registration request page — no login required."""
+
+    template_name = "registration/inscription.html"
+
+    def get(self, request):
+        form = InscriptionForm()
+        return render(request, self.template_name, {"form": form})
+
+    def post(self, request):
+        form = InscriptionForm(request.POST)
+        if form.is_valid():
+            RegistrationRequest.objects.create(
+                first_name=form.cleaned_data["first_name"],
+                last_name=form.cleaned_data["last_name"],
+                email=form.cleaned_data["email"],
+                message=form.cleaned_data.get("message", ""),
+            )
+            return redirect("qcm:inscription_done")
+        return render(request, self.template_name, {"form": form})
+
+
+class InscriptionDoneView(TemplateView):
+    """Confirmation page after registration request."""
+
+    template_name = "registration/inscription_done.html"

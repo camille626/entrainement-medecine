@@ -1,6 +1,6 @@
 from django import forms
 
-from .models import Course, Tag
+from .models import Course, RegistrationRequest, Tag
 
 
 class SessionConfigForm(forms.Form):
@@ -42,3 +42,23 @@ class SessionConfigForm(forms.Form):
             "semester__study_year"
         ).order_by("semester__study_year__order", "semester__order", "name")
         self.fields["tags"].queryset = Tag.objects.order_by("name")
+
+
+class InscriptionForm(forms.Form):
+    first_name = forms.CharField(max_length=150, label="Prénom")
+    last_name = forms.CharField(max_length=150, label="Nom")
+    email = forms.EmailField(label="Email")
+    message = forms.CharField(
+        widget=forms.Textarea(attrs={"rows": 3}),
+        required=False,
+        label="Message (optionnel)",
+        help_text="Ex : Je suis étudiant en P2, promo 2026...",
+    )
+
+    def clean_email(self):
+        email = self.cleaned_data["email"]
+        if RegistrationRequest.objects.filter(email=email).exists():
+            raise forms.ValidationError(
+                "Une demande avec cet email existe déjà. Contactez l'administrateur."
+            )
+        return email
