@@ -256,7 +256,12 @@ class RegistrationRequest(models.Model):
     first_name = models.CharField(max_length=150, verbose_name="Prénom")
     last_name = models.CharField(max_length=150, verbose_name="Nom")
     email = models.EmailField(unique=True, verbose_name="Email")
-    message = models.TextField(blank=True, verbose_name="Message")
+    message = models.TextField(verbose_name="Message")
+    certificate = models.FileField(
+        upload_to="certificates/",
+        verbose_name="Certificat de scolarité (PDF)",
+        blank=True,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDING)
 

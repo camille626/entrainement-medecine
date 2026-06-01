@@ -97,7 +97,14 @@ def _generate_password(length: int = 12) -> str:
 
 @admin.register(RegistrationRequest)
 class RegistrationRequestAdmin(admin.ModelAdmin):
-    list_display = ["email", "first_name", "last_name", "status", "created_at"]
+    list_display = [
+        "email",
+        "first_name",
+        "last_name",
+        "status",
+        "created_at",
+        "certificate",
+    ]
     list_filter = ["status"]
     search_fields = ["email", "first_name", "last_name"]
     ordering = ["-created_at"]
