@@ -11,7 +11,33 @@
   <nav class="navbar navbar-dark bg-primary mb-4">
     <div class="container">
       <a class="navbar-brand fw-bold" href="/">📚 Entraînement Médecine</a>
-      <a class="btn btn-outline-light btn-sm" href="/entrainement/">Nouvelle session</a>
+      <div class="d-flex align-items-center gap-2">
+        <a class="btn btn-outline-light btn-sm" href="/entrainement/">Nouvelle session</a>
+        {% if user.is_authenticated %}
+        <div class="dropdown">
+          <button class="btn btn-outline-light btn-sm dropdown-toggle d-flex align-items-center gap-2"
+                  type="button" data-bs-toggle="dropdown" aria-expanded="false">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor"
+                 class="bi bi-person-circle" viewBox="0 0 16 16">
+              <path d="M11 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0"/>
+              <path fill-rule="evenodd" d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8m8-7a7 7 0 0 0-5.468 11.37C3.242 11.226 4.805 10 8 10s4.757 1.225 5.468 2.37A7 7 0 0 0 8 1"/>
+            </svg>
+            {{ user.get_full_name|default:user.username }}
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><span class="dropdown-item-text text-muted small">{{ user.username }}</span></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="#">👤 Profil</a></li>
+            <li>
+              <form method="post" action="/logout/" class="m-0">
+                {% csrf_token %}
+                <button type="submit" class="dropdown-item text-danger">🚪 Déconnexion</button>
+              </form>
+            </li>
+          </ul>
+        </div>
+        {% endif %}
+      </div>
     </div>
   </nav>
   <div class="container">
