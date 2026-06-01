@@ -343,3 +343,77 @@ class RegistrationRequest(models.Model):
 
     def __str__(self) -> str:
         return f"{self.first_name} {self.last_name} <{self.email}> — {self.get_status_display()}"
+
+
+class Notification(models.Model):
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="notifications"
+    )
+    message = models.TextField()
+    link = models.CharField(max_length=255, blank=True)
+    read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"[{'Lu' if self.read else 'Non lu'}] {self.user.username}: {self.message[:50]}"
+
+
+class Errata(models.Model):
+    POINTS = "points"
+    CORRECTION = "correction"
+    IMAGE = "image"
+    TAG = "tag"
+    OTHER = "autre"
+    TYPE_CHOICES = [
+        (POINTS, "Erreur d'attribution de points"),
+        (CORRECTION, "Erreur dans la correction"),
+        (IMAGE, "Image manquante"),
+        (TAG, "Erreur de tag"),
+        (OTHER, "Autre"),
+    ]
+
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+    STATUS_CHOICES = [
+        (PENDING, "En attente"),
+        (ACCEPTED, "Accepté"),
+        (REJECTED, "Refusé"),
+    ]
+
+    question = models.ForeignKey(
+        Question, on_delete=models.CASCADE, related_name="erratas"
+    )
+    reported_by = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="erratas_reported"
+    )
+    error_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    description = models.TextField(verbose_name="Description du problème")
+    concerned_answers = models.ManyToManyField(
+        Answer, blank=True, related_name="erratas", verbose_name="Réponses concernées"
+    )
+    suggested_tags = models.ManyToManyField(
+        Tag, blank=True, related_name="erratas", verbose_name="Tags suggérés"
+    )
+    admin_note = models.TextField(blank=True, verbose_name="Note admin")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolved_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="erratas_resolved",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Errata"
+        verbose_name_plural = "Erratas"
+
+    def __str__(self) -> str:
+        return f"[{self.get_error_type_display()}] Q#{self.question_id} — {self.reported_by.username}"

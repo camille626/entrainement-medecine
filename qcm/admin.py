@@ -11,6 +11,8 @@ from .models import (
     Category,
     Course,
     CoursePackage,
+    Errata,
+    Notification,
     Question,
     QuizSession,
     RegistrationRequest,
@@ -297,3 +299,80 @@ class RegistrationRequestAdmin(admin.ModelAdmin):
             status=RegistrationRequest.REJECTED
         )
         self.message_user(request, f"{count} demande(s) refusée(s).")
+
+
+class AnswerInlineForErrata(admin.TabularInline):
+    model = Answer
+    extra = 0
+    fields = ["text", "fraction", "is_correct"]
+    readonly_fields = ["text"]
+
+    def get_queryset(self, request):
+        return super().get_queryset(request)
+
+
+@admin.register(Errata)
+class ErrataAdmin(admin.ModelAdmin):
+    list_display = [
+        "question_short",
+        "error_type",
+        "reported_by",
+        "status",
+        "created_at",
+    ]
+    list_filter = ["status", "error_type", "question__category__course"]
+    search_fields = ["description", "reported_by__username", "question__text"]
+    ordering = ["-created_at"]
+    filter_horizontal = ["concerned_answers", "suggested_tags"]
+    readonly_fields = [
+        "question",
+        "reported_by",
+        "created_at",
+        "resolved_at",
+        "resolved_by",
+    ]
+    actions = ["accept_erratas", "reject_erratas"]
+
+    @admin.display(description="Question")
+    def question_short(self, obj):
+        text = obj.question.text[:60].replace("<p>", "").replace("</p>", "")
+        return f"Q#{obj.question_id} — {text}"
+
+    @admin.action(description="✅ Accepter les erratas sélectionnés")
+    def accept_erratas(self, request, queryset):
+        from django.utils import timezone
+
+        count = 0
+        for errata in queryset.filter(status=Errata.PENDING):
+            errata.status = Errata.ACCEPTED
+            errata.resolved_by = request.user
+            errata.resolved_at = timezone.now()
+            errata.save()
+
+            # If tag error: apply suggested tags
+            if errata.error_type == Errata.TAG and errata.suggested_tags.exists():
+                errata.question.tags.set(errata.suggested_tags.all())
+
+            # Notify the reporter via in-app notification
+            Notification.objects.create(
+                user=errata.reported_by,
+                message=(
+                    f"Votre signalement ({errata.get_error_type_display()}) "
+                    f"sur la question #{errata.question_id} a été accepté. Merci !"
+                ),
+                link="/errata/",
+            )
+            count += 1
+
+        self.message_user(request, f"{count} errata(s) accepté(s).")
+
+    @admin.action(description="❌ Refuser les erratas sélectionnés")
+    def reject_erratas(self, request, queryset):
+        from django.utils import timezone
+
+        count = queryset.filter(status=Errata.PENDING).update(
+            status=Errata.REJECTED,
+            resolved_by=request.user,
+            resolved_at=timezone.now(),
+        )
+        self.message_user(request, f"{count} errata(s) refusé(s).")

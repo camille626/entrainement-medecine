@@ -26,6 +26,32 @@ urlpatterns = [
     path("entrainement/tags/", views.TagsView.as_view(), name="tags"),
     path("entrainement/chapters/", views.ChaptersView.as_view(), name="chapters"),
     path("statistiques/", views.StatsView.as_view(), name="stats"),
+    path("errata/", views.ErrataListView.as_view(), name="errata_list"),
+    path(
+        "errata/<int:pk>/accept/",
+        views.ErrataAcceptView.as_view(),
+        name="errata_accept",
+    ),
+    path(
+        "errata/<int:pk>/reject/",
+        views.ErrataRejectView.as_view(),
+        name="errata_reject",
+    ),
+    path(
+        "errata/<int:pk>/feedback/",
+        views.ErrataFeedbackView.as_view(),
+        name="errata_feedback",
+    ),
+    path(
+        "notifications/<int:pk>/mark-read/",
+        views.NotificationMarkReadView.as_view(),
+        name="notification_mark_read",
+    ),
+    path(
+        "errata/question/<int:question_id>/",
+        views.ErrataSubmitView.as_view(),
+        name="errata_submit",
+    ),
     path("historique/", views.HistoryView.as_view(), name="history"),
     path(
         "historique/session/<int:pk>/",

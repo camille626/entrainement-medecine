@@ -1,0 +1,141 @@
+{% if existing %}
+<div class="alert alert-warning small mb-3 py-2">
+  <strong>⚠ Signalement existant</strong> — <em>{{ existing.reported_by.username }}</em> a déjà signalé :
+  <blockquote class="mb-1 mt-1 fst-italic">{{ existing.description|truncatewords:30 }}</blockquote>
+  <div class="d-flex gap-2 mt-1">
+    <button class="btn btn-sm btn-outline-secondary"
+            onclick="document.getElementById('errata-form-{{ question.pk }}').innerHTML=''">
+      Annuler (signalement similaire)
+    </button>
+    <button class="btn btn-sm btn-outline-danger"
+            onclick="document.getElementById('actual-form-{{ question.pk }}').style.display=''">
+      Signaler quand même
+    </button>
+  </div>
+</div>
+{% endif %}
+
+<div id="actual-form-{{ question.pk }}" {% if existing %}style="display:none;"{% endif %}>
+  {% if error %}<div class="alert alert-danger small py-1 mb-2">{{ error }}</div>{% endif %}
+
+  <form hx-post="/errata/question/{{ question.pk }}/"
+        hx-target="#errata-form-{{ question.pk }}"
+        hx-swap="innerHTML">
+    {% csrf_token %}
+
+    <div class="mb-3">
+      <label class="form-label fw-semibold small">Type d'erreur <span class="text-danger">*</span></label>
+      {% for value, label in error_types %}
+      <div class="form-check">
+        <input class="form-check-input" type="radio" name="error_type" value="{{ value }}"
+               id="et_{{ value }}_{{ question.pk }}"
+               onchange="toggleErrataFields('{{ question.pk }}', '{{ value }}')">
+        <label class="form-check-label small" for="et_{{ value }}_{{ question.pk }}">{{ label }}</label>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="mb-3">
+      <label for="desc_{{ question.pk }}" class="form-label fw-semibold small">
+        Description
+        <span id="desc-required-{{ question.pk }}" class="text-danger" style="display:none;">*</span>
+        <span id="desc-optional-{{ question.pk }}" class="text-muted small">(optionnel)</span>
+      </label>
+      <textarea name="description" id="desc_{{ question.pk }}" rows="3"
+                class="form-control form-control-sm"
+                placeholder="Expliquez le problème..."></textarea>
+    </div>
+
+    <!-- Réponses concernées (type=correction) -->
+    <div id="answers-zone-{{ question.pk }}" style="display:none;" class="mb-3">
+      <label class="form-label fw-semibold small">
+        Réponses concernées
+        <button type="button" class="btn btn-link btn-sm p-0 ms-1 text-muted"
+                data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="top"
+                data-bs-content="Cochez les propositions qui sont mal corrigées et indiquez la correction dans la description."
+                title="Comment ça marche ?">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor"
+               class="bi bi-question-circle" viewBox="0 0 16 16">
+            <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
+            <path d="M5.255 5.786a.237.237 0 0 0 .241.247h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1.168 0 .635-.374.927-.965 1.371-.673.489-1.206 1.06-1.168 1.987l.003.217a.25.25 0 0 0 .25.246h.811a.25.25 0 0 0 .25-.25v-.105c0-.718.273-.927 1.01-1.486.609-.463 1.244-.977 1.244-2.056 0-1.511-1.276-2.241-2.673-2.241-1.267 0-2.655.59-2.75 2.286zm1.557 5.763c0 .533.425.927 1.01.927.609 0 1.028-.394 1.028-.927 0-.552-.42-.94-1.029-.94-.584 0-1.009.388-1.009.94"/>
+          </svg>
+        </button>
+      </label>
+      {% for answer in question.answers.all %}
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="concerned_answers"
+               value="{{ answer.pk }}" id="ans_{{ answer.pk }}_{{ question.pk }}">
+        <label class="form-check-label small" for="ans_{{ answer.pk }}_{{ question.pk }}">
+          {{ answer.text|safe|striptags|truncatewords:15 }}
+          {% if answer.is_correct %}<span class="badge bg-success ms-1 small">Correcte</span>{% endif %}
+        </label>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Tags suggérés (type=tag) -->
+    <div id="tags-zone-{{ question.pk }}" style="display:none;" class="mb-3">
+      <label class="form-label fw-semibold small">
+        Tags suggérés
+        <button type="button" class="btn btn-link btn-sm p-0 ms-1 text-muted"
+                data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="top"
+                data-bs-content="Cochez l'EC et le chapitre auxquels appartiennent cette question selon vous."
+                title="Comment ça marche ?">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor"
+               class="bi bi-question-circle" viewBox="0 0 16 16">
+            <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
+            <path d="M5.255 5.786a.237.237 0 0 0 .241.247h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1.168 0 .635-.374.927-.965 1.371-.673.489-1.206 1.06-1.168 1.987l.003.217a.25.25 0 0 0 .25.246h.811a.25.25 0 0 0 .25-.25v-.105c0-.718.273-.927 1.01-1.486.609-.463 1.244-.977 1.244-2.056 0-1.511-1.276-2.241-2.673-2.241-1.267 0-2.655.59-2.75 2.286zm1.557 5.763c0 .533.425.927 1.01.927.609 0 1.028-.394 1.028-.927 0-.552-.42-.94-1.029-.94-.584 0-1.009.388-1.009.94"/>
+          </svg>
+        </button>
+      </label>
+      {% if ec_tags %}
+      <div class="mb-2">
+        <div class="text-muted small mb-1">EC :</div>
+        {% for tag in ec_tags %}
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="checkbox" name="suggested_tags"
+                 value="{{ tag.pk }}" id="tag_{{ tag.pk }}_{{ question.pk }}">
+          <label class="form-check-label small" for="tag_{{ tag.pk }}_{{ question.pk }}">{{ tag.name }}</label>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if chapter_tags %}
+      <div>
+        <div class="text-muted small mb-1">Chapitres :</div>
+        {% for tag in chapter_tags %}
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="checkbox" name="suggested_tags"
+                 value="{{ tag.pk }}" id="tag_{{ tag.pk }}_{{ question.pk }}">
+          <label class="form-check-label small" for="tag_{{ tag.pk }}_{{ question.pk }}">{{ tag.name }}</label>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="d-flex gap-2">
+      <button type="submit" class="btn btn-sm btn-danger">Envoyer le signalement</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary"
+              onclick="document.getElementById('errata-form-{{ question.pk }}').innerHTML=''">
+        Annuler
+      </button>
+    </div>
+  </form>
+</div>
+
+<script>
+function toggleErrataFields(qpk, type) {
+  document.getElementById('answers-zone-' + qpk).style.display = (type === 'correction') ? '' : 'none';
+  document.getElementById('tags-zone-' + qpk).style.display = (type === 'tag') ? '' : 'none';
+  const needsDesc = (type === 'correction' || type === 'autre');
+  const req = document.getElementById('desc-required-' + qpk);
+  const opt = document.getElementById('desc-optional-' + qpk);
+  if (req) req.style.display = needsDesc ? '' : 'none';
+  if (opt) opt.style.display = needsDesc ? 'none' : '';
+}
+// Init Bootstrap popovers in this fragment
+document.querySelectorAll('[data-bs-toggle="popover"]').forEach(el => {
+  new bootstrap.Popover(el);
+});
+</script>

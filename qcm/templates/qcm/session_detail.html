@@ -93,6 +93,18 @@
               <div class="mt-2">{{ result.question.feedback|safe }}</div>
             </div>
             {% endif %}
+
+            <!-- Signaler une erreur -->
+            <div class="mt-2">
+              <button class="btn btn-sm"
+                      style="color:#b91c1c; border:1px solid #fca5a5; background:#fff5f5;"
+                      hx-get="/errata/question/{{ result.question.pk }}/"
+                      hx-target="#errata-form-{{ result.question.pk }}"
+                      hx-swap="innerHTML">
+                ⚠&#xFE0E; Signaler une erreur
+              </button>
+              <div id="errata-form-{{ result.question.pk }}" class="mt-2"></div>
+            </div>
           </div>
         </div>
       </div>
