@@ -3,12 +3,14 @@ import string
 
 from django.contrib import admin
 from django.contrib.auth.models import User
+from django.contrib.auth.models import User as DjangoUser
 from django.core.mail import send_mail
 
 from .models import (
     Answer,
     Category,
     Course,
+    CoursePackage,
     Question,
     QuizSession,
     RegistrationRequest,
@@ -17,6 +19,7 @@ from .models import (
     Tag,
     TagCategory,
     UserAnswer,
+    UserEnrollment,
 )
 
 
@@ -90,6 +93,122 @@ class SemesterAdmin(admin.ModelAdmin):
     list_filter = ["study_year"]
 
 
+class UserEnrollmentInline(admin.TabularInline):
+    model = UserEnrollment
+    fk_name = "user"
+    extra = 1
+    fields = ["course", "enrolled_at"]
+    readonly_fields = ["enrolled_at"]
+    autocomplete_fields = ["course"]
+
+
+class UserAdminWithEnrollments(admin.ModelAdmin):
+    inlines = [UserEnrollmentInline]
+    list_display = ["username", "email", "first_name", "last_name", "is_staff"]
+    search_fields = ["username", "email", "first_name", "last_name"]
+    actions = ["apply_package"]
+
+    @admin.action(
+        description="📦 Appliquer un menu d'inscription aux utilisateurs sélectionnés"
+    )
+    def apply_package(self, request, queryset):
+        package_id = request.POST.get("package_id")
+        if not package_id:
+            self.message_user(
+                request,
+                "Sélectionnez un menu dans l'URL : /admin/auth/user/?package_id=<id>",
+                level="warning",
+            )
+            return
+        try:
+            package = CoursePackage.objects.get(pk=package_id)
+        except CoursePackage.DoesNotExist:
+            self.message_user(request, "Menu introuvable.", level="error")
+            return
+        count = 0
+        for user in queryset:
+            for course in package.courses.all():
+                _, created = UserEnrollment.objects.get_or_create(
+                    user=user,
+                    course=course,
+                    defaults={"enrolled_by": request.user},
+                )
+                if created:
+                    count += 1
+        self.message_user(
+            request,
+            f"{count} inscription(s) créée(s) pour {queryset.count()} utilisateur(s) via le menu « {package.name} ».",
+        )
+
+
+admin.site.unregister(DjangoUser)
+admin.site.register(DjangoUser, UserAdminWithEnrollments)
+
+
+@admin.register(UserEnrollment)
+class UserEnrollmentAdmin(admin.ModelAdmin):
+    list_display = ["user", "course", "enrolled_at", "enrolled_by"]
+    list_filter = ["course__semester__study_year", "course__semester", "course"]
+    search_fields = ["user__username", "user__email", "course__name"]
+    raw_id_fields = ["user", "enrolled_by"]
+    actions = ["enroll_in_semester"]
+
+    @admin.action(
+        description="📚 Inscrire les utilisateurs sélectionnés au même semestre"
+    )
+    def enroll_in_semester(self, request, queryset):
+        pass  # placeholder — bulk enrollment by semester implemented via UserAdmin inline
+
+
+@admin.register(CoursePackage)
+class CoursePackageAdmin(admin.ModelAdmin):
+    list_display = ["name", "description", "course_count"]
+    search_fields = ["name"]
+    filter_horizontal = ["courses"]
+
+    @admin.display(description="Nb cours")
+    def course_count(self, obj):
+        return obj.courses.count()
+
+    def get_urls(self):
+        from django.urls import path
+
+        urls = super().get_urls()
+        custom = [
+            path(
+                "<int:package_id>/apply/<int:user_id>/",
+                self.admin_site.admin_view(self.apply_to_user),
+                name="coursepackage_apply_to_user",
+            ),
+        ]
+        return custom + urls
+
+    def apply_to_user(self, request, package_id, user_id):
+        from django.contrib import messages
+        from django.shortcuts import redirect
+
+        try:
+            package = CoursePackage.objects.get(pk=package_id)
+            user = DjangoUser.objects.get(pk=user_id)
+        except (CoursePackage.DoesNotExist, DjangoUser.DoesNotExist):
+            messages.error(request, "Menu ou utilisateur introuvable.")
+            return redirect("..")
+        count = 0
+        for course in package.courses.all():
+            _, created = UserEnrollment.objects.get_or_create(
+                user=user,
+                course=course,
+                defaults={"enrolled_by": request.user},
+            )
+            if created:
+                count += 1
+        messages.success(
+            request,
+            f"{count} inscription(s) ajoutée(s) à {user.username} via le menu « {package.name} ».",
+        )
+        return redirect(f"/admin/auth/user/{user_id}/change/")
+
+
 def _generate_password(length: int = 12) -> str:
     alphabet = string.ascii_letters + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(length))
@@ -125,7 +244,7 @@ class RegistrationRequestAdmin(admin.ModelAdmin):
                 username = f"{base}{counter}"
                 counter += 1
 
-            User.objects.create_user(
+            new_user = User.objects.create_user(
                 username=username,
                 email=req.email,
                 password=password,  # pragma: allowlist secret
@@ -134,6 +253,22 @@ class RegistrationRequestAdmin(admin.ModelAdmin):
             )
             req.status = RegistrationRequest.ACCEPTED
             req.save()
+
+            # Auto-enroll in matching CoursePackage
+            if req.year or req.parcours:
+                package_qs = CoursePackage.objects.all()
+                if req.year:
+                    package_qs = package_qs.filter(year=req.year)
+                if req.parcours:
+                    package_qs = package_qs.filter(parcours=req.parcours)
+                package = package_qs.first()
+                if package:
+                    for course in package.courses.all():
+                        UserEnrollment.objects.get_or_create(
+                            user=new_user,
+                            course=course,
+                            defaults={"enrolled_by": request.user},
+                        )
 
             send_mail(
                 subject="Accès accordé — Entraînement Médecine",

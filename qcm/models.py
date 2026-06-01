@@ -243,6 +243,65 @@ class UserAnswer(models.Model):
         return f"Réponse de {self.session.user} à Q#{self.question_id}"
 
 
+class CoursePackage(models.Model):
+    YEAR_P2 = "P2"
+    YEAR_D1 = "D1"
+    YEAR_CHOICES = [(YEAR_P2, "P2 (DFGSM2)"), (YEAR_D1, "D1 (DFGSM3)")]
+
+    PARCOURS_PASS = "PASS"
+    PARCOURS_LAS1 = "LAS1"
+    PARCOURS_LAS2 = "LAS2"
+    PARCOURS_CHOICES = [
+        (PARCOURS_PASS, "Ancien PASS"),
+        (PARCOURS_LAS1, "Ancien LAS1"),
+        (PARCOURS_LAS2, "Ancien LAS2"),
+    ]
+
+    name = models.CharField(max_length=100, unique=True, verbose_name="Nom du menu")
+    description = models.TextField(blank=True, verbose_name="Description")
+    year = models.CharField(
+        max_length=10, choices=YEAR_CHOICES, blank=True, verbose_name="Année"
+    )
+    parcours = models.CharField(
+        max_length=10, choices=PARCOURS_CHOICES, blank=True, verbose_name="Parcours"
+    )
+    courses = models.ManyToManyField(
+        Course, blank=True, related_name="packages", verbose_name="Cours inclus"
+    )
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name = "Menu d'inscription"
+        verbose_name_plural = "Menus d'inscription"
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class UserEnrollment(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="enrollments")
+    course = models.ForeignKey(
+        Course, on_delete=models.CASCADE, related_name="enrollments"
+    )
+    enrolled_at = models.DateTimeField(auto_now_add=True)
+    enrolled_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="enrollments_created",
+    )
+
+    class Meta:
+        unique_together = [("user", "course")]
+        ordering = ["course__name"]
+        verbose_name = "Inscription"
+        verbose_name_plural = "Inscriptions"
+
+    def __str__(self) -> str:
+        return f"{self.user.username} → {self.course.name}"
+
+
 class RegistrationRequest(models.Model):
     PENDING = "pending"
     ACCEPTED = "accepted"
@@ -256,7 +315,19 @@ class RegistrationRequest(models.Model):
     first_name = models.CharField(max_length=150, verbose_name="Prénom")
     last_name = models.CharField(max_length=150, verbose_name="Nom")
     email = models.EmailField(unique=True, verbose_name="Email")
-    message = models.TextField(verbose_name="Message")
+    year = models.CharField(
+        max_length=10,
+        choices=CoursePackage.YEAR_CHOICES,
+        verbose_name="Année d'entrée",
+        default="",
+    )
+    parcours = models.CharField(
+        max_length=10,
+        choices=CoursePackage.PARCOURS_CHOICES,
+        blank=True,
+        verbose_name="Parcours antérieur",
+    )
+    message = models.TextField(blank=True, verbose_name="Message complémentaire")
     certificate = models.FileField(
         upload_to="certificates/",
         verbose_name="Certificat de scolarité (PDF)",

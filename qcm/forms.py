@@ -36,11 +36,15 @@ class SessionConfigForm(forms.Form):
         label="Propositions en ordre aléatoire (non alphabétique)",
     )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["courses"].queryset = Course.objects.select_related(
-            "semester__study_year"
-        ).order_by("semester__study_year__order", "semester__order", "name")
+        qs = Course.objects.select_related("semester__study_year").order_by(
+            "semester__study_year__order", "semester__order", "name"
+        )
+        # Staff see all courses; regular users only see enrolled courses
+        if user is not None and not user.is_staff:
+            qs = qs.filter(enrollments__user=user)
+        self.fields["courses"].queryset = qs
         self.fields["tags"].queryset = Tag.objects.order_by("name")
 
 
@@ -48,20 +52,48 @@ class InscriptionForm(forms.Form):
     first_name = forms.CharField(max_length=150, label="Prénom")
     last_name = forms.CharField(max_length=150, label="Nom")
     email = forms.EmailField(label="Email")
+    year = forms.ChoiceField(
+        choices=[],
+        label="Année d'entrée",
+    )
+    parcours = forms.ChoiceField(
+        choices=[],
+        required=False,
+        label="Parcours antérieur (si P2)",
+    )
     message = forms.CharField(
-        widget=forms.Textarea(attrs={"rows": 4}),
-        required=True,
-        label="Message",
-        help_text=(
-            "Indiquez votre année (P2, D1...) et votre parcours (ex-PASS, ex-LAS...). "
-            "Ex : Je suis en P2, ex-LAS, promo 2026."
-        ),
+        widget=forms.Textarea(attrs={"rows": 3}),
+        required=False,
+        label="Message complémentaire (optionnel)",
     )
     certificate = forms.FileField(
         required=True,
         label="Certificat de scolarité (PDF)",
         help_text="Fichier PDF uniquement — justifie votre appartenance à l'université.",
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from .models import CoursePackage
+
+        self.fields["year"].choices = [("", "— Sélectionnez votre année —")] + list(
+            CoursePackage.YEAR_CHOICES
+        )
+        self.fields["parcours"].choices = [("", "— Sans parcours antérieur —")] + list(
+            CoursePackage.PARCOURS_CHOICES
+        )
+
+    def clean(self):
+        cleaned = super().clean()
+        year = cleaned.get("year")
+        parcours = cleaned.get("parcours")
+        if not year:
+            self.add_error("year", "Ce champ est obligatoire.")
+        if year == "P2" and not parcours:
+            self.add_error(
+                "parcours", "Veuillez sélectionner votre parcours antérieur."
+            )
+        return cleaned
 
     def clean_email(self):
         email = self.cleaned_data["email"]

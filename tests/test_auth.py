@@ -173,6 +173,9 @@ class TestLogout:
 @pytest.mark.django_db
 class TestQuizSessionUser:
     def test_session_linked_to_logged_user(self, client, user, course, question):
+        from qcm.models import UserEnrollment
+
+        UserEnrollment.objects.create(user=user, course=course)
         client.force_login(user)
         client.post(
             "/entrainement/",

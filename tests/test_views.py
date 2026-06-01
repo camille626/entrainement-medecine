@@ -90,6 +90,7 @@ def logged_user(db):
     return User.objects.create_user(
         username="testuser",
         password="pass",  # pragma: allowlist secret
+        is_staff=True,  # staff sees all courses without enrollment
     )
 
 
@@ -110,7 +111,7 @@ class TestHomeView:
         response = client.get("/")
         assert response.status_code == 200
 
-    def test_home_shows_semester(self, client, semester_s1):
+    def test_home_shows_semester(self, client, course):  # course is in semester_s1
         response = client.get("/")
         assert b"S1" in response.content
 

@@ -4,34 +4,34 @@
 {% block content %}
 <div class="row">
   <div class="col-lg-8">
-    <h1 class="mb-4">Entraînement Médecine</h1>
-    <p class="lead">Sélectionnez vos cours et lancez une session d'entraînement.</p>
+    <h1 class="mb-2">Entraînement Médecine</h1>
+    <p class="text-muted mb-4">Sélectionnez vos cours et lancez une session d'entraînement.</p>
     <a href="/entrainement/" class="btn btn-primary btn-lg mb-4">Démarrer une session</a>
 
-    {% for year in years %}
-    <h2 class="mt-4">{{ year.name }}</h2>
-    {% for semester in year.semesters.all %}
+    {% if not filtered_years %}
+    <div class="alert alert-info">
+      Vous n'êtes inscrit à aucun cours pour l'instant. Contactez l'administrateur.
+    </div>
+    {% endif %}
+
+    {% for item in filtered_years %}
+    <h2 class="mt-4">{{ item.year.name }}</h2>
+    {% for sem_item in item.semesters %}
     <div class="card mb-3">
-      <div class="card-header fw-bold">{{ semester.name }}</div>
+      <div class="card-header fw-bold">{{ sem_item.semester.name }}</div>
       <div class="card-body">
         <div class="row row-cols-1 row-cols-md-2 g-2">
-          {% for course in semester.courses.all %}
+          {% for course in sem_item.courses %}
           <div class="col">
             <div class="border rounded p-2">
               <span class="fw-semibold">{{ course.name }}</span>
             </div>
           </div>
-          {% empty %}
-          <div class="col text-muted">Aucun cours</div>
           {% endfor %}
         </div>
       </div>
     </div>
-    {% empty %}
-    <p class="text-muted">Aucun semestre configuré.</p>
     {% endfor %}
-    {% empty %}
-    <p class="text-muted">Aucune année configurée.</p>
     {% endfor %}
   </div>
 </div>
