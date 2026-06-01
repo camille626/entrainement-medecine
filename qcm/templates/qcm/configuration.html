@@ -74,6 +74,44 @@
       </div>
 
       <div class="card mb-3">
+        <div class="card-header fw-bold">Sélection des questions</div>
+        <div class="card-body">
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="radio" name="question_filter" value="all"
+                   id="filter_all" checked>
+            <label class="form-check-label" for="filter_all">
+              <strong>Toutes les questions</strong>
+              <span class="text-muted small d-block">Sélection aléatoire parmi toutes les questions disponibles</span>
+            </label>
+          </div>
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="radio" name="question_filter" value="review"
+                   id="filter_review">
+            <label class="form-check-label" for="filter_review">
+              <strong>🔄 Mode révision</strong>
+              <span class="text-muted small d-block">Priorise les questions ratées ou jamais faites (taux de réussite &lt; 50%)</span>
+            </label>
+          </div>
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="radio" name="question_filter" value="never"
+                   id="filter_never">
+            <label class="form-check-label" for="filter_never">
+              <strong>✨ Questions nouvelles</strong>
+              <span class="text-muted small d-block">Uniquement les questions que vous n'avez jamais faites</span>
+            </label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="question_filter" value="anchor"
+                   id="filter_anchor">
+            <label class="form-check-label" for="filter_anchor">
+              <strong>⚓ Mode ancrage</strong>
+              <span class="text-muted small d-block">Questions non encore ancrées (moins de 3 réussites complètes)</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-3">
         <div class="card-body">
           <div class="form-check">
             <input class="form-check-input" type="checkbox" name="shuffle_answers" id="shuffle_answers" checked>

@@ -35,6 +35,24 @@ class SessionConfigForm(forms.Form):
         initial=True,
         label="Propositions en ordre aléatoire (non alphabétique)",
     )
+    question_filter = forms.ChoiceField(
+        choices=[
+            ("all", "Toutes les questions (aléatoire)"),
+            (
+                "review",
+                "Mode révision — questions ratées ou jamais faites (taux < 50%)",
+            ),
+            ("never", "Questions jamais faites uniquement"),
+            (
+                "anchor",
+                "Mode ancrage ⚓ — questions non encore ancrées (< 3 réussites)",
+            ),
+        ],
+        widget=forms.RadioSelect,
+        initial="all",
+        required=False,
+        label="Sélection des questions",
+    )
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
