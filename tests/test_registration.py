@@ -34,13 +34,15 @@ class TestInscriptionPage:
                 "first_name": "Camille",
                 "last_name": "Martin",
                 "email": "camille@example.com",
-                "message": "Je suis en P2, ex-LAS, promo 2026.",
+                "year": "P2",
+                "parcours": "PASS",
                 "certificate": _fake_pdf(),
             },
         )
         assert RegistrationRequest.objects.filter(email="camille@example.com").exists()
         req = RegistrationRequest.objects.get(email="camille@example.com")
         assert req.status == "pending"
+        assert req.year == "P2"
         assert req.certificate  # file was uploaded
 
     def test_valid_submission_redirects(self, client):
@@ -50,7 +52,7 @@ class TestInscriptionPage:
                 "first_name": "Camille",
                 "last_name": "Martin",
                 "email": "camille@example.com",
-                "message": "Je suis en P2, ex-LAS.",
+                "year": "D1",
                 "certificate": _fake_pdf(),
             },
         )

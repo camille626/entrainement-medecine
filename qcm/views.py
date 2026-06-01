@@ -41,43 +41,73 @@ class HomeView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        user = self.request.user
+
+        from .models import UserEnrollment
+
+        if user.is_staff:
+            enrolled_course_ids = None
+        else:
+            enrolled_course_ids = set(
+                UserEnrollment.objects.filter(user=user).values_list(
+                    "course_id", flat=True
+                )
+            )
+
         years = StudyYear.objects.prefetch_related("semesters__courses").order_by(
             "order"
         )
-        ctx["years"] = years
-        ctx["total_questions"] = sum(
-            c.categories.aggregate_question_count()
-            if hasattr(c.categories, "aggregate_question_count")
-            else 0
-            for y in years
-            for s in y.semesters.all()
-            for c in s.courses.all()
-        )
+
+        # Filter to only enrolled courses per semester
+        filtered_years = []
+        for year in years:
+            filtered_semesters = []
+            for semester in year.semesters.all():
+                if enrolled_course_ids is None:
+                    courses = list(semester.courses.all())
+                else:
+                    courses = [
+                        c for c in semester.courses.all() if c.pk in enrolled_course_ids
+                    ]
+                if courses:
+                    filtered_semesters.append(
+                        {"semester": semester, "courses": courses}
+                    )
+            if filtered_semesters:
+                filtered_years.append({"year": year, "semesters": filtered_semesters})
+
+        ctx["filtered_years"] = filtered_years
         return ctx
 
 
 class ConfigurationView(LoginRequiredMixin, View):
     template_name = "qcm/configuration.html"
 
-    def get(self, request):
-        form = SessionConfigForm()
-        semesters = (
-            Semester.objects.select_related("study_year")
-            .prefetch_related("courses")
-            .order_by("study_year__order", "order")
+    def _get_semesters(self, user):
+        """Return semesters with only the user's enrolled courses (or all for staff)."""
+        from .models import UserEnrollment
+
+        qs = Semester.objects.select_related("study_year").order_by(
+            "study_year__order", "order"
         )
+        if not user.is_staff:
+            enrolled_course_ids = UserEnrollment.objects.filter(user=user).values_list(
+                "course_id", flat=True
+            )
+            qs = qs.filter(courses__id__in=enrolled_course_ids).distinct()
+        return qs.prefetch_related("courses")
+
+    def get(self, request):
+        form = SessionConfigForm(user=request.user)
+        semesters = self._get_semesters(request.user)
         return render(
             request, self.template_name, {"form": form, "semesters": semesters}
         )
 
     def post(self, request):
-        form = SessionConfigForm(request.POST)
+        form = SessionConfigForm(request.POST, user=request.user)
         if not form.is_valid():
-            semesters = (
-                Semester.objects.select_related("study_year")
-                .prefetch_related("courses")
-                .order_by("study_year__order", "order")
-            )
+            semesters = self._get_semesters(request.user)
             return render(
                 request, self.template_name, {"form": form, "semesters": semesters}
             )
@@ -487,8 +517,10 @@ class InscriptionView(View):
                 first_name=form.cleaned_data["first_name"],
                 last_name=form.cleaned_data["last_name"],
                 email=form.cleaned_data["email"],
-                message=form.cleaned_data["message"],
-                certificate=form.cleaned_data["certificate"],
+                year=form.cleaned_data.get("year", ""),
+                parcours=form.cleaned_data.get("parcours", ""),
+                message=form.cleaned_data.get("message", ""),
+                certificate=form.cleaned_data.get("certificate"),
             )
             return redirect("qcm:inscription_done")
         return render(request, self.template_name, {"form": form})

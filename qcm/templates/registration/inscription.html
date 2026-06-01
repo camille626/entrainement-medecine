@@ -13,10 +13,6 @@
         <h1 class="h4 text-center fw-bold text-primary mb-1">📚 Entraînement Médecine</h1>
         <p class="text-center text-muted small mb-4">Demande d'accès à la plateforme</p>
 
-        <p class="text-muted small mb-3">
-          Remplissez ce formulaire pour demander l'accès. L'administrateur vérifiera votre dossier et vous contactera par email.
-        </p>
-
         {% if form.errors %}
         <div class="alert alert-danger py-2 small">
           {% for field in form %}{% for error in field.errors %}<div><strong>{{ field.label }} :</strong> {{ error }}</div>{% endfor %}{% endfor %}
@@ -43,12 +39,39 @@
             <input type="email" name="email" id="id_email"
                    class="form-control" value="{{ form.email.value|default:'' }}" required>
           </div>
+
+          <!-- Année -->
           <div class="mb-3">
-            <label for="id_message" class="form-label fw-semibold">Message <span class="text-danger">*</span></label>
-            <textarea name="message" id="id_message" rows="4"
-                      class="form-control" required
-                      placeholder="Ex : Je suis en P2, parcours ex-LAS, promo 2026.">{{ form.message.value|default:'' }}</textarea>
-            <div class="form-text">Indiquez votre <strong>année</strong> (P2, D1...) et votre <strong>parcours</strong> (ex-PASS, ex-LAS, PACES...).</div>
+            <label for="id_year" class="form-label fw-semibold">
+              Dans quelle année entrez-vous ? <span class="text-danger">*</span>
+            </label>
+            <select name="year" id="id_year" class="form-select" required onchange="toggleParcours()">
+              {% for value, label in form.fields.year.choices %}
+              <option value="{{ value }}" {% if form.year.value == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Parcours (visible uniquement si P2) -->
+          <div class="mb-3" id="parcours-zone" style="display: none;">
+            <label for="id_parcours" class="form-label fw-semibold">
+              Votre parcours antérieur <span class="text-danger">*</span>
+            </label>
+            <select name="parcours" id="id_parcours" class="form-select">
+              {% for value, label in form.fields.parcours.choices %}
+              <option value="{{ value }}" {% if form.parcours.value == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <div class="form-text">PASS (Parcours Accès Santé Spécifique), LAS1 ou LAS2 (Licence Accès Santé)</div>
+          </div>
+
+          <div class="mb-3">
+            <label for="id_message" class="form-label fw-semibold">
+              Message <span class="text-muted fw-normal small">(optionnel)</span>
+            </label>
+            <textarea name="message" id="id_message" rows="2"
+                      class="form-control"
+                      placeholder="Ex : promo 2026, rattrapages en cours...">{{ form.message.value|default:'' }}</textarea>
           </div>
           <div class="mb-4">
             <label for="id_certificate" class="form-label fw-semibold">
@@ -56,7 +79,7 @@
             </label>
             <input type="file" name="certificate" id="id_certificate"
                    class="form-control" accept=".pdf" required>
-            <div class="form-text">Fichier PDF uniquement, 5 Mo maximum — justifie votre appartenance à l'université.</div>
+            <div class="form-text">PDF uniquement, 5 Mo max.</div>
           </div>
           <button type="submit" class="btn btn-primary w-100">Envoyer la demande</button>
           <p class="text-center text-muted small mt-2 mb-0"><span class="text-danger">*</span> champs obligatoires</p>
@@ -68,5 +91,22 @@
       </div>
     </div>
   </div>
+  <script>
+    function toggleParcours() {
+      const year = document.getElementById('id_year').value;
+      const zone = document.getElementById('parcours-zone');
+      const select = document.getElementById('id_parcours');
+      if (year === 'P2') {
+        zone.style.display = '';
+        select.required = true;
+      } else {
+        zone.style.display = 'none';
+        select.required = false;
+        select.value = '';
+      }
+    }
+    // Run on page load to restore state after form error
+    toggleParcours();
+  </script>
 </body>
 </html>
