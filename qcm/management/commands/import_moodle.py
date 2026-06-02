@@ -7,6 +7,13 @@ from qcm.models import Answer, Category, Course, Question, Semester, Tag
 from .moodle_parser import build_context_to_course, parse_sql_dump
 
 
+def _decode_pg_copy(text: str) -> str:
+    """Decode PostgreSQL COPY escape sequences in text fields."""
+    return (
+        text.replace("\\r\\n", "<br>").replace("\\n", "<br>").replace("\\r", "").strip()
+    )
+
+
 COURSE_IDS = {11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}
 DEFAULT_DUMP = "data/raw/plateforme-medecine_moodlecloud.sql"
 
@@ -124,35 +131,28 @@ class Command(BaseCommand):
             c.moodle_id: c for c in Category.objects.all()
         }
 
+        supported_qtypes = {"multichoice", "shortanswer"}
         for row in data.get("m_question", []):
-            if row.get("qtype") != "multichoice":
+            qtype = row.get("qtype")
+            if qtype not in supported_qtypes:
                 continue
             if int(row["id"]) in excluded_ids:
                 continue
             # Find which category this question belongs to via m_question_bank_entries
-            # Moodle doesn't store category directly on m_question — we need
-            # m_question_bank_entries + m_question_versions to find the category.
-            # Fallback: assign to first category of the right context via
-            # m_question_categories using the stamp prefix (domain match).
-            # Simpler approach: use question_bank_entries table if available.
             category = self._find_category_for_question(row, data, cat_by_moodle)
             if category is None:
                 continue
             raw_feedback = row.get("generalfeedback") or ""
-            # Decode PostgreSQL COPY escape sequences: \r\n → <br>, \n → <br>
-            feedback = (
-                raw_feedback.replace("\\r\\n", "<br>")
-                .replace("\\n", "<br>")
-                .replace("\\r", "")
-                .strip()
-            )
+            raw_text = row.get("questiontext") or ""
+            feedback = _decode_pg_copy(raw_feedback)
+            question_text = _decode_pg_copy(raw_text)
             _, is_new = Question.objects.update_or_create(
                 moodle_id=int(row["id"]),
                 defaults={
-                    "text": row.get("questiontext", ""),
+                    "text": question_text,
                     "feedback": feedback,
                     "category": category,
-                    "qtype": "multichoice",
+                    "qtype": qtype,
                 },
             )
             if is_new:
@@ -196,9 +196,10 @@ class Command(BaseCommand):
             if question is None:
                 continue
             fraction = float(row.get("fraction", 0.0))
+            answer_text = _decode_pg_copy(row.get("answer") or "")
             _, is_new = Answer.objects.update_or_create(
                 question=question,
-                text=row.get("answer", ""),
+                text=answer_text,
                 defaults={
                     "fraction": fraction,
                     "is_correct": fraction > 0.0,

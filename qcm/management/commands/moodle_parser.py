@@ -16,9 +16,26 @@ def _is_binary_dump(path: str) -> bool:
         return f.read(5) == b"PGDMP"
 
 
+def _find_pg_restore() -> str:
+    """Return path to pg_restore, checking common locations."""
+    candidates = [
+        "/usr/bin/pg_restore",
+        "/usr/lib/postgresql/17/bin/pg_restore",
+        "/usr/lib/postgresql/16/bin/pg_restore",
+        "/usr/lib/postgresql/15/bin/pg_restore",
+        "/usr/lib/postgresql/14/bin/pg_restore",
+        "/usr/lib/postgresql/13/bin/pg_restore",
+    ]
+    for path in candidates:
+        if Path(path).exists():
+            return path
+    # Fallback: rely on PATH
+    return "pg_restore"
+
+
 def _convert_binary_to_text(binary_path: str) -> str:
-    """Convert a PG17 binary dump to text SQL using pg_restore."""
-    pg_restore = "/usr/lib/postgresql/17/bin/pg_restore"
+    """Convert a binary Moodle dump to text SQL using pg_restore."""
+    pg_restore = _find_pg_restore()
     with tempfile.NamedTemporaryFile(suffix=".sql", delete=False) as tmp:
         tmp_path = tmp.name
     subprocess.run(

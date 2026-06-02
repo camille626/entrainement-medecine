@@ -1,7 +1,9 @@
 """Views for the QCM training interface."""
 
+import fnmatch
 import json
 import random
+import unicodedata
 from typing import TYPE_CHECKING
 
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -43,6 +45,47 @@ if TYPE_CHECKING:
     from typing import Any
 
     from .models import Question as QuestionModel
+
+
+# ── QROC helpers ─────────────────────────────────────────────────────────────
+
+
+def normalize_qroc(text: str) -> str:
+    """Normalise le texte pour la comparaison QROC : minuscules, sans accents, strip."""
+    nfkd = unicodedata.normalize("NFD", text.lower().strip())
+    return "".join(c for c in nfkd if not unicodedata.combining(c))
+
+
+def match_qroc_answer(
+    question: "QuestionModel", user_text: str
+) -> "tuple[bool, Answer | None]":
+    """Cherche une correspondance dans les réponses acceptées (insensible casse/accents).
+
+    Supporte le joker Moodle * (zéro ou plusieurs caractères quelconques).
+    Exemple : "myélome*" correspond à "myélome classique", "myélome multiple", etc.
+    """
+    n = normalize_qroc(user_text)
+    if not n:
+        return False, None
+    for answer in question.answers.all():
+        pattern = normalize_qroc(answer.text)
+        if "*" in pattern:
+            if fnmatch.fnmatch(n, pattern):
+                return answer.is_correct, answer
+        else:
+            if pattern == n:
+                return answer.is_correct, answer
+    return False, None
+
+
+# ── Helpers de score ─────────────────────────────────────────────────────────
+
+
+def _ua_fraction(answer_fraction: "float | None", is_correct: bool) -> float:
+    """Fraction effective pour un dict UserAnswer (gère l'auto-éval QROC)."""
+    if answer_fraction is not None:
+        return answer_fraction
+    return 1.0 if is_correct else 0.0
 
 
 def get_answers(question: "QuestionModel", shuffle: bool = True) -> list:
@@ -213,14 +256,18 @@ class ConfigurationView(LoginRequiredMixin, View):
         nb_questions = form.cleaned_data["nb_questions"]
         tags = form.cleaned_data.get("tags")
         question_filter = form.cleaned_data.get("question_filter") or "all"
+        include_qroc = form.cleaned_data.get("include_qroc", False)
 
-        # Select random questions from chosen courses
-
+        # Select questions from chosen courses
         from .models import Question
+
+        qtypes = ["multichoice"]
+        if include_qroc:
+            qtypes.append("shortanswer")
 
         qs = Question.objects.filter(
             category__course__in=courses,
-            qtype="multichoice",
+            qtype__in=qtypes,
         )
 
         if tags:
@@ -337,10 +384,16 @@ class QuestionView(LoginRequiredMixin, View):
             if not ua_list:
                 status = "not_answered"
             else:
-                score = max(0.0, min(1.0, sum(ua.answer.fraction for ua in ua_list)))
-                max_score = sum(
-                    a.fraction for a in sq.question.answers.filter(fraction__gt=0)
+                score = max(
+                    0.0,
+                    min(1.0, sum(ua.effective_fraction for ua in ua_list)),
                 )
+                if sq.question.qtype == "shortanswer":
+                    max_score = 1.0
+                else:
+                    max_score = sum(
+                        a.fraction for a in sq.question.answers.filter(fraction__gt=0)
+                    )
                 ratio = score / max_score if max_score > 0 else 0.0
                 if ratio >= 1.0 - 1e-6:
                     status = "correct"
@@ -376,9 +429,14 @@ class QuestionView(LoginRequiredMixin, View):
 
         if is_answered:
             ua_list = ua_by_qid.get(question.pk, [])
-            selected_ids = [ua.answer_id for ua in ua_list]
-            score = max(0.0, min(1.0, sum(ua.answer.fraction for ua in ua_list)))
-            max_score = sum(a.fraction for a in question.answers.filter(fraction__gt=0))
+            selected_ids = [ua.answer_id for ua in ua_list if ua.answer_id is not None]
+            score = max(0.0, min(1.0, sum(ua.effective_fraction for ua in ua_list)))
+            if question.qtype == "shortanswer":
+                max_score = 1.0
+            else:
+                max_score = sum(
+                    a.fraction for a in question.answers.filter(fraction__gt=0)
+                )
             ratio = score / max_score if max_score > 0 else 0.0
             if ratio >= 1.0 - 1e-6:
                 q_status = "correct"
@@ -387,12 +445,23 @@ class QuestionView(LoginRequiredMixin, View):
             else:
                 q_status = "incorrect"
             is_last = answered_count >= total
+            # QROC-specific context for answered questions
+            qroc_text = next(
+                (ua.qroc_text for ua in ua_list if ua.qroc_text is not None), None
+            )
+            accepted_answers = (
+                list(question.answers.filter(fraction__gt=0).order_by("text"))
+                if question.qtype == "shortanswer"
+                else []
+            )
             ctx.update(
                 {
                     "selected_ids": selected_ids,
                     "score": score,
                     "status": q_status,
                     "is_last": is_last,
+                    "qroc_text": qroc_text,
+                    "accepted_answers": accepted_answers,
                 }
             )
 
@@ -406,19 +475,31 @@ class CheckView(LoginRequiredMixin, View):
             session.user_answers.values_list("question_id", flat=True).distinct()
         )
 
-        # Get current question
-        current_sq = (
-            session.session_questions.exclude(question_id__in=answered_question_ids)
-            .order_by("order")
-            .first()
-        )
+        # Use question_id from POST when provided (avoids wrong-question bug with navigator)
+        question_id_from_post = request.POST.get("question_id")
+        if question_id_from_post and question_id_from_post.isdigit():
+            current_sq = session.session_questions.filter(
+                question_id=int(question_id_from_post)
+            ).first()
+            if current_sq is None or current_sq.question_id in answered_question_ids:
+                return HttpResponse("Question déjà répondue ou introuvable", status=400)
+        else:
+            current_sq = (
+                session.session_questions.exclude(question_id__in=answered_question_ids)
+                .order_by("order")
+                .first()
+            )
         if current_sq is None:
             return HttpResponse("Session terminée", status=400)
 
         question = current_sq.question
-        selected_ids = request.POST.getlist("answers")
 
-        # Record selected answers
+        # ── Branche QROC ──────────────────────────────────────────────────────
+        if question.qtype == "shortanswer":
+            return self._handle_qroc(request, session, current_sq, question)
+
+        # ── Branche multichoix ────────────────────────────────────────────────
+        selected_ids = request.POST.getlist("answers")
         score = 0.0
         for answer_id in selected_ids:
             try:
@@ -433,14 +514,7 @@ class CheckView(LoginRequiredMixin, View):
             except Answer.DoesNotExist:
                 continue
 
-        # If no answers selected, still mark as attempted (with dummy UserAnswer for tracking)
-        if not selected_ids:
-            # Mark question as "skipped" by creating a placeholder — not needed if no answers
-            pass
-
         score = max(0.0, min(1.0, score))
-
-        # Determine status
         max_score = sum(a.fraction for a in question.answers.filter(fraction__gt=0))
         ratio = score / max_score if max_score > 0 else 0.0
 
@@ -478,6 +552,151 @@ class CheckView(LoginRequiredMixin, View):
             },
         )
 
+    def _handle_qroc(self, request, session, current_sq, question):
+        """Gère la soumission d'une réponse QROC."""
+        user_text = request.POST.get("qroc_text", "").strip()
+        total = session.session_questions.count()
+        prev_order = current_sq.order - 1 if current_sq.order > 1 else None
+        next_order = current_sq.order + 1 if current_sq.order < total else None
+        accepted_answers = list(
+            question.answers.filter(fraction__gt=0).order_by("text")
+        )
+
+        found, matched_answer = match_qroc_answer(question, user_text)
+
+        if found and matched_answer is not None:
+            # Correspondance automatique — on enregistre directement
+            UserAnswer.objects.get_or_create(
+                session=session,
+                question=question,
+                answer=matched_answer,
+                defaults={
+                    "is_correct": matched_answer.is_correct,
+                    "qroc_text": user_text,
+                },
+            )
+            score = matched_answer.fraction
+            status = "correct" if matched_answer.is_correct else "incorrect"
+            new_answered = set(
+                session.user_answers.values_list("question_id", flat=True).distinct()
+            )
+            position = len(new_answered)
+            is_last = position >= total
+            return render(
+                request,
+                "qcm/_correction.html",
+                {
+                    "question": question,
+                    "answers": accepted_answers,
+                    "selected_ids": [],
+                    "score": score,
+                    "status": status,
+                    "session": session,
+                    "is_last": is_last,
+                    "position": position,
+                    "total": total,
+                    "prev_order": prev_order,
+                    "next_order": next_order,
+                    "qroc_text": user_text,
+                    "accepted_answers": accepted_answers,
+                },
+            )
+
+        # Pas de correspondance — auto-évaluation requise
+        return render(
+            request,
+            "qcm/_qroc_ambiguous.html",
+            {
+                "question": question,
+                "session": session,
+                "qroc_text": user_text,
+                "accepted_answers": accepted_answers,
+                "prev_order": prev_order,
+                "next_order": next_order,
+                "total": total,
+            },
+        )
+
+
+class CheckQROCSelfView(LoginRequiredMixin, View):
+    """Enregistre l'auto-évaluation d'une réponse QROC sans correspondance automatique."""
+
+    def post(self, request, pk):
+        session = get_object_or_404(QuizSession, pk=pk)
+        answered_question_ids = set(
+            session.user_answers.values_list("question_id", flat=True).distinct()
+        )
+
+        # Use question_id from POST to answer the correct question
+        question_id_from_post = request.POST.get("question_id")
+        if question_id_from_post and question_id_from_post.isdigit():
+            current_sq = session.session_questions.filter(
+                question_id=int(question_id_from_post)
+            ).first()
+            if current_sq is None or current_sq.question_id in answered_question_ids:
+                return HttpResponse("Question déjà répondue ou introuvable", status=400)
+        else:
+            current_sq = (
+                session.session_questions.exclude(question_id__in=answered_question_ids)
+                .order_by("order")
+                .first()
+            )
+        if current_sq is None:
+            return HttpResponse("Session terminée", status=400)
+
+        question = current_sq.question
+        if question.qtype != "shortanswer":
+            return HttpResponse("Question non QROC", status=400)
+
+        user_text = request.POST.get("qroc_text", "").strip()
+        self_eval = request.POST.get("self_eval", "incorrect")
+        is_correct = self_eval == "correct"
+
+        UserAnswer.objects.get_or_create(
+            session=session,
+            question=question,
+            answer=None,
+            defaults={
+                "is_correct": is_correct,
+                "qroc_text": user_text,
+                "is_self_evaluated": True,
+            },
+        )
+
+        score = 1.0 if is_correct else 0.0
+        status = "correct" if is_correct else "incorrect"
+        total = session.session_questions.count()
+        new_answered = set(
+            session.user_answers.values_list("question_id", flat=True).distinct()
+        )
+        position = len(new_answered)
+        is_last = position >= total
+        prev_order = current_sq.order - 1 if current_sq.order > 1 else None
+        next_order = current_sq.order + 1 if current_sq.order < total else None
+        accepted_answers = list(
+            question.answers.filter(fraction__gt=0).order_by("text")
+        )
+
+        return render(
+            request,
+            "qcm/_correction.html",
+            {
+                "question": question,
+                "answers": accepted_answers,
+                "selected_ids": [],
+                "score": score,
+                "status": status,
+                "session": session,
+                "is_last": is_last,
+                "position": position,
+                "total": total,
+                "prev_order": prev_order,
+                "next_order": next_order,
+                "qroc_text": user_text,
+                "accepted_answers": accepted_answers,
+            },
+        )
+
 
 class FinView(LoginRequiredMixin, View):
     template_name = "qcm/fin.html"
@@ -494,14 +713,26 @@ class FinView(LoginRequiredMixin, View):
             user_answers = list(
                 session.user_answers.filter(question=q).select_related("answer")
             )
-            selected_ids = {ua.answer_id for ua in user_answers}
+            selected_ids = {ua.answer_id for ua in user_answers if ua.answer_id}
 
-            raw_score = sum(ua.answer.fraction for ua in user_answers)
+            raw_score = sum(ua.effective_fraction for ua in user_answers)
             score = max(0.0, min(1.0, raw_score))
             total_score += score
 
-            max_score = sum(a.fraction for a in q.answers.filter(fraction__gt=0))
+            if q.qtype == "shortanswer":
+                max_score = 1.0
+            else:
+                max_score = sum(a.fraction for a in q.answers.filter(fraction__gt=0))
             ratio = score / max_score if max_score > 0 else 0.0
+
+            qroc_text = next(
+                (ua.qroc_text for ua in user_answers if ua.qroc_text is not None), None
+            )
+            accepted_answers = (
+                list(q.answers.filter(fraction__gt=0).order_by("text"))
+                if q.qtype == "shortanswer"
+                else []
+            )
 
             if not user_answers:
                 status = "unanswered"
@@ -521,6 +752,8 @@ class FinView(LoginRequiredMixin, View):
                     "max_score": max_score,
                     "status": status,
                     "answered": bool(user_answers),
+                    "qroc_text": qroc_text,
+                    "accepted_answers": accepted_answers,
                 }
             )
 
@@ -718,14 +951,17 @@ def _compute_course_block(course, all_answers):
 
     answers = all_answers.filter(question__category__course=course)
     nb_available = Question.objects.filter(
-        category__course=course, qtype="multichoice"
+        category__course=course, qtype__in=["multichoice", "shortanswer"]
     ).count()
     nb_done = answers.values("question_id").distinct().count()
 
     # Compute note at question-attempt level: group fractions by (session, question)
     pair_fracs: dict = defaultdict(list)
-    for ua in answers.values("session_id", "question_id", "answer__fraction"):
-        pair_fracs[(ua["session_id"], ua["question_id"])].append(ua["answer__fraction"])
+    for ua in answers.values(
+        "session_id", "question_id", "answer__fraction", "is_correct"
+    ):
+        frac = _ua_fraction(ua["answer__fraction"], ua["is_correct"])
+        pair_fracs[(ua["session_id"], ua["question_id"])].append(frac)
 
     nb_total_sessions = len(pair_fracs)
 
@@ -790,9 +1026,8 @@ class StatsView(LoginRequiredMixin, View):
             # Group answer fractions by (session, question) for question-level scoring
             pair_fracs: dict = defaultdict(list)
             for r in raw:
-                pair_fracs[(r["session_id"], r["question_id"])].append(
-                    r["answer__fraction"]
-                )
+                frac = _ua_fraction(r["answer__fraction"], r["is_correct"])
+                pair_fracs[(r["session_id"], r["question_id"])].append(frac)
 
             # Question score = sum of answer fractions clamped to [0, 1]
             q_scores = [max(0.0, min(1.0, sum(fracs))) for fracs in pair_fracs.values()]
@@ -849,7 +1084,7 @@ class StatsView(LoginRequiredMixin, View):
 
         total_available = Question.objects.filter(
             category__course__in=[c.pk for c in enrolled_courses],
-            qtype="multichoice",
+            qtype__in=["multichoice", "shortanswer"],
         ).count()
         total_done = all_answers.values("question_id").distinct().count()
         pct_done_global = (
@@ -874,7 +1109,10 @@ class StatsView(LoginRequiredMixin, View):
             """Returns (note_or_None, nb_checks)."""
             if not entries:
                 return None, 0
-            score = sum(min(1.0, max(0.0, e["answer__fraction"])) for e in entries)
+            score = sum(
+                min(1.0, max(0.0, _ua_fraction(e["answer__fraction"], e["is_correct"])))
+                for e in entries
+            )
             note = round(score / len(entries) * 20, 1)
             checks = len({(e["session_id"], e["question_id"]) for e in entries})
             return note, checks
@@ -981,7 +1219,7 @@ class HistoryView(LoginRequiredMixin, View):
             nb_answered_distinct = len(answered_q_ids)
             is_complete = nb_answered_distinct >= nb_questions
 
-            # Note: aggregate per question (correct for multichoice)
+            # Note: aggregate per question (correct for multichoice and QROC)
             if answered_q_ids:
                 total_q_score = 0.0
                 for q_id in answered_q_ids:
@@ -989,7 +1227,7 @@ class HistoryView(LoginRequiredMixin, View):
                         "answer"
                     )
                     q_score = min(
-                        1.0, max(0.0, sum(ua.answer.fraction for ua in q_ans))
+                        1.0, max(0.0, sum(ua.effective_fraction for ua in q_ans))
                     )
                     total_q_score += q_score
                 note = (
@@ -1105,6 +1343,24 @@ class ErrataAcceptView(LoginRequiredMixin, View):
             feedback = request.POST.get("general_feedback", "").strip()
             question.feedback = feedback
             question.save(update_fields=["feedback"])
+
+        elif errata.error_type == Errata.QROC_ANSWER:
+            # Créer un nouvel Answer accepté pour la question QROC
+            suggested_text = errata.qroc_suggested_text.strip()
+            try:
+                fraction = float(request.POST.get("qroc_fraction", "1.0"))
+                fraction = max(0.0, min(1.0, fraction))
+            except ValueError:
+                fraction = 1.0
+            if suggested_text:
+                Answer.objects.get_or_create(
+                    question=errata.question,
+                    text=suggested_text,
+                    defaults={
+                        "fraction": fraction,
+                        "is_correct": fraction > 0,
+                    },
+                )
 
         from .models import Notification
 
@@ -1232,11 +1488,14 @@ class ErrataSubmitView(LoginRequiredMixin, View):
                 },
             )
 
+        qroc_suggested_text = request.POST.get("qroc_suggested_text", "").strip()
+
         errata = Errata.objects.create(
             question=question,
             reported_by=request.user,
             error_type=error_type,
             description=description,
+            qroc_suggested_text=qroc_suggested_text,
         )
 
         # Link concerned answers (for correction errors)
@@ -1274,6 +1533,9 @@ class ErrataSubmitView(LoginRequiredMixin, View):
             .distinct()
             .order_by("name")
         )
+        # Pre-fill QROC text from query param (coming from ambiguous template)
+        prefill_qroc_text = request.GET.get("qroc_text", "")
+        prefill_type = request.GET.get("prefill_type", "")
         return render(
             request,
             "qcm/_errata_form.html",
@@ -1283,6 +1545,8 @@ class ErrataSubmitView(LoginRequiredMixin, View):
                 "ec_tags": ec_tags,
                 "chapter_tags": chapter_tags,
                 "error_types": Errata.TYPE_CHOICES,
+                "prefill_qroc_text": prefill_qroc_text,
+                "prefill_type": prefill_type,
             },
         )
 
@@ -1308,12 +1572,24 @@ class SessionDetailView(LoginRequiredMixin, View):
             user_answers = list(
                 session.user_answers.filter(question=q).select_related("answer")
             )
-            selected_ids = {ua.answer_id for ua in user_answers}
-            raw_score = sum(ua.answer.fraction for ua in user_answers)
+            selected_ids = {ua.answer_id for ua in user_answers if ua.answer_id}
+            raw_score = sum(ua.effective_fraction for ua in user_answers)
             score = max(0.0, min(1.0, raw_score))
             total_score += score
-            max_score = sum(a.fraction for a in q.answers.filter(fraction__gt=0))
+            if q.qtype == "shortanswer":
+                max_score = 1.0
+            else:
+                max_score = sum(a.fraction for a in q.answers.filter(fraction__gt=0))
             ratio = score / max_score if max_score > 0 else 0.0
+
+            qroc_text = next(
+                (ua.qroc_text for ua in user_answers if ua.qroc_text is not None), None
+            )
+            accepted_answers = (
+                list(q.answers.filter(fraction__gt=0).order_by("text"))
+                if q.qtype == "shortanswer"
+                else []
+            )
 
             if not user_answers:
                 status = "unanswered"
@@ -1333,6 +1609,8 @@ class SessionDetailView(LoginRequiredMixin, View):
                     "max_score": max_score,
                     "status": status,
                     "answered": bool(user_answers),
+                    "qroc_text": qroc_text,
+                    "accepted_answers": accepted_answers,
                 }
             )
 
@@ -1394,7 +1672,9 @@ class CourseStatsView(LoginRequiredMixin, View):
         for tag in ec_tag_ids:
             ec_answers = all_answers.filter(question__tags=tag)
             nb_available = Question.objects.filter(
-                category__course=course, qtype="multichoice", tags=tag
+                category__course=course,
+                qtype__in=["multichoice", "shortanswer"],
+                tags=tag,
             ).count()
             nb_done = ec_answers.values("question_id").distinct().count()
             pct_done = round(nb_done / nb_available * 100) if nb_available > 0 else 0
@@ -1402,11 +1682,10 @@ class CourseStatsView(LoginRequiredMixin, View):
             # Question-level scoring: group answer fractions by (session, question)
             pair_fracs: dict = defaultdict(list)
             for ua in ec_answers.values(
-                "session_id", "question_id", "answer__fraction"
+                "session_id", "question_id", "answer__fraction", "is_correct"
             ):
-                pair_fracs[(ua["session_id"], ua["question_id"])].append(
-                    ua["answer__fraction"]
-                )
+                frac = _ua_fraction(ua["answer__fraction"], ua["is_correct"])
+                pair_fracs[(ua["session_id"], ua["question_id"])].append(frac)
 
             nb_total_sessions = len(pair_fracs)
 

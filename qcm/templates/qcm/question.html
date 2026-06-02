@@ -61,19 +61,37 @@
         <!-- Énoncé -->
         <div class="mb-3">{{ question.text|safe }}</div>
 
-        <p class="text-muted small">Sélectionner une ou plusieurs réponses :</p>
-
         <!-- Zone réponses -->
         <div id="answers-zone">
           {% if is_answered %}
           {% include "qcm/_correction.html" %}
-          {% else %}
+          {% elif question.qtype == "shortanswer" %}
+          <!-- QROC : champ texte libre -->
+          <p class="text-muted small">Tapez votre réponse :</p>
           <form id="answer-form"
                 hx-post="/entrainement/session/{{ session.pk }}/check/"
                 hx-target="#answers-zone"
                 hx-swap="innerHTML"
                 hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
             {% csrf_token %}
+            <input type="hidden" name="question_id" value="{{ question.pk }}">
+            <div class="mb-3">
+              <input type="text" name="qroc_text" id="qroc_input"
+                     class="form-control" placeholder="Votre réponse…"
+                     autocomplete="off" autofocus>
+            </div>
+            <button type="submit" class="btn btn-secondary" id="check-btn">Vérifier</button>
+          </form>
+          {% else %}
+          <!-- Multichoix -->
+          <p class="text-muted small">Sélectionner une ou plusieurs réponses :</p>
+          <form id="answer-form"
+                hx-post="/entrainement/session/{{ session.pk }}/check/"
+                hx-target="#answers-zone"
+                hx-swap="innerHTML"
+                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+            {% csrf_token %}
+            <input type="hidden" name="question_id" value="{{ question.pk }}">
             {% for answer in answers %}
             <div class="form-check mb-2">
               <input class="form-check-input" type="checkbox"
@@ -152,13 +170,16 @@
 </button>
 
 <script>
-// Active le bouton Check dès qu'au moins une proposition est cochée
+// Multichoix : active Check dès qu'au moins une case est cochée
 document.querySelectorAll('input[name="answers"]').forEach(function(cb) {
   cb.addEventListener('change', function() {
     const btn = document.getElementById('check-btn');
     if (btn) btn.disabled = !document.querySelector('input[name="answers"]:checked');
   });
 });
+// QROC : focus automatique sur le champ texte
+const qrocInput = document.getElementById('qroc_input');
+if (qrocInput) { qrocInput.focus(); }
 
 function toggleNav() {
   const nav  = document.getElementById('question-nav');

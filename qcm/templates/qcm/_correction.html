@@ -21,7 +21,29 @@
   if (btn) btn.style.display = 'none';
 </script>
 
-<!-- Affichage des réponses avec code couleur (identique à la relecture) -->
+{% if question.qtype == "shortanswer" %}
+<!-- ── Correction QROC ── -->
+<div class="mb-3 p-2 rounded d-flex align-items-center gap-2
+  {% if status == 'correct' %}border border-success bg-success bg-opacity-10
+  {% else %}border border-danger bg-danger bg-opacity-10{% endif %}">
+  <span class="fw-bold fs-5">{% if status == "correct" %}✓{% else %}✗{% endif %}</span>
+  <span>
+    Votre réponse : <strong>{{ qroc_text|default:"(vide)" }}</strong>
+    {% if is_self_evaluated %}<span class="badge bg-secondary ms-1" style="font-size:0.65rem;">auto-évaluation</span>{% endif %}
+  </span>
+</div>
+{% if accepted_answers %}
+<div class="mb-2 small text-muted">
+  Réponses acceptées :
+  {% for a in accepted_answers %}
+  <span class="badge {% if a.fraction >= 1.0 %}bg-success{% else %}bg-warning text-dark{% endif %} me-1">
+    {{ a.text }}{% if a.fraction < 1.0 %} ({{ a.fraction|floatformat:1 }}){% endif %}
+  </span>
+  {% endfor %}
+</div>
+{% endif %}
+{% else %}
+<!-- ── Correction multichoix ── -->
 {% for answer in answers %}
 <div class="mb-1 p-2 rounded d-flex align-items-start
   {% if answer.pk in selected_ids and answer.is_correct %}border border-success bg-success bg-opacity-10
@@ -41,6 +63,7 @@
   {% endif %}
 </div>
 {% endfor %}
+{% endif %}
 
 <!-- Panneau de correction (feedback Moodle) -->
 <div class="mt-3 p-3 rounded" style="background-color: #fff3cd; border: 1px solid #ffc107;">
@@ -54,6 +77,15 @@
 
 <!-- Signaler une erreur -->
 <div class="mt-2">
+  {% if question.qtype == "shortanswer" and qroc_text %}
+  <button class="btn btn-sm"
+          style="color:#b91c1c; border:1px solid #fca5a5; background:#fff5f5;"
+          hx-get="/errata/question/{{ question.pk }}/?qroc_text={{ qroc_text|urlencode }}&prefill_type=qroc_answer"
+          hx-target="#errata-form-{{ question.pk }}"
+          hx-swap="innerHTML">
+    ⚠&#xFE0E; Signaler une erreur
+  </button>
+  {% else %}
   <button class="btn btn-sm"
           style="color:#b91c1c; border:1px solid #fca5a5; background:#fff5f5;"
           hx-get="/errata/question/{{ question.pk }}/"
@@ -61,6 +93,7 @@
           hx-swap="innerHTML">
     ⚠&#xFE0E; Signaler une erreur
   </button>
+  {% endif %}
   <div id="errata-form-{{ question.pk }}" class="mt-2"></div>
 </div>
 

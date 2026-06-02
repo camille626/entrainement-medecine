@@ -29,6 +29,7 @@
       <div class="form-check">
         <input class="form-check-input" type="radio" name="error_type" value="{{ value }}"
                id="et_{{ value }}_{{ question.pk }}"
+               {% if prefill_type == value %}checked{% endif %}
                onchange="toggleErrataFields('{{ question.pk }}', '{{ value }}')">
         <label class="form-check-label small" for="et_{{ value }}_{{ question.pk }}">{{ label }}</label>
       </div>
@@ -71,6 +72,22 @@
         </label>
       </div>
       {% endfor %}
+    </div>
+
+    <!-- Réponse QROC suggérée (type=qroc_answer) -->
+    <div id="qroc-zone-{{ question.pk }}"
+         style="{% if prefill_type != 'qroc_answer' %}display:none;{% endif %}"
+         class="mb-3">
+      <label for="qroc_text_{{ question.pk }}" class="form-label fw-semibold small">
+        Réponse à ajouter comme variante acceptée <span class="text-danger">*</span>
+      </label>
+      <input type="text" name="qroc_suggested_text" id="qroc_text_{{ question.pk }}"
+             class="form-control form-control-sm"
+             value="{{ prefill_qroc_text|default:'' }}"
+             placeholder="Ex : huit, poumon gauche...">
+      <div class="form-text text-muted" style="font-size:0.75rem;">
+        Vous pouvez modifier si votre réponse initiale contenait une faute de frappe.
+      </div>
     </div>
 
     <!-- Tags suggérés (type=tag) -->
@@ -128,6 +145,8 @@
 function toggleErrataFields(qpk, type) {
   document.getElementById('answers-zone-' + qpk).style.display = (type === 'correction') ? '' : 'none';
   document.getElementById('tags-zone-' + qpk).style.display = (type === 'tag') ? '' : 'none';
+  const qrocZone = document.getElementById('qroc-zone-' + qpk);
+  if (qrocZone) qrocZone.style.display = (type === 'qroc_answer') ? '' : 'none';
   const needsDesc = (type === 'correction' || type === 'autre');
   const req = document.getElementById('desc-required-' + qpk);
   const opt = document.getElementById('desc-optional-' + qpk);
