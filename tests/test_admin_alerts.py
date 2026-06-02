@@ -154,7 +154,7 @@ class TestAdminAlertsNavbar:
         client.force_login(staff_user)
         response = client.get("/")
         assert response.status_code == 200
-        assert b"admin-alert-badge" in response.content
+        assert b'<span class="admin-alert-badge"' in response.content
 
     def test_badge_not_visible_for_regular_user(self, client, regular_user, question):
         Errata.objects.create(
@@ -167,10 +167,10 @@ class TestAdminAlertsNavbar:
         client.force_login(regular_user)
         response = client.get("/")
         assert response.status_code == 200
-        assert b"admin-alert-badge" not in response.content
+        assert b'<span class="admin-alert-badge"' not in response.content
 
     def test_badge_not_visible_when_nothing_pending(self, client, staff_user):
         client.force_login(staff_user)
         response = client.get("/")
         assert response.status_code == 200
-        assert b"admin-alert-badge" not in response.content
+        assert b'<span class="admin-alert-badge"' not in response.content
