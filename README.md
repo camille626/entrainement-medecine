@@ -1,16 +1,18 @@
-# Entrainement Médecine
+# StudyMed
 
-Plateforme web de QCMs interactifs pour l'apprentissage des cours de médecine (P2).
+Plateforme web de QCMs interactifs pour l'apprentissage des cours de médecine (P2, D1).
 
 ## Fonctionnalités
 
-- QCMs organisés par cours et catégories (13 cours P2)
-- Sessions d'entraînement personnalisables (nombre de questions, thèmes)
-- Mode révision : revoir uniquement les questions ratées
-- Statistiques personnalisées par matière (progression, % de questions réalisées)
+- QCMs organisés par cours, EC et chapitres
+- Sessions d'entraînement personnalisables (nombre de questions, thèmes, mode d'apprentissage, QROCs...)
+- Modes différents : revoir uniquement les questions ratées, revoir les questions non ancrées, revoir les questions jamais réalisées ...
+- Statistiques personnalisées par matière et par EC (progression, % de questions réalisées)
 - Correction immédiate ou différée (format flash / format classique)
-- Interface d'administration pour gérer les questions
+- Interface d'administration pour gérer les questions : ajouter des questions (fichiers moodle xml ou manuellement)
+- Interface d'erratas : les utilisateurs peuvent signaler des erreurs dans les questions qui sont relues et acceptées/refusées par l'admin
 - Multi-utilisateurs avec comptes individuels
+- Des trophées inspirés de playstation
 
 ## Stack technique
 
