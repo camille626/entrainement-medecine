@@ -38,6 +38,12 @@
       </li>
       {% if user.is_staff %}
       <li class="nav-item">
+        <a class="nav-link {% if '/questions' in request.path %}active{% endif %}"
+           href="/questions/upload/">Questions</a>
+      </li>
+      {% endif %}
+      {% if user.is_staff %}
+      <li class="nav-item">
         <a class="nav-link {% if '/errata' in request.path %}active{% endif %}"
            href="/errata/">Erratas
           {% if admin_pending_erratas %}

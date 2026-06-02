@@ -1,5 +1,6 @@
 """Views for the QCM training interface."""
 
+import json
 import random
 from typing import TYPE_CHECKING
 
@@ -24,6 +25,18 @@ from .models import (
     TagCategory,
     UserAnswer,
 )
+
+
+# Fraction choices for the question upload preview form
+FRACTION_CHOICES = [
+    ("1.0", "+1,00 (correcte)"),
+    ("0.5", "+0,50 (partielle)"),
+    ("0.333333", "+0,33 (partielle x3)"),
+    ("0.25", "+0,25 (partielle x4)"),
+    ("0.0", "0 (neutre)"),
+    ("-1.0", "-1,00 (penalite)"),
+]
+FRACTION_CHOICES_JSON = json.dumps([[val, label] for val, label in FRACTION_CHOICES])
 
 
 if TYPE_CHECKING:
@@ -616,6 +629,8 @@ def _compute_anchored_count(user_answers_qs):
 
 def _compute_course_block(course, all_answers):
     """Return stats dict for a single course."""
+    from collections import defaultdict
+
     from .models import Question
 
     answers = all_answers.filter(question__category__course=course)
@@ -623,17 +638,18 @@ def _compute_course_block(course, all_answers):
         category__course=course, qtype="multichoice"
     ).count()
     nb_done = answers.values("question_id").distinct().count()
-    nb_total_sessions = (
-        answers.count()
-    )  # total attempts (same question can appear multiple times)
+
+    # Compute note at question-attempt level: group fractions by (session, question)
+    pair_fracs: dict = defaultdict(list)
+    for ua in answers.values("session_id", "question_id", "answer__fraction"):
+        pair_fracs[(ua["session_id"], ua["question_id"])].append(ua["answer__fraction"])
+
+    nb_total_sessions = len(pair_fracs)
 
     if nb_total_sessions > 0:
-        score = sum(
-            min(1.0, max(0.0, ua.answer.fraction))
-            for ua in answers.select_related("answer")
-        )
-        note = round(score / nb_total_sessions * 20, 1)
-        correct = answers.filter(answer__fraction=1.0).count()
+        q_scores = [max(0.0, min(1.0, sum(fracs))) for fracs in pair_fracs.values()]
+        note = round(sum(q_scores) / nb_total_sessions * 20, 1)
+        correct = sum(1 for s in q_scores if s >= 1.0 - 1e-6)
         pct = round(correct / nb_total_sessions * 100)
     else:
         note = 0.0
@@ -659,64 +675,93 @@ class StatsView(LoginRequiredMixin, View):
 
     template_name = "qcm/stats.html"
 
-    def get(self, request):
-        import json
+    def get(self, request):  # noqa: PLR0914
+        from collections import defaultdict
         from datetime import timedelta
 
         from django.utils import timezone
+        from django.utils.timezone import localdate
 
         user = request.user
 
-        # --- Global stats ---
+        # Single queryset — evaluated once into a list for Python processing
         all_answers = UserAnswer.objects.filter(session__user=user)
-        total_answered = all_answers.count()
-
-        if total_answered > 0:
-            correct = all_answers.filter(answer__fraction=1.0).count()
-            partial = all_answers.filter(
-                answer__fraction__gt=0.0, answer__fraction__lt=1.0
-            ).count()
-            incorrect = total_answered - correct - partial
-
-            total_score = sum(
-                min(1.0, max(0.0, ua.answer.fraction))
-                for ua in all_answers.select_related("answer")
+        raw = list(
+            all_answers.values(
+                "session_id",
+                "question_id",
+                "is_correct",
+                "answer__fraction",
+                "session__started_at",
             )
-            note_20 = round(total_score / total_answered * 20, 1)
+        )
 
-            pct_correct = round(correct / total_answered * 100)
-            pct_partial = round(partial / total_answered * 100)
-            pct_incorrect = round(incorrect / total_answered * 100)
-        else:
+        total_sessions = QuizSession.objects.filter(user=user).count()
+
+        if not raw:
             correct = partial = incorrect = 0
             note_20 = 0.0
             pct_correct = pct_partial = pct_incorrect = 0
+            total_checks = 0
+        else:
+            # Group answer fractions by (session, question) for question-level scoring
+            pair_fracs: dict = defaultdict(list)
+            for r in raw:
+                pair_fracs[(r["session_id"], r["question_id"])].append(
+                    r["answer__fraction"]
+                )
 
-        total_sessions = QuizSession.objects.filter(user=user).count()
+            # Question score = sum of answer fractions clamped to [0, 1]
+            q_scores = [max(0.0, min(1.0, sum(fracs))) for fracs in pair_fracs.values()]
+            total_checks = len(q_scores)
+
+            note_20 = round(sum(q_scores) / total_checks * 20, 1)
+
+            # Classify each question attempt by its score
+            correct = sum(1 for s in q_scores if s >= 1.0 - 1e-6)
+            incorrect = sum(1 for s in q_scores if s <= 0)
+            partial = total_checks - correct - incorrect
+            pct_correct = round(correct / total_checks * 100)
+            pct_partial = round(partial / total_checks * 100)
+            pct_incorrect = round(incorrect / total_checks * 100)
 
         # --- Per-course stats ---
         from .models import Course, UserEnrollment
 
-        if user.is_staff:
-            # Staff: show courses that have at least 1 answer
+        # Always prefer explicit enrollment (shows courses even with 0 answers)
+        enrollment_qs = UserEnrollment.objects.filter(user=user).select_related(
+            "course__semester__study_year"
+        )
+        if enrollment_qs.exists():
+            enrolled_courses = [e.course for e in enrollment_qs]
+        else:
+            # No enrollment records: fall back to courses with at least 1 answer
             answered_course_ids = all_answers.values_list(
                 "question__category__course_id", flat=True
             ).distinct()
             enrolled_courses = list(
-                Course.objects.filter(pk__in=answered_course_ids).order_by("name")
-            )
-        else:
-            enrolled_courses = [
-                e.course
-                for e in UserEnrollment.objects.filter(user=user).select_related(
-                    "course"
+                Course.objects.filter(pk__in=answered_course_ids).select_related(
+                    "semester__study_year"
                 )
-            ]
+            )
 
         course_stats = [_compute_course_block(c, all_answers) for c in enrolled_courses]
-        course_stats.sort(key=lambda x: x["course"].name)
 
-        # Global anchored count
+        # Sort by semester (study_year order → semester order → course name)
+        def _sem_key(stat):
+            sem = stat["course"].semester
+            if sem:
+                return (sem.study_year.order, sem.order, stat["course"].name)
+            return (999, 999, stat["course"].name)
+
+        course_stats.sort(key=_sem_key)
+
+        # Add semester label for template grouping
+        for stat in course_stats:
+            sem = stat["course"].semester
+            stat["semester_label"] = str(sem) if sem else "Autres"
+
+        # Global totals
         from .models import Question
 
         total_available = Question.objects.filter(
@@ -732,36 +777,77 @@ class StatsView(LoginRequiredMixin, View):
             round(total_anchored / total_available * 100) if total_available > 0 else 0
         )
 
-        # --- Weekly progression (last 8 weeks) ---
+        # --- Weekly progression (last 8 weeks) with daily breakdown ---
         now = timezone.now()
+        today = localdate(now)
+
+        # Group raw answers by local date
+        by_date: dict = defaultdict(list)
+        for r in raw:
+            d = localdate(r["session__started_at"])
+            by_date[d].append(r)
+
+        def _week_stats(entries: list) -> tuple:
+            """Returns (note_or_None, nb_checks)."""
+            if not entries:
+                return None, 0
+            score = sum(min(1.0, max(0.0, e["answer__fraction"])) for e in entries)
+            note = round(score / len(entries) * 20, 1)
+            checks = len({(e["session_id"], e["question_id"]) for e in entries})
+            return note, checks
+
         weekly_data = []
         for i in range(7, -1, -1):
-            week_start = now - timedelta(weeks=i + 1)
-            week_end = now - timedelta(weeks=i)
-            week_answers = all_answers.filter(
-                session__started_at__gte=week_start,
-                session__started_at__lt=week_end,
-            )
-            wcount = week_answers.count()
-            if wcount > 0:
-                wscore = sum(
-                    min(1.0, max(0.0, ua.answer.fraction))
-                    for ua in week_answers.select_related("answer")
-                )
-                wnote = round(wscore / wcount * 20, 1)
-            else:
-                wnote = None
-            label = week_end.strftime("S%U")
-            weekly_data.append({"label": label, "note": wnote})
+            week_start = today - timedelta(weeks=i + 1)
+            week_end = today - timedelta(weeks=i)
 
-        chart_labels = json.dumps([d["label"] for d in weekly_data])
-        chart_data = json.dumps([d["note"] for d in weekly_data])
+            week_entries = [
+                r
+                for r in raw
+                if week_start <= localdate(r["session__started_at"]) < week_end
+            ]
+            wnote, wchecks = _week_stats(week_entries)
+
+            daily = []
+            for j in range(7):
+                d = week_start + timedelta(days=j)
+                day_entries = by_date.get(d, [])
+                dnote, dchecks = _week_stats(day_entries)
+                daily.append(
+                    {
+                        "day": d.strftime("%a %d/%m"),
+                        "note": dnote,
+                        "checks": dchecks,
+                    }
+                )
+
+            label = week_end.strftime("S%U")
+            weekly_data.append(
+                {
+                    "label": label,
+                    "note": wnote,
+                    "nb_checks": wchecks,
+                    "daily": daily,
+                }
+            )
+
+        # Pass Python objects — json_script in the template handles encoding
+        chart_labels = [d["label"] for d in weekly_data]
+        chart_notes = [d["note"] for d in weekly_data]
+        chart_checks = [d["nb_checks"] for d in weekly_data]
+        chart_daily = [
+            [
+                {"day": day["day"], "note": day["note"], "checks": day["checks"]}
+                for day in d["daily"]
+            ]
+            for d in weekly_data
+        ]
 
         return render(
             request,
             self.template_name,
             {
-                "total_answered": total_answered,
+                "total_checks": total_checks,
                 "total_sessions": total_sessions,
                 "correct": correct,
                 "partial": partial,
@@ -772,7 +858,9 @@ class StatsView(LoginRequiredMixin, View):
                 "pct_incorrect": pct_incorrect,
                 "course_stats": course_stats,
                 "chart_labels": chart_labels,
-                "chart_data": chart_data,
+                "chart_notes": chart_notes,
+                "chart_checks": chart_checks,
+                "chart_daily": chart_daily,
                 "total_available": total_available,
                 "total_done": total_done,
                 "pct_done_global": pct_done_global,
@@ -1217,6 +1305,8 @@ class CourseStatsView(LoginRequiredMixin, View):
             .order_by("name")
         )
 
+        from collections import defaultdict
+
         ec_stats = []
         for tag in ec_tag_ids:
             ec_answers = all_answers.filter(question__tags=tag)
@@ -1224,16 +1314,25 @@ class CourseStatsView(LoginRequiredMixin, View):
                 category__course=course, qtype="multichoice", tags=tag
             ).count()
             nb_done = ec_answers.values("question_id").distinct().count()
-            nb_total_sessions = ec_answers.count()
             pct_done = round(nb_done / nb_available * 100) if nb_available > 0 else 0
 
-            if nb_total_sessions > 0:
-                score = sum(
-                    min(1.0, max(0.0, ua.answer.fraction))
-                    for ua in ec_answers.select_related("answer")
+            # Question-level scoring: group answer fractions by (session, question)
+            pair_fracs: dict = defaultdict(list)
+            for ua in ec_answers.values(
+                "session_id", "question_id", "answer__fraction"
+            ):
+                pair_fracs[(ua["session_id"], ua["question_id"])].append(
+                    ua["answer__fraction"]
                 )
-                note = round(score / nb_total_sessions * 20, 1)
-                correct = ec_answers.filter(answer__fraction=1.0).count()
+
+            nb_total_sessions = len(pair_fracs)
+
+            if nb_total_sessions > 0:
+                q_scores = [
+                    max(0.0, min(1.0, sum(fracs))) for fracs in pair_fracs.values()
+                ]
+                note = round(sum(q_scores) / nb_total_sessions * 20, 1)
+                correct = sum(1 for s in q_scores if s >= 1.0 - 1e-6)
                 pct = round(correct / nb_total_sessions * 100)
             else:
                 note = 0.0
@@ -1314,3 +1413,192 @@ class InscriptionDoneView(TemplateView):
     """Confirmation page after registration request."""
 
     template_name = "registration/inscription_done.html"
+
+
+# ── Admin — Upload de questions Moodle XML ────────────────────────────────────
+
+
+class AdminQuestionsUploadView(LoginRequiredMixin, View):
+    """Staff-only: upload a Moodle XML question file."""
+
+    template_name = "qcm/admin_questions_upload.html"
+
+    def _staff_required(self, request):
+        if not request.user.is_staff:
+            from django.http import Http404
+
+            raise Http404
+
+    def _categories(self):
+        from .models import Category
+
+        return Category.objects.select_related("course__semester__study_year").order_by(
+            "course__semester__study_year__order",
+            "course__semester__order",
+            "course__name",
+            "name",
+        )
+
+    def get(self, request):
+        self._staff_required(request)
+        success = request.GET.get("success")
+        return render(
+            request,
+            self.template_name,
+            {
+                "categories": self._categories(),
+                "success": int(success) if success and success.isdigit() else None,
+            },
+        )
+
+    def post(self, request):
+        self._staff_required(request)
+        xml_file = request.FILES.get("xml_file")
+        if not xml_file:
+            return render(
+                request,
+                self.template_name,
+                {
+                    "categories": self._categories(),
+                    "error": "Veuillez sélectionner un fichier XML.",
+                },
+            )
+
+        from .question_upload import parse_moodle_xml
+
+        try:
+            questions = parse_moodle_xml(xml_file.read())
+        except ValueError as exc:
+            return render(
+                request,
+                self.template_name,
+                {
+                    "categories": self._categories(),
+                    "error": f"Fichier invalide : {exc}",
+                },
+            )
+
+        if not questions:
+            return render(
+                request,
+                self.template_name,
+                {
+                    "categories": self._categories(),
+                    "error": "Aucune question multichoix trouvée dans ce fichier.",
+                },
+            )
+
+        request.session["upload_questions"] = questions
+        return redirect("qcm:questions_preview")
+
+
+class AdminQuestionsPreviewView(LoginRequiredMixin, View):
+    """Staff-only: preview and edit parsed questions before confirming."""
+
+    template_name = "qcm/admin_questions_preview.html"
+
+    def get(self, request):
+        if not request.user.is_staff:
+            from django.http import Http404
+
+            raise Http404
+        questions = request.session.get("upload_questions")
+        if not questions:
+            return redirect("qcm:questions_upload")
+
+        from .models import Category, TagCategory
+
+        categories = Category.objects.select_related(
+            "course__semester__study_year"
+        ).order_by(
+            "course__semester__study_year__order",
+            "course__semester__order",
+            "course__name",
+            "name",
+        )
+        tag_groups = [
+            {"category": tc, "tags": list(tc.tags.order_by("name"))}
+            for tc in TagCategory.objects.prefetch_related("tags").order_by(
+                "tag_type", "name"
+            )
+            if tc.tags.exists()
+        ]
+
+        # Pre-match XML tag names to DB tag PKs (case-insensitive)
+        tag_by_name = {t.name.lower(): t.pk for t in Tag.objects.all()}
+        for q in questions:
+            xml_tags = q.get("xml_tags", [])
+            matched_names = {
+                name.lower() for name in xml_tags if name.lower() in tag_by_name
+            }
+            q["matched_tag_ids"] = [str(tag_by_name[name]) for name in matched_names]
+            q["matched_xml_names"] = list(matched_names)  # for template badge coloring
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "questions": questions,
+                "categories": categories,
+                "tag_groups": tag_groups,
+                "fraction_choices": FRACTION_CHOICES,
+                "fraction_choices_json": FRACTION_CHOICES_JSON,
+            },
+        )
+
+
+class AdminQuestionsConfirmView(LoginRequiredMixin, View):
+    """Staff-only: save uploaded questions to the database."""
+
+    def post(self, request):
+        if not request.user.is_staff:
+            from django.http import Http404
+
+            raise Http404
+
+        from .models import Category
+
+        category_id = request.POST.get("category_id")
+        category = get_object_or_404(Category, pk=category_id)
+
+        q_count = int(request.POST.get("q_count", 0))
+        created = 0
+
+        for n in range(q_count):
+            text = request.POST.get(f"q_{n}_text", "").strip()
+            feedback = request.POST.get(f"q_{n}_feedback", "").strip()
+            a_count = int(request.POST.get(f"q_{n}_a_count", 0))
+
+            if not text or a_count < 2:
+                continue
+
+            question = Question.objects.create(
+                text=text,
+                feedback=feedback,
+                category=category,
+                qtype=Question.MULTICHOICE,
+                moodle_id=None,
+            )
+
+            for m in range(a_count):
+                ans_text = request.POST.get(f"q_{n}_a_{m}_text", "").strip()
+                try:
+                    fraction = float(request.POST.get(f"q_{n}_a_{m}_fraction", "0"))
+                except ValueError:
+                    fraction = 0.0
+                if ans_text:
+                    Answer.objects.create(
+                        text=ans_text,
+                        question=question,
+                        fraction=fraction,
+                        is_correct=fraction > 0,
+                    )
+
+            tag_ids = request.POST.getlist(f"q_{n}_tag_ids")
+            if tag_ids:
+                question.tags.set(Tag.objects.filter(pk__in=tag_ids))
+
+            created += 1
+
+        request.session.pop("upload_questions", None)
+        return redirect(f"/questions/upload/?success={created}")

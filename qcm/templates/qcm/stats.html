@@ -6,47 +6,58 @@
   <div class="col-12">
     <h2 class="mb-4">📊 Mes statistiques</h2>
 
-    {% if total_answered == 0 %}
+    {% if total_checks == 0 %}
     <div class="alert alert-info">
       Vous n'avez pas encore répondu à des questions. <a href="/entrainement/">Démarrer une session</a> pour voir vos statistiques.
     </div>
     {% else %}
 
     <!-- Vue d'ensemble -->
-    <div class="row g-3 mb-4">
+    <div class="row g-3 mb-4 align-items-stretch">
+
+      <!-- Note moyenne -->
       <div class="col-md-3">
-        <div class="card text-center border-primary">
-          <div class="card-body">
+        <div class="card text-center border-primary h-100">
+          <div class="card-body d-flex flex-column justify-content-center">
             <div class="display-6 fw-bold text-primary">{{ note_20 }}<small class="fs-5">/20</small></div>
-            <div class="small text-muted">Note moyenne</div>
+            <div class="small text-muted mt-1">Note moyenne</div>
           </div>
         </div>
       </div>
+
+      <!-- Questions réalisées -->
       <div class="col-md-3">
-        <div class="card text-center">
-          <div class="card-body">
-            <div class="display-6 fw-bold">{{ total_done }}<small class="fs-6 text-muted">/{{ total_available }}</small></div>
+        <div class="card text-center h-100">
+          <div class="card-body d-flex flex-column justify-content-center">
+            <div class="display-6 fw-bold">{{ total_checks }}</div>
             <div class="small text-muted">Questions réalisées</div>
-            <div class="progress mt-1" style="height:6px;">
+            <div class="text-muted mt-2" style="font-size:0.8rem;">
+              {{ total_done }}<span class="text-muted">/{{ total_available }}</span> questions distinctes
+            </div>
+            <div class="progress mt-1" style="height:5px;">
               <div class="progress-bar" style="width:{{ pct_done_global }}%"></div>
             </div>
           </div>
         </div>
       </div>
+
+      <!-- Questions ancrées -->
       <div class="col-md-3">
-        <div class="card text-center border-warning">
-          <div class="card-body">
+        <div class="card text-center border-warning h-100">
+          <div class="card-body d-flex flex-column justify-content-center">
             <div class="display-6 fw-bold text-warning">{{ total_anchored }}</div>
             <div class="small text-muted">Questions ancrées ⚓</div>
             <div class="small text-muted">{{ pct_anchored }}% du total</div>
           </div>
         </div>
       </div>
+
+      <!-- % correctes -->
       <div class="col-md-3">
-        <div class="card text-center border-success">
-          <div class="card-body">
+        <div class="card text-center border-success h-100">
+          <div class="card-body d-flex flex-column justify-content-center">
             <div class="display-6 fw-bold text-success">{{ pct_correct }}%</div>
-            <div class="small text-muted">Correctes</div>
+            <div class="small text-muted">Entièrement correctes</div>
             <div class="small text-muted">{{ total_sessions }} sessions</div>
           </div>
         </div>
@@ -56,7 +67,7 @@
     <!-- Barre de répartition -->
     <div class="card mb-4">
       <div class="card-body">
-        <h6 class="card-title mb-3">Répartition des réponses</h6>
+        <h6 class="card-title mb-3">Répartition des questions</h6>
         <div class="progress" style="height: 24px;">
           {% if pct_correct > 0 %}
           <div class="progress-bar bg-success" style="width: {{ pct_correct }}%" title="{{ pct_correct }}% correctes">
@@ -78,6 +89,7 @@
           <span><span class="badge bg-success">✓</span> {{ correct }} correctes</span>
           <span><span class="badge bg-warning text-dark">~</span> {{ partial }} partielles</span>
           <span><span class="badge bg-danger">✗</span> {{ incorrect }} incorrectes</span>
+          <span class="text-muted ms-auto">sur {{ total_checks }} tentatives</span>
         </div>
       </div>
     </div>
@@ -85,7 +97,15 @@
     <!-- Graphe de progression -->
     <div class="card mb-4">
       <div class="card-body">
-        <h6 class="card-title mb-3">Progression sur 8 semaines</h6>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h6 class="card-title mb-0">Progression sur 8 semaines</h6>
+          <div class="btn-group btn-group-sm" role="group">
+            <button type="button" class="btn btn-primary active" id="btn-note"
+                    onclick="setChartMetric('note')">Note /20</button>
+            <button type="button" class="btn btn-outline-secondary" id="btn-checks"
+                    onclick="setChartMetric('checks')">Questions</button>
+          </div>
+        </div>
         <canvas id="progressChart" height="80"></canvas>
       </div>
     </div>
@@ -110,6 +130,13 @@
             </thead>
             <tbody>
               {% for s in course_stats %}
+              {% ifchanged s.semester_label %}
+              <tr class="table-secondary">
+                <td colspan="7" class="fw-semibold small text-muted py-1 px-2">
+                  📅 {{ s.semester_label }}
+                </td>
+              </tr>
+              {% endifchanged %}
               <tr class="{% if s.nb_done > 0 %}cursor-pointer{% endif %}"
                   {% if s.nb_done > 0 %}onclick="location='/statistiques/cours/{{ s.course.pk }}/'"
                   style="cursor:pointer;"{% endif %}>
@@ -152,29 +179,86 @@
   </div>
 </div>
 
+{{ chart_labels|json_script:"d-chart-labels" }}
+{{ chart_notes|json_script:"d-chart-notes" }}
+{{ chart_checks|json_script:"d-chart-checks" }}
+{{ chart_daily|json_script:"d-chart-daily" }}
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-const labels = {{ chart_labels|safe }};
-const data = {{ chart_data|safe }};
-new Chart(document.getElementById('progressChart'), {
+const chartLabels = JSON.parse(document.getElementById('d-chart-labels').textContent);
+const chartNotes  = JSON.parse(document.getElementById('d-chart-notes').textContent);
+const chartChecks = JSON.parse(document.getElementById('d-chart-checks').textContent);
+const dailyData   = JSON.parse(document.getElementById('d-chart-daily').textContent);
+
+const chart = new Chart(document.getElementById('progressChart'), {
   type: 'line',
   data: {
-    labels: labels,
-    datasets: [{
-      label: 'Note /20',
-      data: data,
-      borderColor: '#0d6efd',
-      backgroundColor: 'rgba(13,110,253,0.1)',
-      tension: 0.3,
-      fill: true,
-      pointRadius: 4,
-      spanGaps: true,
-    }]
+    labels: chartLabels,
+    datasets: [
+      {
+        label: 'Note /20',
+        data: chartNotes,
+        borderColor: '#0d6efd',
+        backgroundColor: 'rgba(13,110,253,0.1)',
+        tension: 0.3,
+        fill: true,
+        pointRadius: 4,
+        spanGaps: true,
+        yAxisID: 'y',
+      },
+      {
+        label: 'Questions',
+        data: chartChecks,
+        borderColor: '#198754',
+        backgroundColor: 'rgba(25,135,84,0.1)',
+        tension: 0.3,
+        fill: true,
+        pointRadius: 4,
+        spanGaps: false,
+        yAxisID: 'y',
+        hidden: true,
+      }
+    ]
   },
   options: {
-    scales: { y: { min: 0, max: 20, ticks: { stepSize: 5 } } },
-    plugins: { legend: { display: false } }
+    interaction: { mode: 'index', intersect: false },
+    scales: {
+      y: { min: 0, max: 20, ticks: { stepSize: 5 } }
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          afterBody: function(contexts) {
+            const weekIdx = contexts[0].dataIndex;
+            const days = dailyData[weekIdx];
+            if (!days) return [];
+            const lines = ['', 'Détail par jour :'];
+            days.forEach(d => {
+              if (d.checks > 0) {
+                const noteStr = d.note !== null ? ` — ${d.note}/20` : '';
+                lines.push(`  ${d.day} : ${d.checks} q.${noteStr}`);
+              }
+            });
+            return lines.length > 2 ? lines : [];
+          }
+        }
+      }
+    }
   }
 });
+
+function setChartMetric(metric) {
+  const isNote = metric === 'note';
+  chart.data.datasets[0].hidden = !isNote;
+  chart.data.datasets[1].hidden = isNote;
+  chart.options.scales.y.max = isNote ? 20 : undefined;
+  chart.options.scales.y.ticks.stepSize = isNote ? 5 : undefined;
+  chart.update();
+
+  document.getElementById('btn-note').className   = isNote ? 'btn btn-sm btn-primary active' : 'btn btn-sm btn-outline-secondary';
+  document.getElementById('btn-checks').className = isNote ? 'btn btn-sm btn-outline-secondary' : 'btn btn-sm btn-primary active';
+}
 </script>
 {% endblock %}
