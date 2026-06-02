@@ -11,6 +11,7 @@
     .nav-tabs .nav-link { color: #495057; font-weight: 500; }
     .nav-tabs .nav-link.active { color: #0d6efd; border-bottom: 2px solid #0d6efd; }
     .nav-tabs .nav-link.disabled { color: #adb5bd; cursor: default; }
+    .admin-alert-badge { display:inline-flex; align-items:center; justify-content:center; width:1.1rem; height:1.1rem; border-radius:50%; background-color:#dc3545; color:#fff !important; font-size:0.6rem; font-weight:700; vertical-align:middle; margin-left:3px; line-height:1; }
     .navbar-brand { font-weight: 700; font-size: 1.1rem; }
     body { background-color: #f8f9fa; }
     .main-content { padding-top: 1.5rem; }
@@ -38,7 +39,11 @@
       {% if user.is_staff %}
       <li class="nav-item">
         <a class="nav-link {% if '/errata' in request.path %}active{% endif %}"
-           href="/errata/">Erratas</a>
+           href="/errata/">Erratas
+          {% if admin_pending_erratas %}
+          <span class="admin-alert-badge" class="badge bg-danger ms-1" style="font-size:0.6rem;">{{ admin_pending_erratas }}</span>
+          {% endif %}
+        </a>
       </li>
       {% endif %}
       <li class="nav-item">
@@ -52,7 +57,11 @@
       {% if user.is_staff %}
       <li class="nav-item">
         <a class="nav-link {% if '/admin' in request.path %}active{% endif %}"
-           href="/admin/" id="nav-admin">Admin</a>
+           href="/admin/" id="nav-admin">Admin
+          {% if admin_pending_registrations %}
+          <span class="admin-alert-badge" class="badge bg-danger ms-1" style="font-size:0.6rem;">{{ admin_pending_registrations }}</span>
+          {% endif %}
+        </a>
       </li>
       {% endif %}
     </ul>
