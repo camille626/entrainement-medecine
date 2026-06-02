@@ -1,5 +1,6 @@
 """Views for the QCM training interface."""
 
+import json
 import random
 from typing import TYPE_CHECKING
 
@@ -24,6 +25,18 @@ from .models import (
     TagCategory,
     UserAnswer,
 )
+
+
+# Fraction choices for the question upload preview form
+FRACTION_CHOICES = [
+    ("1.0", "+1,00 (correcte)"),
+    ("0.5", "+0,50 (partielle)"),
+    ("0.333333", "+0,33 (partielle x3)"),
+    ("0.25", "+0,25 (partielle x4)"),
+    ("0.0", "0 (neutre)"),
+    ("-1.0", "-1,00 (penalite)"),
+]
+FRACTION_CHOICES_JSON = json.dumps([[val, label] for val, label in FRACTION_CHOICES])
 
 
 if TYPE_CHECKING:
@@ -1400,3 +1413,192 @@ class InscriptionDoneView(TemplateView):
     """Confirmation page after registration request."""
 
     template_name = "registration/inscription_done.html"
+
+
+# ── Admin — Upload de questions Moodle XML ────────────────────────────────────
+
+
+class AdminQuestionsUploadView(LoginRequiredMixin, View):
+    """Staff-only: upload a Moodle XML question file."""
+
+    template_name = "qcm/admin_questions_upload.html"
+
+    def _staff_required(self, request):
+        if not request.user.is_staff:
+            from django.http import Http404
+
+            raise Http404
+
+    def _categories(self):
+        from .models import Category
+
+        return Category.objects.select_related("course__semester__study_year").order_by(
+            "course__semester__study_year__order",
+            "course__semester__order",
+            "course__name",
+            "name",
+        )
+
+    def get(self, request):
+        self._staff_required(request)
+        success = request.GET.get("success")
+        return render(
+            request,
+            self.template_name,
+            {
+                "categories": self._categories(),
+                "success": int(success) if success and success.isdigit() else None,
+            },
+        )
+
+    def post(self, request):
+        self._staff_required(request)
+        xml_file = request.FILES.get("xml_file")
+        if not xml_file:
+            return render(
+                request,
+                self.template_name,
+                {
+                    "categories": self._categories(),
+                    "error": "Veuillez sélectionner un fichier XML.",
+                },
+            )
+
+        from .question_upload import parse_moodle_xml
+
+        try:
+            questions = parse_moodle_xml(xml_file.read())
+        except ValueError as exc:
+            return render(
+                request,
+                self.template_name,
+                {
+                    "categories": self._categories(),
+                    "error": f"Fichier invalide : {exc}",
+                },
+            )
+
+        if not questions:
+            return render(
+                request,
+                self.template_name,
+                {
+                    "categories": self._categories(),
+                    "error": "Aucune question multichoix trouvée dans ce fichier.",
+                },
+            )
+
+        request.session["upload_questions"] = questions
+        return redirect("qcm:questions_preview")
+
+
+class AdminQuestionsPreviewView(LoginRequiredMixin, View):
+    """Staff-only: preview and edit parsed questions before confirming."""
+
+    template_name = "qcm/admin_questions_preview.html"
+
+    def get(self, request):
+        if not request.user.is_staff:
+            from django.http import Http404
+
+            raise Http404
+        questions = request.session.get("upload_questions")
+        if not questions:
+            return redirect("qcm:questions_upload")
+
+        from .models import Category, TagCategory
+
+        categories = Category.objects.select_related(
+            "course__semester__study_year"
+        ).order_by(
+            "course__semester__study_year__order",
+            "course__semester__order",
+            "course__name",
+            "name",
+        )
+        tag_groups = [
+            {"category": tc, "tags": list(tc.tags.order_by("name"))}
+            for tc in TagCategory.objects.prefetch_related("tags").order_by(
+                "tag_type", "name"
+            )
+            if tc.tags.exists()
+        ]
+
+        # Pre-match XML tag names to DB tag PKs (case-insensitive)
+        tag_by_name = {t.name.lower(): t.pk for t in Tag.objects.all()}
+        for q in questions:
+            xml_tags = q.get("xml_tags", [])
+            matched_names = {
+                name.lower() for name in xml_tags if name.lower() in tag_by_name
+            }
+            q["matched_tag_ids"] = [str(tag_by_name[name]) for name in matched_names]
+            q["matched_xml_names"] = list(matched_names)  # for template badge coloring
+
+        return render(
+            request,
+            self.template_name,
+            {
+                "questions": questions,
+                "categories": categories,
+                "tag_groups": tag_groups,
+                "fraction_choices": FRACTION_CHOICES,
+                "fraction_choices_json": FRACTION_CHOICES_JSON,
+            },
+        )
+
+
+class AdminQuestionsConfirmView(LoginRequiredMixin, View):
+    """Staff-only: save uploaded questions to the database."""
+
+    def post(self, request):
+        if not request.user.is_staff:
+            from django.http import Http404
+
+            raise Http404
+
+        from .models import Category
+
+        category_id = request.POST.get("category_id")
+        category = get_object_or_404(Category, pk=category_id)
+
+        q_count = int(request.POST.get("q_count", 0))
+        created = 0
+
+        for n in range(q_count):
+            text = request.POST.get(f"q_{n}_text", "").strip()
+            feedback = request.POST.get(f"q_{n}_feedback", "").strip()
+            a_count = int(request.POST.get(f"q_{n}_a_count", 0))
+
+            if not text or a_count < 2:
+                continue
+
+            question = Question.objects.create(
+                text=text,
+                feedback=feedback,
+                category=category,
+                qtype=Question.MULTICHOICE,
+                moodle_id=None,
+            )
+
+            for m in range(a_count):
+                ans_text = request.POST.get(f"q_{n}_a_{m}_text", "").strip()
+                try:
+                    fraction = float(request.POST.get(f"q_{n}_a_{m}_fraction", "0"))
+                except ValueError:
+                    fraction = 0.0
+                if ans_text:
+                    Answer.objects.create(
+                        text=ans_text,
+                        question=question,
+                        fraction=fraction,
+                        is_correct=fraction > 0,
+                    )
+
+            tag_ids = request.POST.getlist(f"q_{n}_tag_ids")
+            if tag_ids:
+                question.tags.set(Tag.objects.filter(pk__in=tag_ids))
+
+            created += 1
+
+        request.session.pop("upload_questions", None)
+        return redirect(f"/questions/upload/?success={created}")

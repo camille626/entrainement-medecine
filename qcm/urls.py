@@ -63,6 +63,21 @@ urlpatterns = [
         views.CourseStatsView.as_view(),
         name="course_stats",
     ),
+    path(
+        "questions/upload/",
+        views.AdminQuestionsUploadView.as_view(),
+        name="questions_upload",
+    ),
+    path(
+        "questions/upload/preview/",
+        views.AdminQuestionsPreviewView.as_view(),
+        name="questions_preview",
+    ),
+    path(
+        "questions/confirmer/",
+        views.AdminQuestionsConfirmView.as_view(),
+        name="questions_confirm",
+    ),
     path("inscription/", views.InscriptionView.as_view(), name="inscription"),
     path(
         "inscription/merci/",

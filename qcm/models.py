@@ -143,7 +143,7 @@ class Question(models.Model):
         Category, on_delete=models.CASCADE, related_name="questions"
     )
     qtype = models.CharField(max_length=50, choices=QTYPE_CHOICES, default=MULTICHOICE)
-    moodle_id = models.IntegerField(unique=True)
+    moodle_id = models.IntegerField(unique=True, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     tags = models.ManyToManyField(Tag, blank=True, related_name="questions")
 
@@ -151,7 +151,7 @@ class Question(models.Model):
         ordering = ["moodle_id"]
 
     def __str__(self) -> str:
-        return f"Question #{self.moodle_id} ({self.category})"
+        return f"Question #{self.moodle_id or 'N/A'} ({self.category})"
 
 
 class Answer(models.Model):

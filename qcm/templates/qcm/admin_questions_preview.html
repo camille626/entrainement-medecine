@@ -1,0 +1,260 @@
+{% extends "qcm/base.html" %}
+{% block title %}Prévisualisation — StudyMed{% endblock %}
+
+{% block extra_head %}
+<link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+<style>
+  .ql-toolbar { border-radius: 4px 4px 0 0; }
+  .ql-container { border-radius: 0 0 4px 4px; }
+  .ql-editor { min-height: 60px; max-height: 200px; overflow-y: auto; font-size: 0.875rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12">
+    <div class="d-flex align-items-center gap-3 mb-4">
+      <h2 class="mb-0">📋 Prévisualisation — {{ questions|length }} question{{ questions|length|pluralize }}</h2>
+      <a href="/questions/upload/" class="btn btn-sm btn-outline-secondary">← Recommencer</a>
+    </div>
+
+    <form action="/questions/confirmer/" method="post" id="confirm-form">
+      {% csrf_token %}
+      <input type="hidden" name="q_count" value="{{ questions|length }}">
+
+      <!-- Catégorie -->
+      <div class="card mb-4">
+        <div class="card-body">
+          <label class="form-label fw-semibold">Catégorie de destination <span class="text-danger">*</span></label>
+          <select name="category_id" class="form-select" required>
+            <option value="">— Choisir une catégorie —</option>
+            {% regroup categories by course.name as course_groups %}
+            {% for group in course_groups %}
+            <optgroup label="{{ group.grouper }}">
+              {% for cat in group.list %}
+              <option value="{{ cat.pk }}">{{ cat.name }}</option>
+              {% endfor %}
+            </optgroup>
+            {% endfor %}
+          </select>
+          <div class="form-text">Toutes les questions seront placées dans cette catégorie.</div>
+        </div>
+      </div>
+
+      <!-- Questions en accordéon -->
+      <div class="accordion mb-4" id="questionsAccordion">
+        {% for q in questions %}
+        {% with n=forloop.counter0 %}
+        <div class="accordion-item border mb-2 rounded">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed py-2 px-3 small" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#q-{{ n }}">
+              <span class="text-muted me-2">#{{ forloop.counter }}</span>
+              {{ q.text|safe|striptags|truncatewords:12 }}
+            </button>
+          </h2>
+
+          <!-- Hidden inputs pré-remplis (utilisés si l'accordéon n'est pas ouvert) -->
+          <input type="hidden" name="q_{{ n }}_text" id="q-text-{{ n }}" value="{{ q.text }}">
+          <input type="hidden" name="q_{{ n }}_feedback" id="q-feedback-{{ n }}" value="{{ q.feedback }}">
+
+          <div id="q-{{ n }}" class="accordion-collapse collapse" data-qidx="{{ n }}">
+            <div class="accordion-body">
+
+              <!-- Énoncé (Quill) -->
+              <div class="mb-3">
+                <label class="form-label fw-semibold small">Énoncé</label>
+                <div id="quill-text-{{ n }}" class="bg-white"></div>
+                <template id="text-tpl-{{ n }}">{{ q.text|safe }}</template>
+              </div>
+
+              <!-- Feedback (Quill) -->
+              <div class="mb-3">
+                <label class="form-label fw-semibold small">Correction générale <span class="text-muted fw-normal">(optionnel)</span></label>
+                <div id="quill-feedback-{{ n }}" class="bg-white"></div>
+                <template id="feedback-tpl-{{ n }}">{{ q.feedback|safe }}</template>
+              </div>
+
+              <!-- Propositions -->
+              <div class="mb-3">
+                <label class="form-label fw-semibold small">Propositions</label>
+                <div class="answer-rows" data-qidx="{{ n }}">
+                  {% for ans in q.answers %}
+                  <div class="answer-row d-flex gap-2 mb-2 align-items-center">
+                    <input type="text"
+                           name="q_{{ n }}_a_{{ forloop.counter0 }}_text"
+                           value="{{ ans.text|striptags }}"
+                           class="form-control form-control-sm flex-grow-1"
+                           placeholder="Texte de la proposition">
+                    <select name="q_{{ n }}_a_{{ forloop.counter0 }}_fraction"
+                            class="form-select form-select-sm" style="max-width:210px;">
+                      {% for val, label in fraction_choices %}
+                      <option value="{{ val }}" {% if ans.fraction_str == val %}selected{% endif %}>{{ label }}</option>
+                      {% endfor %}
+                    </select>
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-answer" title="Supprimer">✕</button>
+                  </div>
+                  {% endfor %}
+                </div>
+                <input type="hidden" name="q_{{ n }}_a_count" class="a-count-input" value="{{ q.answers|length }}">
+                <button type="button" class="btn btn-sm btn-outline-secondary add-answer mt-1" data-qidx="{{ n }}">
+                  + Ajouter une proposition
+                </button>
+              </div>
+
+              <!-- Tags depuis le fichier XML -->
+              <div class="mb-2">
+                <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                  <span class="fw-semibold small">Tags :</span>
+                  {% if q.xml_tags %}
+                    {% for tag_name in q.xml_tags %}
+                    {% with tag_lower=tag_name|lower %}
+                    <span class="badge {% if tag_lower in q.matched_xml_names %}bg-primary{% else %}bg-warning text-dark{% endif %} small">
+                      {{ tag_name }}{% if tag_lower not in q.matched_xml_names %} <span title="Tag non trouvé en base">?</span>{% endif %}
+                    </span>
+                    {% endwith %}
+                    {% endfor %}
+                  {% else %}
+                    <span class="text-muted small">Aucun tag dans le fichier</span>
+                  {% endif %}
+                  {% if tag_groups %}
+                  <button type="button" class="btn btn-sm btn-link p-0 ms-1 small"
+                          onclick="document.getElementById('tag-edit-{{ n }}').style.display = document.getElementById('tag-edit-{{ n }}').style.display === 'none' ? '' : 'none';">
+                    ✏️ Changer les tags
+                  </button>
+                  {% endif %}
+                </div>
+
+                <!-- Sélection complète des tags (cachée par défaut) -->
+                {% if tag_groups %}
+                <div id="tag-edit-{{ n }}" style="display:none;" class="border rounded p-2 bg-light small">
+                  <div class="row g-2">
+                    {% for group in tag_groups %}
+                    <div class="col-md-4">
+                      <div class="text-muted fw-semibold mb-1">{{ group.category.name }}</div>
+                      {% for tag in group.tags %}
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox"
+                               name="q_{{ n }}_tag_ids"
+                               value="{{ tag.pk }}"
+                               id="tag-{{ n }}-{{ tag.pk }}"
+                               {% if tag.pk|stringformat:"s" in q.matched_tag_ids %}checked{% endif %}>
+                        <label class="form-check-label" for="tag-{{ n }}-{{ tag.pk }}">{{ tag.name }}</label>
+                      </div>
+                      {% endfor %}
+                    </div>
+                    {% endfor %}
+                  </div>
+                </div>
+                {% endif %}
+              </div>
+
+            </div>
+          </div>
+        </div>
+        {% endwith %}
+        {% endfor %}
+      </div>
+
+      <!-- Confirmer -->
+      <div class="d-flex gap-3 align-items-center">
+        <button type="submit" class="btn btn-success btn-lg">
+          ✅ Confirmer l'import ({{ questions|length }} question{{ questions|length|pluralize }})
+        </button>
+        <a href="/questions/upload/" class="btn btn-outline-secondary">Annuler</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+<script>
+const quillInstances = {}; // { qidx: { text: Quill, feedback: Quill } }
+const QUILL_TOOLBAR = [
+  ['bold', 'italic', 'underline', 'strike'],
+  [{ script: 'sub' }, { script: 'super' }],
+  [{ list: 'ordered' }, { list: 'bullet' }],
+  ['clean']
+];
+
+// Init Quill paresseusement à l'ouverture de l'accordéon
+document.querySelectorAll('.accordion-collapse').forEach(function(collapse) {
+  collapse.addEventListener('show.bs.collapse', function() {
+    const n = this.dataset.qidx;
+    if (quillInstances[n]) return;
+
+    function initEditor(containerId, tplId) {
+      const el = document.getElementById(containerId);
+      const tpl = document.getElementById(tplId);
+      if (!el) return null;
+      const q = new Quill(el, { theme: 'snow', modules: { toolbar: QUILL_TOOLBAR } });
+      q.root.innerHTML = tpl ? tpl.innerHTML : '';
+      return q;
+    }
+
+    const textQ    = initEditor(`quill-text-${n}`,    `text-tpl-${n}`);
+    const feedbackQ = initEditor(`quill-feedback-${n}`, `feedback-tpl-${n}`);
+    quillInstances[n] = { text: textQ, feedback: feedbackQ };
+  });
+});
+
+// Synchroniser Quill → hidden inputs au submit
+document.getElementById('confirm-form').addEventListener('submit', function() {
+  Object.entries(quillInstances).forEach(function([n, editors]) {
+    const textInput     = document.getElementById(`q-text-${n}`);
+    const feedbackInput = document.getElementById(`q-feedback-${n}`);
+    if (textInput && editors.text)     textInput.value     = editors.text.root.innerHTML;
+    if (feedbackInput && editors.feedback) feedbackInput.value = editors.feedback.root.innerHTML;
+  });
+});
+
+// --- Gestion dynamique des propositions ---
+const FRACTION_OPTIONS = {{ fraction_choices_json|safe }};
+
+function rebuildAnswerNames(container) {
+  const n = container.dataset.qidx;
+  container.querySelectorAll('.answer-row').forEach(function(row, m) {
+    const textInput  = row.querySelector('input[type="text"]');
+    const fracSelect = row.querySelector('select');
+    if (textInput)  textInput.name  = `q_${n}_a_${m}_text`;
+    if (fracSelect) fracSelect.name = `q_${n}_a_${m}_fraction`;
+  });
+  const countInput = container.parentElement.querySelector('.a-count-input');
+  if (countInput) countInput.value = container.querySelectorAll('.answer-row').length;
+}
+
+document.querySelectorAll('.add-answer').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    const n = this.dataset.qidx;
+    const container = document.querySelector(`.answer-rows[data-qidx="${n}"]`);
+    const row = document.createElement('div');
+    row.className = 'answer-row d-flex gap-2 mb-2 align-items-center';
+    row.innerHTML =
+      `<input type="text" class="form-control form-control-sm flex-grow-1" placeholder="Texte de la proposition">` +
+      `<select class="form-select form-select-sm" style="max-width:210px;">` +
+      FRACTION_OPTIONS.map(([v, l]) => `<option value="${v}">${l}</option>`).join('') +
+      `</select>` +
+      `<button type="button" class="btn btn-sm btn-outline-danger remove-answer" title="Supprimer">✕</button>`;
+    container.appendChild(row);
+    row.querySelector('.remove-answer').addEventListener('click', function() {
+      row.remove(); rebuildAnswerNames(container);
+    });
+    rebuildAnswerNames(container);
+  });
+});
+
+document.querySelectorAll('.remove-answer').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    const row = this.closest('.answer-row');
+    const container = row.closest('.answer-rows');
+    row.remove();
+    rebuildAnswerNames(container);
+  });
+});
+
+// Rebuild all on load (noms d'inputs corrects)
+document.querySelectorAll('.answer-rows').forEach(rebuildAnswerNames);
+</script>
+{% endblock %}

@@ -1,0 +1,44 @@
+{% extends "qcm/base.html" %}
+{% block title %}Upload de questions — StudyMed{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <h2 class="mb-4">📥 Importer des questions</h2>
+
+    {% if success is not None %}
+    <div class="alert alert-success alert-dismissible fade show">
+      ✅ <strong>{{ success }} question{{ success|pluralize }}</strong> importée{{ success|pluralize }} avec succès.
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="alert alert-danger">⚠ {{ error }}</div>
+    {% endif %}
+
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title mb-3">Fichier XML Moodle</h5>
+        <p class="text-muted small">
+          Exportez vos questions depuis Moodle : <strong>Banque de questions → Exporter → Format XML Moodle</strong>.
+        </p>
+
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+
+          <div class="mb-3">
+            <label for="xml_file" class="form-label fw-semibold">Fichier XML <span class="text-danger">*</span></label>
+            <input type="file" class="form-control" id="xml_file" name="xml_file" accept=".xml" required>
+            <div class="form-text">Uniquement les questions de type QCM (multichoice) sont importées.</div>
+          </div>
+
+          <button type="submit" class="btn btn-primary">
+            🔍 Analyser et prévisualiser
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
