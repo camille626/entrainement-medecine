@@ -287,37 +287,116 @@ class QuestionView(LoginRequiredMixin, View):
     template_name = "qcm/question.html"
 
     def get(self, request, pk):
+        from collections import defaultdict
+
         session = get_object_or_404(QuizSession, pk=pk)
         total = session.session_questions.count()
-        answered_question_ids = set(
-            session.user_answers.values_list("question_id", flat=True).distinct()
-        )
+
+        # Fetch all user answers once — avoids N+1 in status computation
+        all_ua = list(session.user_answers.select_related("answer").all())
+        answered_question_ids = {ua.question_id for ua in all_ua}
         answered_count = len(answered_question_ids)
 
         if answered_count >= total:
             return redirect("qcm:fin", pk=pk)
 
-        # Find current question (first not answered)
-        current_sq = (
-            session.session_questions.exclude(question_id__in=answered_question_ids)
-            .order_by("order")
-            .first()
-        )
+        # Navigate to a specific question via ?q=<order> (1-based)
+        q_order = request.GET.get("q")
+        if q_order and q_order.isdigit():
+            current_sq = session.session_questions.filter(order=int(q_order)).first()
+        if not q_order or not q_order.isdigit() or current_sq is None:
+            current_sq = (
+                session.session_questions.exclude(question_id__in=answered_question_ids)
+                .order_by("order")
+                .first()
+            )
+
         question = current_sq.question
         answers = get_answers(question, shuffle=session.shuffle_answers)
 
-        return render(
-            request,
-            self.template_name,
-            {
-                "session": session,
-                "question": question,
-                "answers": answers,
-                "position": answered_count + 1,
-                "total": total,
-                "mode": session.mode,
-            },
-        )
+        question_tags = list(question.tags.select_related("category").all())
+        ec_tags = [
+            t
+            for t in question_tags
+            if t.category and t.category.tag_type == "souscategorie"
+        ]
+        chapter_tags = [
+            t for t in question_tags if t.category and t.category.tag_type == "chapitre"
+        ]
+
+        # Build navigator list with status per session question
+        ua_by_qid: dict = defaultdict(list)
+        for ua in all_ua:
+            ua_by_qid[ua.question_id].append(ua)
+
+        sq_list = []
+        for sq in session.session_questions.select_related("question").order_by(
+            "order"
+        ):
+            ua_list = ua_by_qid.get(sq.question_id, [])
+            if not ua_list:
+                status = "not_answered"
+            else:
+                score = max(0.0, min(1.0, sum(ua.answer.fraction for ua in ua_list)))
+                max_score = sum(
+                    a.fraction for a in sq.question.answers.filter(fraction__gt=0)
+                )
+                ratio = score / max_score if max_score > 0 else 0.0
+                if ratio >= 1.0 - 1e-6:
+                    status = "correct"
+                elif ratio > 0:
+                    status = "partial"
+                else:
+                    status = "incorrect"
+            sq_list.append(
+                {
+                    "order": sq.order,
+                    "question_id": sq.question_id,
+                    "status": status,
+                    "is_current": sq.pk == current_sq.pk,
+                }
+            )
+
+        # If navigating to an already-answered question, prepare correction context
+        is_answered = question.pk in answered_question_ids
+        ctx: dict = {
+            "session": session,
+            "question": question,
+            "answers": answers,
+            "position": current_sq.order,
+            "total": total,
+            "mode": session.mode,
+            "ec_tags": ec_tags,
+            "chapter_tags": chapter_tags,
+            "sq_list": sq_list,
+            "is_answered": is_answered,
+            "prev_order": current_sq.order - 1 if current_sq.order > 1 else None,
+            "next_order": current_sq.order + 1 if current_sq.order < total else None,
+        }
+
+        if is_answered:
+            ua_list = ua_by_qid.get(question.pk, [])
+            selected_ids = [ua.answer_id for ua in ua_list]
+            score = max(0.0, min(1.0, sum(ua.answer.fraction for ua in ua_list)))
+            max_score = sum(a.fraction for a in question.answers.filter(fraction__gt=0))
+            ratio = score / max_score if max_score > 0 else 0.0
+            if ratio >= 1.0 - 1e-6:
+                q_status = "correct"
+            elif ratio > 0:
+                q_status = "partial"
+            else:
+                q_status = "incorrect"
+            is_last = answered_count >= total
+            ctx.update(
+                {
+                    "selected_ids": selected_ids,
+                    "score": score,
+                    "status": q_status,
+                    "is_last": is_last,
+                }
+            )
+
+        return render(request, self.template_name, ctx)
 
 
 class CheckView(LoginRequiredMixin, View):
@@ -378,6 +457,8 @@ class CheckView(LoginRequiredMixin, View):
         )
         position = len(new_answered)
         is_last = position >= total
+        prev_order = current_sq.order - 1 if current_sq.order > 1 else None
+        next_order = current_sq.order + 1 if current_sq.order < total else None
 
         return render(
             request,
@@ -392,6 +473,8 @@ class CheckView(LoginRequiredMixin, View):
                 "is_last": is_last,
                 "position": position,
                 "total": total,
+                "prev_order": prev_order,
+                "next_order": next_order,
             },
         )
 
