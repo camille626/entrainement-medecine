@@ -19,6 +19,11 @@ urlpatterns = [
         name="check",
     ),
     path(
+        "entrainement/session/<int:pk>/check-qroc/",
+        views.CheckQROCSelfView.as_view(),
+        name="check_qroc",
+    ),
+    path(
         "entrainement/session/<int:pk>/fin/",
         views.FinView.as_view(),
         name="fin",

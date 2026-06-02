@@ -231,9 +231,16 @@ class UserAnswer(models.Model):
         Question, on_delete=models.PROTECT, related_name="user_answers"
     )
     answer = models.ForeignKey(
-        Answer, on_delete=models.PROTECT, related_name="user_answers"
+        Answer,
+        on_delete=models.PROTECT,
+        related_name="user_answers",
+        null=True,
+        blank=True,
     )
     is_correct = models.BooleanField()
+    # QROC-specific fields (null for multichoice questions)
+    qroc_text = models.TextField(null=True, blank=True)
+    is_self_evaluated = models.BooleanField(default=False)
     answered_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -241,6 +248,13 @@ class UserAnswer(models.Model):
 
     def __str__(self) -> str:
         return f"Réponse de {self.session.user} à Q#{self.question_id}"
+
+    @property
+    def effective_fraction(self) -> float:
+        """Fraction effective : answer.fraction si disponible, sinon 1.0/0.0 (auto-éval QROC)."""
+        if self.answer_id is not None and self.answer is not None:
+            return self.answer.fraction
+        return 1.0 if self.is_correct else 0.0
 
 
 class CoursePackage(models.Model):
@@ -366,12 +380,14 @@ class Errata(models.Model):
     CORRECTION = "correction"
     IMAGE = "image"
     TAG = "tag"
+    QROC_ANSWER = "qroc_answer"
     OTHER = "autre"
     TYPE_CHOICES = [
         (POINTS, "Erreur d'attribution de points"),
         (CORRECTION, "Erreur dans la correction"),
         (IMAGE, "Image manquante"),
         (TAG, "Erreur de tag"),
+        (QROC_ANSWER, "Ma réponse est correcte (QROC)"),
         (OTHER, "Autre"),
     ]
 
@@ -391,7 +407,17 @@ class Errata(models.Model):
         User, on_delete=models.CASCADE, related_name="erratas_reported"
     )
     error_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
-    description = models.TextField(verbose_name="Description du problème")
+    description = models.TextField(verbose_name="Description du problème", blank=True)
+    # QROC-specific fields for "ma réponse est correcte"
+    qroc_suggested_text = models.TextField(
+        blank=True, verbose_name="Réponse suggérée (QROC)"
+    )
+    qroc_suggested_fraction = models.FloatField(
+        null=True,
+        blank=True,
+        verbose_name="Fraction suggérée (QROC)",
+        help_text="1.0 = réponse complète, 0.7 = réponse partielle, etc.",
+    )
     concerned_answers = models.ManyToManyField(
         Answer, blank=True, related_name="erratas", verbose_name="Réponses concernées"
     )

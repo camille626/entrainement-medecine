@@ -35,6 +35,12 @@ class SessionConfigForm(forms.Form):
         initial=True,
         label="Propositions en ordre aléatoire (non alphabétique)",
     )
+    include_qroc = forms.BooleanField(
+        required=False,
+        initial=False,
+        label="Inclure les QROC (réponses ouvertes courtes)",
+        help_text="Les questions QROC nécessitent de taper une réponse libre.",
+    )
     question_filter = forms.ChoiceField(
         choices=[
             ("all", "Toutes les questions (aléatoire)"),

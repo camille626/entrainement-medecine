@@ -2,7 +2,7 @@
 {% block title %}Configuration — StudyMed{% endblock %}
 
 {% block content %}
-<div class="row">
+<div class="row justify-content-center">
   <div class="col-lg-8">
     <h1 class="mb-4">Configurer une session</h1>
     <form method="post" action="/entrainement/">
@@ -113,10 +113,16 @@
 
       <div class="card mb-3">
         <div class="card-body">
-          <div class="form-check">
+          <div class="form-check mb-2">
             <input class="form-check-input" type="checkbox" name="shuffle_answers" id="shuffle_answers" checked>
             <label class="form-check-label" for="shuffle_answers">
               Propositions en ordre aléatoire <span class="text-muted small">(non alphabétique)</span>
+            </label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="include_qroc" id="include_qroc">
+            <label class="form-check-label" for="include_qroc">
+              Inclure les QROC <span class="text-muted small">(questions à réponse ouverte courte — vous tapez votre réponse)</span>
             </label>
           </div>
         </div>

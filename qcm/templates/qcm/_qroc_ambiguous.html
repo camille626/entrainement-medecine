@@ -1,0 +1,62 @@
+<!-- QROC : réponse non reconnue automatiquement — auto-évaluation -->
+<div class="mb-3 p-3 rounded border border-warning bg-warning bg-opacity-10">
+  <p class="fw-semibold mb-1">Votre réponse :</p>
+  <p class="mb-0 fs-5">
+    <strong>{{ qroc_text|default:"(vide)" }}</strong>
+  </p>
+</div>
+
+{% if accepted_answers %}
+<div class="mb-3 small">
+  <span class="text-muted">Réponses reconnues automatiquement :</span>
+  <div class="mt-1">
+    {% for a in accepted_answers %}
+    <span class="badge {% if a.fraction >= 1.0 %}bg-success{% else %}bg-warning text-dark{% endif %} me-1 mb-1">
+      {{ a.text }}{% if a.fraction < 1.0 %} ({{ a.fraction|floatformat:1 }} pt){% endif %}
+    </span>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<p class="small text-muted mb-2">Votre réponse ne correspond pas exactement à celles enregistrées. Évaluez-vous :</p>
+
+<div class="d-flex gap-2 mb-3">
+  <form hx-post="/entrainement/session/{{ session.pk }}/check-qroc/"
+        hx-target="#answers-zone"
+        hx-swap="innerHTML"
+        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+    {% csrf_token %}
+    <input type="hidden" name="question_id" value="{{ question.pk }}">
+    <input type="hidden" name="qroc_text" value="{{ qroc_text }}">
+    <input type="hidden" name="self_eval" value="correct">
+    <button type="submit" class="btn btn-success">
+      ✓ J'avais bon
+    </button>
+  </form>
+
+  <form hx-post="/entrainement/session/{{ session.pk }}/check-qroc/"
+        hx-target="#answers-zone"
+        hx-swap="innerHTML"
+        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+    {% csrf_token %}
+    <input type="hidden" name="question_id" value="{{ question.pk }}">
+    <input type="hidden" name="qroc_text" value="{{ qroc_text }}">
+    <input type="hidden" name="self_eval" value="incorrect">
+    <button type="submit" class="btn btn-danger">
+      ✗ J'avais faux
+    </button>
+  </form>
+</div>
+
+<!-- Suggérer la réponse comme variante acceptée -->
+<div class="mt-2 border-top pt-2">
+  <button class="btn btn-sm btn-link p-0 text-muted"
+          style="font-size:0.8rem;"
+          hx-get="/errata/question/{{ question.pk }}/?qroc_text={{ qroc_text|urlencode }}&prefill_type=qroc_answer"
+          hx-target="#errata-form-{{ question.pk }}"
+          hx-swap="innerHTML">
+    ⚠&#xFE0E; Suggérer cette réponse comme variante acceptée
+  </button>
+  <div id="errata-form-{{ question.pk }}" class="mt-2"></div>
+</div>

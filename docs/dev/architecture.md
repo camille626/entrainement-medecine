@@ -91,9 +91,35 @@ User
 |-------|------|-------------|
 | `session` | FK → QuizSession (CASCADE) | Session parente |
 | `question` | FK → Question (PROTECT) | Question répondue |
-| `answer` | FK → Answer (PROTECT) | Réponse choisie |
+| `answer` | FK → Answer (PROTECT, **nullable**) | Réponse choisie — `None` pour les auto-évaluations QROC |
 | `is_correct` | BooleanField | Résultat |
+| `qroc_text` | TextField (nullable) | Texte tapé par l'étudiant (QROC uniquement) |
+| `is_self_evaluated` | BooleanField | `True` si l'étudiant s'est auto-évalué (QROC sans correspondance) |
 | `answered_at` | DateTimeField | Horodatage |
+
+La propriété `effective_fraction` retourne `answer.fraction` si `answer` est défini, sinon `1.0` ou `0.0` selon `is_correct`. Tous les calculs de score utilisent cette propriété.
+
+## Questions QROC (shortanswer)
+
+Les questions de type `shortanswer` utilisent un champ texte libre à la place des cases à cocher.
+
+### Validation
+
+La correspondance est insensible à la casse et aux accents via `normalize_qroc()` (unicodedata NFD). Le joker Moodle `*` est supporté via `fnmatch` : un pattern comme `myélome*` correspond à "myélome classique", "myélome multiple", etc.
+
+### Flux de réponse
+
+```
+Étudiant tape → POST /check/
+  ├─ Correspondance trouvée → UserAnswer(answer=matched_answer)
+  └─ Pas de correspondance → template _qroc_ambiguous.html
+        [J'avais bon] / [J'avais faux] → POST /check-qroc/
+              → UserAnswer(answer=None, is_self_evaluated=True)
+```
+
+### Errata QROC
+
+Le type `Errata.QROC_ANSWER` permet à un étudiant de suggérer une nouvelle variante acceptée. L'admin fixe une fraction (1.0 par défaut) et accepte → un nouvel `Answer` est créé pour la question.
 
 ## Configuration de la base de données
 
@@ -132,7 +158,7 @@ La commande est **idempotente** : elle peut être relancée sans créer de doubl
 ### Résultat attendu
 
 ```
-13 cours, 139 catégories, 6 454 questions, 32 131 réponses
+13 cours, 139 catégories, ~6 515 questions (6 454 multichoix + 61 shortanswer), ~32 333 réponses
 ```
 
 ### Règles de mapping
@@ -141,7 +167,7 @@ La commande est **idempotente** : elle peut être relancée sans créer de doubl
 |-------|-------|
 | `Course.moodle_id` | `m_course.id` (filtré sur ids 11–23) |
 | `Category` | `m_question_categories` excluant les catégories `top` |
-| `Question` | `m_question` avec `qtype = multichoice` uniquement |
+| `Question` | `m_question` avec `qtype` dans `{multichoice, shortanswer}` |
 | `Answer.is_correct` | `fraction > 0.0` (toute fraction positive est correcte, y compris 0.33, 0.5...) |
 
 ### Chaîne de liaison cours → catégories

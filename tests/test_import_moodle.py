@@ -114,11 +114,14 @@ class TestImportMoodleCommand:
         course = Course.objects.get(moodle_id=11)
         assert Category.objects.filter(course=course).count() == 2
 
-    def test_imports_multichoice_questions_only(self, mini_dump):
+    def test_imports_multichoice_and_shortanswer_questions(self, mini_dump):
         call_command("import_moodle", dump=mini_dump)
-        # Q201 is tagged 'le chat' without 'annale' → excluded
-        assert Question.objects.count() == 1
-        assert not Question.objects.filter(qtype="shortanswer").exists()
+        # Q200: multichoice → imported
+        # Q201: multichoice, tagged 'le chat' without 'annale' → excluded
+        # Q202: shortanswer → imported
+        assert Question.objects.count() == 2
+        assert Question.objects.filter(qtype="multichoice").count() == 1
+        assert Question.objects.filter(qtype="shortanswer").count() == 1
 
     def test_questions_linked_to_category(self, mini_dump):
         call_command("import_moodle", dump=mini_dump)
@@ -151,8 +154,8 @@ class TestImportMoodleCommand:
         call_command("import_moodle", dump=mini_dump)
         assert Course.objects.count() == 1
         assert Category.objects.count() == 2
-        assert Question.objects.count() == 1  # Q201 excluded
-        assert Answer.objects.count() == 3
+        assert Question.objects.count() == 2  # Q200 (multichoice) + Q202 (shortanswer)
+        assert Answer.objects.count() == 3  # Only answers for Q200
 
 
 @pytest.mark.django_db

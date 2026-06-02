@@ -100,12 +100,15 @@ uv run --active python manage.py createsuperuser
 uv run --active python manage.py makemigrations
 
 # Importer les données depuis le dump Moodle (idempotent, relançable)
+# Importe multichoice ET shortanswer (QROC). Nécessite postgresql-client-17 (installé dans le devcontainer).
 uv run --active python manage.py import_moodle --dump data/raw/plateforme-medecine_moodlecloud.sql
 
 # URLs de l'application
 # /                          → accueil (cours par semestre)
 # /entrainement/             → configuration d'une session
-# /entrainement/session/<id>/ → question courante
+# /entrainement/session/<id>/ → question courante (QCM + QROC mixtes si option cochée)
+# /entrainement/session/<id>/check/ → soumission réponse (multichoix ou QROC)
+# /entrainement/session/<id>/check-qroc/ → auto-évaluation QROC (j'avais bon/faux)
 # /entrainement/session/<id>/fin/ → résultats
 ```
 

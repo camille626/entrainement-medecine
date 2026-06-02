@@ -331,6 +331,43 @@ class ErrataAdmin(admin.ModelAdmin):
         "resolved_at",
         "resolved_by",
     ]
+    fieldsets = (
+        (
+            None,
+            {
+                "fields": (
+                    "question",
+                    "reported_by",
+                    "error_type",
+                    "status",
+                    "description",
+                    "admin_note",
+                ),
+            },
+        ),
+        (
+            "QROC — réponse suggérée",
+            {
+                "fields": ("qroc_suggested_text", "qroc_suggested_fraction"),
+                "classes": ("collapse",),
+                "description": "Renseignez une fraction avant d'accepter (1.0 = réponse complète).",
+            },
+        ),
+        (
+            "Références",
+            {
+                "fields": ("concerned_answers", "suggested_tags"),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            "Métadonnées",
+            {
+                "fields": ("created_at", "resolved_at", "resolved_by"),
+                "classes": ("collapse",),
+            },
+        ),
+    )
     actions = ["accept_erratas", "reject_erratas"]
 
     @admin.display(description="Question")
