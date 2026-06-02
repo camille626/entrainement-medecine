@@ -1,28 +1,61 @@
 {% extends "qcm/base.html" %}
 {% block title %}Question {{ position }}/{{ total }}{% endblock %}
 
+{% block extra_head %}
+<style>
+  /* ── Navigateur de questions ── */
+  .nav-q {
+    width: 2.5rem; height: 1.7rem;
+    border-radius: 4px;
+    border: 1px solid rgba(0,0,0,0.15);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 0.72rem; font-weight: 600; text-decoration: none !important; line-height: 1;
+    color: #555 !important;
+  }
+  .nav-q-not-answered { background: #f0f0f0; }
+  .nav-q-correct      { background: #d1f0d8; border-color: #a8ddb5; }
+  .nav-q-partial      { background: #fff3cd; border-color: #ffe083; }
+  .nav-q-incorrect    { background: #fde8ea; border-color: #f5b8bc; }
+  .nav-q-current      { outline: 2px solid #0d6efd; outline-offset: 1px; }
+  .nav-q:hover        { opacity: 0.8; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="row">
-  <!-- Panneau gauche -->
-  <div class="col-md-3 mb-3">
+<div class="row g-3">
+
+  <!-- ── Panneau gauche : info + tags ── -->
+  <div class="col-md-2">
     <div class="card">
-      <div class="card-body">
-        <h6 class="fw-bold">Question <span class="text-primary">{{ position }}</span></h6>
+      <div class="card-body p-3">
+        <h6 class="fw-bold mb-1">Question <span class="text-primary">{{ position }}</span></h6>
         <p class="text-muted small mb-1">{{ total }} questions au total</p>
-        <hr>
+        <hr class="my-2">
         <p class="small mb-1">
-          <span id="status-label" class="text-secondary">Non répondue</span>
+          <span id="status-label" class="{% if is_answered %}{% if status == 'correct' %}text-success fw-bold{% elif status == 'partial' %}text-warning fw-bold{% else %}text-danger fw-bold{% endif %}{% else %}text-secondary{% endif %}">
+            {% if is_answered %}{% if status == 'correct' %}Correct{% elif status == 'partial' %}Partiel{% else %}Incorrect{% endif %}{% else %}Non répondue{% endif %}
+          </span>
         </p>
-        <p class="small mb-0">
-          <span id="score-label"></span>
-        </p>
+        <p class="small mb-0"><span id="score-label">{% if is_answered %}Score : {{ score|floatformat:2 }}{% endif %}</span></p>
+
+        {% if ec_tags or chapter_tags %}
+        <hr class="my-2">
+        <div class="text-muted small mb-1" style="font-size:0.7rem;">Tags :</div>
+        <div class="d-flex flex-column gap-1">
+          {% for tag in ec_tags %}
+          <span class="badge bg-primary" style="font-size:0.68rem; white-space:normal; text-align:left;">{{ tag.name }}</span>
+          {% endfor %}
+          {% for tag in chapter_tags %}
+          <span class="badge bg-secondary" style="font-size:0.68rem; white-space:normal; text-align:left;">{{ tag.name }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
       </div>
     </div>
-    <a href="/entrainement/" class="btn btn-outline-secondary btn-sm mt-2 w-100">Nouvelle session</a>
   </div>
 
-  <!-- Zone principale -->
-  <div class="col-md-9">
+  <!-- ── Zone principale ── -->
+  <div id="main-col" class="col-md-7">
     <div class="card mb-3 border-info" style="background-color: #e8f4f8;">
       <div class="card-body">
         <!-- Énoncé -->
@@ -30,8 +63,11 @@
 
         <p class="text-muted small">Sélectionner une ou plusieurs réponses :</p>
 
-        <!-- Formulaire réponses (caché après Check via HTMX swap) -->
+        <!-- Zone réponses -->
         <div id="answers-zone">
+          {% if is_answered %}
+          {% include "qcm/_correction.html" %}
+          {% else %}
           <form id="answer-form"
                 hx-post="/entrainement/session/{{ session.pk }}/check/"
                 hx-target="#answers-zone"
@@ -48,21 +84,94 @@
               </label>
             </div>
             {% endfor %}
-
             {% if mode == "training" %}
-            <button type="submit" class="btn btn-secondary mt-3">Check</button>
+            <button type="submit" class="btn btn-secondary mt-3" id="check-btn" disabled>Check</button>
             {% endif %}
           </form>
+          {% endif %}
         </div>
 
-        {% if mode != "training" %}
-        <!-- En mode différé : bouton next directement -->
+        {% if mode != "training" and not is_answered %}
         <div class="mt-3 text-end">
           <a href="/entrainement/session/{{ session.pk }}/" class="btn btn-primary">Page suivante →</a>
         </div>
         {% endif %}
       </div>
     </div>
+
+    <!-- Boutons précédent / suivant (uniquement si non répondue — sinon ils sont dans _correction.html) -->
+    {% if not is_answered %}
+    <div class="d-flex justify-content-between mt-2">
+      {% if prev_order %}
+      <a href="/entrainement/session/{{ session.pk }}/?q={{ prev_order }}"
+         class="btn btn-outline-secondary btn-sm">← Précédente</a>
+      {% else %}<span></span>{% endif %}
+      {% if next_order %}
+      <a href="/entrainement/session/{{ session.pk }}/?q={{ next_order }}"
+         class="btn btn-outline-primary btn-sm">Suivante →</a>
+      {% endif %}
+    </div>
+    {% endif %}
   </div>
+
+  <!-- ── Navigateur (panneau droit collapsable) ── -->
+  <div id="question-nav" class="col-md-3">
+    <div class="card position-sticky" style="top: 1rem;">
+      <div class="card-body p-2">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="fw-semibold small">🧭 Navigation</span>
+          <button class="btn btn-sm btn-link p-0 text-muted lh-1" style="text-decoration:none;" onclick="toggleNav()" title="Masquer">✕</button>
+        </div>
+
+        <div class="d-flex flex-wrap gap-1">
+          {% for sq in sq_list %}
+          <a href="/entrainement/session/{{ session.pk }}/?q={{ sq.order }}"
+             class="nav-q nav-q-{{ sq.status }}{% if sq.is_current %} nav-q-current{% endif %}"
+             title="Question {{ sq.order }}">{{ sq.order }}</a>
+          {% endfor %}
+        </div>
+
+        <div class="mt-2 border-top pt-1 d-flex flex-wrap gap-1" style="font-size:0.6rem; color:#6c757d;">
+          <span><span class="nav-q nav-q-correct" style="width:1.1rem;height:0.9rem;font-size:0.5rem;"> </span> Correct</span>
+          <span><span class="nav-q nav-q-partial" style="width:1.1rem;height:0.9rem;font-size:0.5rem;"> </span> Partiel</span>
+          <span><span class="nav-q nav-q-incorrect" style="width:1.1rem;height:0.9rem;font-size:0.5rem;"> </span> Incorrect</span>
+          <span><span class="nav-q nav-q-not-answered" style="width:1.1rem;height:0.9rem;font-size:0.5rem;"> </span> Non répondu</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
+
+<!-- Bouton toggle flottant (visible quand navigateur caché) -->
+<button id="nav-show-btn" onclick="toggleNav()"
+        class="btn btn-outline-secondary btn-sm position-fixed d-none"
+        style="right:1rem; top:5rem; z-index:100;"
+        title="Afficher le navigateur">
+  🧭
+</button>
+
+<script>
+// Active le bouton Check dès qu'au moins une proposition est cochée
+document.querySelectorAll('input[name="answers"]').forEach(function(cb) {
+  cb.addEventListener('change', function() {
+    const btn = document.getElementById('check-btn');
+    if (btn) btn.disabled = !document.querySelector('input[name="answers"]:checked');
+  });
+});
+
+function toggleNav() {
+  const nav  = document.getElementById('question-nav');
+  const main = document.getElementById('main-col');
+  const show = document.getElementById('nav-show-btn');
+  const hidden = nav.classList.toggle('d-none');
+  if (hidden) {
+    main.classList.replace('col-md-7', 'col-md-10');
+    show.classList.remove('d-none');
+  } else {
+    main.classList.replace('col-md-10', 'col-md-7');
+    show.classList.add('d-none');
+  }
+}
+</script>
 {% endblock %}
