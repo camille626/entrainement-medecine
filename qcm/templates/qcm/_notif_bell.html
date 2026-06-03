@@ -1,0 +1,49 @@
+<!-- Cloche de notifications — incluse dans base.html et renvoyée par HTMX mark-all-read -->
+<div class="dropdown" id="notif-bell-zone">
+  <button class="btn btn-sm btn-outline-secondary position-relative dropdown-toggle"
+          type="button" data-bs-toggle="dropdown" id="notif-btn">
+    🔔
+    {% if unread_notif_count %}
+    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+          style="font-size:0.55rem;">
+      {{ unread_notif_count }}
+    </span>
+    {% endif %}
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end shadow" style="min-width:300px; max-height:350px; overflow-y:auto;">
+    <li>
+      <div class="d-flex justify-content-between align-items-center px-3 py-1">
+        <span class="fw-bold small">Notifications</span>
+        {% if unread_notifications %}
+        <button class="btn btn-link btn-sm p-0 text-muted lh-1"
+                style="font-size:1rem;"
+                title="Tout marquer comme vu"
+                hx-post="/notifications/mark-all-read/"
+                hx-target="#notif-bell-zone"
+                hx-swap="outerHTML"
+                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+          ✓
+        </button>
+        {% endif %}
+      </div>
+    </li>
+    <li><hr class="dropdown-divider my-1"></li>
+    {% if unread_notifications %}
+    {% for n in unread_notifications %}
+    <li>
+      <a class="dropdown-item small"
+         href="{{ n.link|default:'#' }}"
+         hx-post="/notifications/{{ n.pk }}/mark-read/"
+         hx-trigger="click"
+         hx-swap="none">
+        <span class="text-primary">●</span>
+        {{ n.message|truncatewords:15 }}
+        <div class="text-muted" style="font-size:0.7rem;">{{ n.created_at|date:"d/m H:i" }}</div>
+      </a>
+    </li>
+    {% endfor %}
+    {% else %}
+    <li><span class="dropdown-item-text text-muted small">Aucune notification</span></li>
+    {% endif %}
+  </ul>
+</div>

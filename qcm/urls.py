@@ -53,6 +53,11 @@ urlpatterns = [
         name="notification_mark_read",
     ),
     path(
+        "notifications/mark-all-read/",
+        views.NotificationMarkAllReadView.as_view(),
+        name="notification_mark_all_read",
+    ),
+    path(
         "errata/question/<int:question_id>/",
         views.ErrataSubmitView.as_view(),
         name="errata_submit",

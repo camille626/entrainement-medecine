@@ -1437,6 +1437,14 @@ class NotificationMarkReadView(LoginRequiredMixin, View):
         return HttpResponse(status=204)
 
 
+class NotificationMarkAllReadView(LoginRequiredMixin, View):
+    def post(self, request):
+        from .models import Notification
+
+        Notification.objects.filter(user=request.user, read=False).update(read=True)
+        return render(request, "qcm/_notif_bell.html")
+
+
 class ErrataListView(LoginRequiredMixin, View):
     """Public list of erratas, filterable by course and status."""
 

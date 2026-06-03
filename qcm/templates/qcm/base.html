@@ -76,39 +76,7 @@
     {% if user.is_authenticated %}
     <div class="d-flex align-items-center gap-2 ms-3">
       <!-- Notification bell -->
-      <div class="dropdown">
-        <button class="btn btn-sm btn-outline-secondary position-relative dropdown-toggle"
-                type="button" data-bs-toggle="dropdown" id="notif-btn">
-          🔔
-          {% if unread_notif_count %}
-          <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-                style="font-size:0.55rem;">
-            {{ unread_notif_count }}
-          </span>
-          {% endif %}
-        </button>
-        <ul class="dropdown-menu dropdown-menu-end shadow" style="min-width:300px; max-height:350px; overflow-y:auto;">
-          <li><span class="dropdown-item-text fw-bold small">Notifications</span></li>
-          <li><hr class="dropdown-divider my-1"></li>
-          {% if unread_notifications %}
-          {% for n in unread_notifications %}
-          <li>
-            <a class="dropdown-item small"
-               href="{{ n.link|default:'#' }}"
-               hx-post="/notifications/{{ n.pk }}/mark-read/"
-               hx-trigger="click"
-               hx-swap="none">
-              <span class="text-primary">●</span>
-              {{ n.message|truncatewords:15 }}
-              <div class="text-muted" style="font-size:0.7rem;">{{ n.created_at|date:"d/m H:i" }}</div>
-            </a>
-          </li>
-          {% endfor %}
-          {% else %}
-          <li><span class="dropdown-item-text text-muted small">Aucune notification</span></li>
-          {% endif %}
-        </ul>
-      </div>
+      {% include "qcm/_notif_bell.html" %}
 
       <!-- User dropdown -->
       <div class="dropdown">
