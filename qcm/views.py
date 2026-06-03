@@ -1323,7 +1323,15 @@ class ErrataAcceptView(LoginRequiredMixin, View):
         errata.save()
 
         if errata.error_type == Errata.TAG and errata.suggested_tags.exists():
-            errata.question.tags.set(errata.suggested_tags.all())
+            question = errata.question
+            # Conserver les tags annale existants, remplacer uniquement EC et chapitres
+            annale_ids = set(
+                question.tags.filter(category__tag_type=TagCategory.ANNEE).values_list(
+                    "id", flat=True
+                )
+            )
+            suggested_ids = set(errata.suggested_tags.values_list("id", flat=True))
+            question.tags.set(annale_ids | suggested_ids)
 
         elif errata.error_type == Errata.CORRECTION:
             question = errata.question
