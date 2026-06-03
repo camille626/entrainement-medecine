@@ -1,0 +1,153 @@
+{% extends "qcm/admin_site/base.html" %}
+{% block title %}Tags — Admin{% endblock %}
+
+{% block admin_content %}
+<h2 class="mb-4">Tags</h2>
+
+<div class="row g-4">
+  <!-- Colonne gauche : formulaire d'ajout -->
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-header fw-bold">Ajouter / modifier un tag</div>
+      <div class="card-body">
+        <form method="post" action="/admin-site/tags/">
+          {% csrf_token %}
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Nom <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control form-control-sm"
+                   placeholder="Ex : Immunologie, Chapitre 3…" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Catégorie de tag <span class="text-danger">*</span></label>
+            <select name="tag_category" id="tag_category_select"
+                    class="form-select form-select-sm"
+                    required onchange="updateTagFields(this.value)">
+              <option value="">— Sélectionner —</option>
+              {% for cat in tag_categories %}
+              <option value="{{ cat.pk }}" data-type="{{ cat.tag_type }}">
+                {{ cat.name }} ({{ cat.get_tag_type_display }})
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Cours (pour EC et chapitre) -->
+          <div class="mb-3" id="field-course" style="display:none;">
+            <label class="form-label small fw-semibold">Cours associé</label>
+            <select name="course" class="form-select form-select-sm">
+              <option value="">— Aucun —</option>
+              {% for c in courses %}
+              <option value="{{ c.pk }}">{{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- EC parent (pour les chapitres) -->
+          <div class="mb-3" id="field-ec" style="display:none;">
+            <label class="form-label small fw-semibold">EC parente</label>
+            <select name="parent_ec" class="form-select form-select-sm">
+              <option value="">— Aucune —</option>
+              {% for tag in ec_tags %}
+              <option value="{{ tag.pk }}">{{ tag.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <button type="submit" class="btn btn-outline-success mt-2 w-100">
+            <span style="font-size:1.2em; line-height:1;">+</span> Enregistrer le tag
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Info-bulle sur les types -->
+    <div class="card mt-3 border-info">
+      <div class="card-body small text-muted">
+        <strong>Types de tags :</strong><br>
+        <b>Annale</b> : année d'annale (ex: 2024 S1)<br>
+        <b>EC</b> : sous-catégorie de cours<br>
+        <b>Chapitre</b> : chapitre d'un EC → nécessite un cours + une EC parente
+      </div>
+    </div>
+  </div>
+
+  <!-- Colonne droite : liste des tags -->
+  <div class="col-md-8">
+    <!-- Filtre -->
+    <form method="get" class="d-flex gap-2 mb-3 align-items-center">
+      <select name="category_type" class="form-select form-select-sm" style="max-width:220px;"
+              onchange="this.form.submit()">
+        <option value="">Tous les types</option>
+        {% for val, label in tag_type_choices %}
+        <option value="{{ val }}" {% if category_filter == val %}selected{% endif %}>
+          {{ label }}
+        </option>
+        {% endfor %}
+      </select>
+      {% if category_filter %}
+      <a href="/admin-site/tags/" class="btn btn-sm btn-outline-secondary">✕</a>
+      {% endif %}
+    </form>
+
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Nom</th>
+            <th>Type</th>
+            <th>Catégorie</th>
+            <th>Cours</th>
+            <th>EC parente</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for tag in tags %}
+          <tr>
+            <td class="fw-semibold">{{ tag.name }}</td>
+            <td>
+              {% if tag.category %}
+              <span class="badge
+                {% if tag.category.tag_type == 'annee' %}bg-secondary
+                {% elif tag.category.tag_type == 'souscategorie' %}bg-primary
+                {% else %}bg-info text-dark{% endif %}">
+                {{ tag.category.get_tag_type_display }}
+              </span>
+              {% endif %}
+            </td>
+            <td class="small">{{ tag.category.name|default:"—" }}</td>
+            <td class="small">{{ tag.course.name|default:"—" }}</td>
+            <td class="small">{{ tag.parent_ec.name|default:"—" }}</td>
+            <td>
+              {% if not tag.moodle_id %}
+              <form method="post" action="/admin-site/tags/{{ tag.pk }}/supprimer/" class="m-0">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-danger"
+                        onclick="return confirm('Supprimer ce tag ?')">🗑</button>
+              </form>
+              {% else %}
+              <span class="text-muted small" title="Tag Moodle — non supprimable ici">🔒</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+function updateTagFields(selectedPk) {
+  const select = document.getElementById('tag_category_select');
+  const opt = select.querySelector(`option[value="${selectedPk}"]`);
+  const type = opt ? opt.dataset.type : '';
+  document.getElementById('field-course').style.display =
+    (type === 'souscategorie' || type === 'chapitre') ? '' : 'none';
+  document.getElementById('field-ec').style.display =
+    (type === 'chapitre') ? '' : 'none';
+}
+</script>
+{% endblock %}

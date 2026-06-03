@@ -1,0 +1,268 @@
+{% extends "qcm/base.html" %}
+{% block title %}{% if action == 'edit' %}Modifier{% else %}Ajouter{% endif %} une question{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-3">
+  <a href="{{ back_url|default:'/admin-site/questions/' }}" class="btn btn-sm btn-outline-secondary">← Retour</a>
+  <h2 class="mb-0">
+    {% if action == 'edit' %}Modifier la question{% else %}Ajouter une question{% endif %}
+  </h2>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<form method="post">
+  {% csrf_token %}
+
+  <div class="card mb-3">
+    <div class="card-header fw-bold">Informations générales</div>
+    <div class="card-body">
+
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label class="form-label fw-semibold small">Cours</label>
+          <select id="course-select" class="form-select form-select-sm"
+                  onchange="filterCategories(this.value)">
+            <option value="">— Sélectionner un cours —</option>
+            {% for c in courses %}
+            <option value="{{ c.pk }}"
+                    {% if question and question.category.course_id == c.pk %}selected{% endif %}>
+              {{ c.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label for="id_category" class="form-label fw-semibold small">
+            Catégorie <span class="text-danger">*</span>
+          </label>
+          <select name="category" id="id_category" class="form-select form-select-sm" required>
+            <option value="">— Sélectionner une catégorie —</option>
+            {% for cat in categories %}
+            <option value="{{ cat.pk }}"
+                    data-course="{{ cat.course_id }}"
+                    {% if question and question.category_id == cat.pk %}selected{% endif %}>
+              {{ cat.name }} — {{ cat.course.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label for="id_qtype" class="form-label fw-semibold small">Type de question</label>
+        <select name="qtype" id="id_qtype" class="form-select form-select-sm" style="max-width:240px;">
+          <option value="multichoice" {% if not question or question.qtype == 'multichoice' %}selected{% endif %}>Choix multiple (QCM)</option>
+          <option value="shortanswer" {% if question and question.qtype == 'shortanswer' %}selected{% endif %}>Réponse courte (QROC)</option>
+        </select>
+      </div>
+
+      <div class="mb-3">
+        <label for="id_text" class="form-label fw-semibold small">
+          Énoncé <span class="text-danger">*</span>
+        </label>
+        <textarea name="text" id="id_text" rows="4"
+                  class="form-control form-control-sm"
+                  required>{% if question %}{{ question.text|striptags }}{% endif %}</textarea>
+      </div>
+
+      <div class="mb-3">
+        <label for="id_feedback" class="form-label fw-semibold small">
+          Correction générale <span class="text-muted fw-normal small">(optionnel)</span>
+        </label>
+        <textarea name="feedback" id="id_feedback" rows="3"
+                  class="form-control form-control-sm"
+                  placeholder="Correction affichée aux étudiants après réponse…">{% if question %}{{ question.feedback|striptags }}{% endif %}</textarea>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Tags -->
+  {% if annale_tags or ec_tags or direct_chapters %}
+  <div class="card mb-3">
+    <div class="card-header fw-bold">Tags</div>
+    <div class="card-body">
+
+      {% if annale_tags %}
+      <div class="mb-3">
+        <div class="text-muted small fw-semibold mb-1">Annales</div>
+        <div class="d-flex flex-wrap gap-2">
+          {% for tag in annale_tags %}
+          <div class="form-check form-check-inline mb-0">
+            <input class="form-check-input" type="checkbox" name="tags"
+                   value="{{ tag.pk }}" id="tag_{{ tag.pk }}"
+                   {% if tag.pk in selected_tag_ids %}checked{% endif %}>
+            <label class="form-check-label small" for="tag_{{ tag.pk }}">{{ tag.name }}</label>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      {% if direct_chapters %}
+      <div class="mb-3">
+        <div class="text-muted small fw-semibold mb-1">Chapitres</div>
+        <div class="d-flex flex-wrap gap-2">
+          {% for chapter in direct_chapters %}
+          <div class="form-check form-check-inline mb-0">
+            <input class="form-check-input" type="checkbox" name="tags"
+                   value="{{ chapter.pk }}" id="tag_{{ chapter.pk }}"
+                   {% if chapter.pk in selected_tag_ids %}checked{% endif %}>
+            <label class="form-check-label small" for="tag_{{ chapter.pk }}">{{ chapter.name }}</label>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      {% if ec_tags %}
+      <div class="mb-2">
+        <div class="text-muted small fw-semibold mb-1">EC (sous-catégories)</div>
+        <div class="d-flex flex-wrap gap-2">
+          {% for tag in ec_tags %}
+          <div class="form-check form-check-inline mb-0">
+            <input class="form-check-input ec-checkbox" type="checkbox" name="tags"
+                   value="{{ tag.pk }}" id="tag_{{ tag.pk }}"
+                   data-ec-pk="{{ tag.pk }}"
+                   {% if tag.pk in selected_tag_ids %}checked{% endif %}
+                   onchange="toggleChapters({{ tag.pk }}, this.checked)">
+            <label class="form-check-label small" for="tag_{{ tag.pk }}">{{ tag.name }}</label>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Chapitres : affichés uniquement si l'EC parente est cochée -->
+      {% for item in ec_with_chapters %}
+      {% if item.chapters %}
+      <div id="chapters-ec-{{ item.ec.pk }}"
+           class="ms-3 mb-2 ps-2 border-start border-secondary"
+           {% if item.ec.pk not in selected_tag_ids %}style="display:none;"{% endif %}>
+        <div class="text-muted" style="font-size:0.75rem; font-weight:600; margin-bottom:4px;">
+          Chapitres — {{ item.ec.name }}
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          {% for chapter in item.chapters %}
+          <div class="form-check form-check-inline mb-0">
+            <input class="form-check-input" type="checkbox" name="tags"
+                   value="{{ chapter.pk }}" id="tag_{{ chapter.pk }}"
+                   {% if chapter.pk in selected_tag_ids %}checked{% endif %}>
+            <label class="form-check-label small" for="tag_{{ chapter.pk }}">{{ chapter.name }}</label>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+      {% endfor %}
+      {% endif %}
+
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Propositions de réponse -->
+  <div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span class="fw-bold">Propositions de réponse</span>
+      <button type="button" class="btn btn-outline-success" onclick="addAnswer()">
+        <span style="font-size:1.2em; line-height:1;">+</span> Ajouter
+      </button>
+    </div>
+    <div class="card-body">
+      {{ formset.management_form }}
+      <div class="text-muted small mb-2">
+        Fraction : <code>1.0</code> = correcte · <code>0.5</code> = partielle · <code>0.0</code> = neutre · <code>-1.0</code> = pénalité
+      </div>
+      <div id="answers-container">
+        {% for form in formset %}
+        <div class="answer-row d-flex gap-2 align-items-center mb-2">
+          {% if form.instance.pk %}{{ form.id }}{% endif %}
+          <div class="flex-grow-1">
+            <input type="text" name="{{ form.text.html_name }}"
+                   value="{{ form.instance.text|striptags }}"
+                   class="form-control form-control-sm"
+                   placeholder="Texte de la proposition…">
+          </div>
+          <div style="width:90px;">
+            {{ form.fraction }}
+          </div>
+          {% if formset.can_delete %}
+          <div class="form-check mt-0">
+            {{ form.DELETE }}
+            <label class="form-check-label small text-danger ms-1">Suppr.</label>
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <input type="hidden" name="back_url" value="{{ back_url|default:'/admin-site/questions/' }}">
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary">
+      {% if action == 'edit' %}💾 Enregistrer{% else %}✅ Créer la question{% endif %}
+    </button>
+    <a href="{{ back_url|default:'/admin-site/questions/' }}" class="btn btn-outline-secondary">Annuler</a>
+  </div>
+</form>
+
+<script>
+// Afficher/masquer les chapitres d'une EC selon si elle est cochée
+function toggleChapters(ecPk, visible) {
+  const zone = document.getElementById('chapters-ec-' + ecPk);
+  if (!zone) return;
+  zone.style.display = visible ? '' : 'none';
+  // Décocher les chapitres quand l'EC est désélectionnée
+  if (!visible) {
+    zone.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+  }
+}
+
+// Style fraction inputs
+document.querySelectorAll('.answer-row input[type="number"]').forEach(el => {
+  el.classList.add('form-control', 'form-control-sm', 'text-end');
+});
+
+function addAnswer() {
+  const container = document.getElementById('answers-container');
+  const total = document.getElementById('id_form-TOTAL_FORMS');
+  const idx = parseInt(total.value);
+  const row = document.createElement('div');
+  row.className = 'answer-row d-flex gap-2 align-items-center mb-2';
+  row.innerHTML = `
+    <div class="flex-grow-1">
+      <input type="text" name="form-${idx}-text"
+             class="form-control form-control-sm" placeholder="Texte de la proposition…">
+    </div>
+    <div style="width:90px;">
+      <input type="number" name="form-${idx}-fraction" value="0.0"
+             step="0.01" min="-1" max="1"
+             class="form-control form-control-sm text-end">
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-danger"
+            onclick="this.closest('.answer-row').remove(); updateTotalForms()">✕</button>
+  `;
+  container.appendChild(row);
+  total.value = idx + 1;
+}
+
+function updateTotalForms() {
+  document.getElementById('id_form-TOTAL_FORMS').value =
+    document.querySelectorAll('.answer-row').length;
+}
+
+function filterCategories(courseId) {
+  const select = document.getElementById('id_category');
+  Array.from(select.options).forEach(opt => {
+    if (!opt.value) return;
+    opt.style.display = (!courseId || opt.dataset.course === courseId) ? '' : 'none';
+  });
+}
+const courseSelect = document.getElementById('course-select');
+if (courseSelect.value) filterCategories(courseSelect.value);
+</script>
+{% endblock content %}

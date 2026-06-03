@@ -1,0 +1,78 @@
+{% extends "qcm/admin_site/base.html" %}
+{% block title %}Demandes d'inscription — Admin{% endblock %}
+
+{% block admin_content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Demandes d'inscription</h2>
+  <div class="d-flex gap-2">
+    {% for val, label in status_choices %}
+    <a href="?status={{ val }}"
+       class="btn btn-sm {% if status_filter == val %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+      {{ label }}
+    </a>
+    {% endfor %}
+    <a href="?" class="btn btn-sm btn-outline-secondary">Toutes</a>
+  </div>
+</div>
+
+{% if requests %}
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>Nom</th>
+        <th>Email</th>
+        <th>Année / Parcours</th>
+        <th>Date</th>
+        <th>Statut</th>
+        <th>Certificat</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for req in requests %}
+      <tr>
+        <td class="fw-semibold">{{ req.first_name }} {{ req.last_name }}</td>
+        <td><a href="mailto:{{ req.email }}">{{ req.email }}</a></td>
+        <td>
+          <span class="badge bg-secondary">{{ req.year }}</span>
+          {% if req.parcours %}<span class="badge bg-light text-dark">{{ req.parcours }}</span>{% endif %}
+        </td>
+        <td class="small text-muted">{{ req.created_at|date:"d/m/Y H:i" }}</td>
+        <td>
+          <span class="badge {% if req.status == 'pending' %}bg-warning text-dark{% elif req.status == 'accepted' %}bg-success{% else %}bg-danger{% endif %}">
+            {{ req.get_status_display }}
+          </span>
+        </td>
+        <td>
+          {% if req.certificate %}
+          <a href="{{ req.certificate.url }}" target="_blank" class="btn btn-sm btn-outline-secondary">📄 Voir</a>
+          {% else %}
+          <span class="text-muted small">—</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if req.status == 'pending' %}
+          <div class="d-flex gap-1">
+            <form method="post" action="/admin-site/demandes/{{ req.pk }}/accepter/" class="m-0">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-success">✅ Accepter</button>
+            </form>
+            <form method="post" action="/admin-site/demandes/{{ req.pk }}/refuser/" class="m-0">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-danger">✗ Refuser</button>
+            </form>
+          </div>
+          {% elif req.message %}
+          <span class="small text-muted fst-italic">{{ req.message|truncatewords:8 }}</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="alert alert-info">Aucune demande pour ce filtre.</div>
+{% endif %}
+{% endblock %}
