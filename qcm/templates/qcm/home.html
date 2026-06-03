@@ -7,8 +7,8 @@
 
     <!-- Salutation -->
     <div class="mb-4">
-      <h1 class="h3">Bonjour, {{ user.get_full_name|default:user.username }} 👋</h1>
-      <p class="text-muted">Bienvenue sur votre espace d'entraînement médical.</p>
+      <h1 class="h3">Bonjour, {{ user.first_name|default:user.username }} 👋</h1>
+      <p class="text-muted">Bienvenue sur votre espace StudyMed
     </div>
 
     <div class="row g-4">
@@ -30,7 +30,7 @@
           <div class="card-body d-flex flex-column">
             <h5 class="card-title">📊 Ma progression</h5>
             <p class="card-text text-muted flex-grow-1 small">
-              Consultez vos statistiques détaillées, votre note moyenne et votre progression par cours.
+              Consultez vos statistiques détaillées et votre progression par cours.
             </p>
             <a href="/statistiques/" class="btn btn-outline-warning mt-2">Voir mes stats</a>
           </div>
