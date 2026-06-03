@@ -94,7 +94,7 @@ class TagCategory(models.Model):
 
 class Tag(models.Model):
     name = models.CharField(max_length=100, unique=True)
-    moodle_id = models.IntegerField(unique=True)
+    moodle_id = models.IntegerField(unique=True, null=True, blank=True)
     category = models.ForeignKey(
         TagCategory,
         on_delete=models.SET_NULL,

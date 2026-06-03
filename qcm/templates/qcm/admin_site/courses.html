@@ -1,0 +1,85 @@
+{% extends "qcm/admin_site/base.html" %}
+{% block title %}Cours — Admin{% endblock %}
+
+{% block admin_content %}
+<h2 class="mb-4">Cours</h2>
+
+<!-- Ajouter un cours -->
+<div class="card mb-4">
+  <div class="card-header fw-bold">Ajouter un cours</div>
+  <div class="card-body">
+    <form method="post" action="/admin-site/cours/" class="row g-2 align-items-end">
+      {% csrf_token %}
+      <div class="col-md-4">
+        <label class="form-label small fw-semibold">Nom complet <span class="text-danger">*</span></label>
+        <input type="text" name="name" class="form-control form-control-sm"
+               placeholder="Ex : P2 - La cellule" required>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold">Code court <span class="text-danger">*</span></label>
+        <input type="text" name="short_name" class="form-control form-control-sm"
+               placeholder="Ex : cell" maxlength="50" required>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold">Semestre</label>
+        <select name="semester" class="form-select form-select-sm">
+          <option value="">— Aucun —</option>
+          {% for sem in semesters %}
+          <option value="{{ sem.pk }}">{{ sem.study_year.name }} — {{ sem.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-outline-success"><span style="font-size:1.2em; line-height:1;">+</span> Ajouter</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Liste des cours -->
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>Nom du cours</th>
+        <th>Code</th>
+        <th>Semestre actuel</th>
+        <th>Changer de semestre</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for course in courses %}
+      <tr>
+        <td class="fw-semibold">{{ course.name }}</td>
+        <td class="small text-muted">{{ course.short_name }}</td>
+        <td>
+          {% if course.semester %}
+          <span class="badge bg-secondary">
+            {{ course.semester.study_year.name }} — {{ course.semester.name }}
+          </span>
+          {% else %}
+          <span class="text-muted small">Non assigné</span>
+          {% endif %}
+        </td>
+        <td>
+          <form method="post" action="/admin-site/cours/{{ course.pk }}/"
+                class="d-flex gap-2 align-items-center">
+            {% csrf_token %}
+            <select name="semester" class="form-select form-select-sm" style="max-width:200px;">
+              <option value="">— Aucun semestre —</option>
+              {% for sem in semesters %}
+              <option value="{{ sem.pk }}"
+                      {% if course.semester_id == sem.pk %}selected{% endif %}>
+                {{ sem.study_year.name }} — {{ sem.name }}
+              </option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-sm btn-outline-primary">💾</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

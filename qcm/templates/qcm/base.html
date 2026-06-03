@@ -37,9 +37,14 @@
            href="/statistiques/">Statistiques</a>
       </li>
       {% if user.is_staff %}
-      <li class="nav-item">
-        <a class="nav-link {% if '/questions' in request.path %}active{% endif %}"
-           href="/questions/upload/">Questions</a>
+      <li class="nav-item dropdown">
+        <a class="nav-link dropdown-toggle {% if '/questions' in request.path %}active{% endif %}"
+           href="#" role="button" data-bs-toggle="dropdown">Questions</a>
+        <ul class="dropdown-menu">
+          <li><a class="dropdown-item" href="/questions/upload/">📤 Importer (XML Moodle)</a></li>
+          <li><a class="dropdown-item" href="/admin-site/questions/">📋 Gérer les questions</a></li>
+          <li><a class="dropdown-item" href="/admin-site/questions/ajouter/">+ Ajouter une question</a></li>
+        </ul>
       </li>
       {% endif %}
       {% if user.is_staff %}
@@ -62,10 +67,10 @@
       </li>
       {% if user.is_staff %}
       <li class="nav-item">
-        <a class="nav-link {% if '/admin' in request.path %}active{% endif %}"
-           href="/admin/" id="nav-admin">Admin
+        <a class="nav-link {% if '/admin-site' in request.path and '/admin-site/questions' not in request.path %}active{% endif %}"
+           href="/admin-site/">Admin
           {% if admin_pending_registrations %}
-          <span class="admin-alert-badge" class="badge bg-danger ms-1" style="font-size:0.6rem;">{{ admin_pending_registrations }}</span>
+          <span class="admin-alert-badge" style="font-size:0.6rem;">{{ admin_pending_registrations }}</span>
           {% endif %}
         </a>
       </li>

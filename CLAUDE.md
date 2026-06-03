@@ -110,6 +110,12 @@ uv run --active python manage.py import_moodle --dump data/raw/plateforme-medeci
 # /entrainement/session/<id>/check/ → soumission réponse (multichoix ou QROC)
 # /entrainement/session/<id>/check-qroc/ → auto-évaluation QROC (j'avais bon/faux)
 # /entrainement/session/<id>/fin/ → résultats
+# /admin-site/               → tableau de bord admin web (staff uniquement)
+# /admin-site/demandes/      → gestion des demandes d'inscription
+# /admin-site/utilisateurs/  → gestion des utilisateurs
+# /admin-site/questions/     → liste/modification/suppression des questions
+# /admin-site/cours/         → gestion des cours et semestres
+# /admin-site/tags/          → gestion des tags
 ```
 
 **Important** : toujours utiliser `uv run --active` pour éviter de créer un environnement `.venv` parasite.

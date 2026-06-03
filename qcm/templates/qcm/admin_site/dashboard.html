@@ -1,0 +1,46 @@
+{% extends "qcm/admin_site/base.html" %}
+{% block title %}Administration — StudyMed{% endblock %}
+
+{% block admin_content %}
+<h2 class="mb-4">Tableau de bord</h2>
+
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-lg-3">
+    <div class="card text-center border-warning">
+      <div class="card-body">
+        <div class="fs-2 fw-bold text-warning">{{ pending_count }}</div>
+        <div class="small text-muted">Demandes en attente</div>
+        <a href="/admin-site/demandes/" class="btn btn-sm btn-outline-warning mt-2">Gérer</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card text-center border-primary">
+      <div class="card-body">
+        <div class="fs-2 fw-bold text-primary">{{ user_count }}</div>
+        <div class="small text-muted">Utilisateurs</div>
+        <a href="/admin-site/utilisateurs/" class="btn btn-sm btn-outline-primary mt-2">Gérer</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card text-center border-success">
+      <div class="card-body">
+        <div class="fs-2 fw-bold text-success">{{ question_count }}</div>
+        <div class="small text-muted">Questions</div>
+        <a href="/admin-site/questions/" class="btn btn-sm btn-outline-success mt-2">Gérer</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card text-center border-info">
+      <div class="card-body">
+        <div class="fs-2 fw-bold text-info">{{ course_count }}</div>
+        <div class="small text-muted">Cours</div>
+        <a href="/admin-site/cours/" class="btn btn-sm btn-outline-info mt-2">Gérer</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

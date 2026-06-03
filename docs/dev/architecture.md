@@ -10,13 +10,30 @@ La plateforme est une application Django connectée à une base de données SQLi
 config/                        # Configuration Django (settings, urls, wsgi)
 qcm/                           # App Django principale
 ├── models.py                  # Modèles de données
-├── admin.py                   # Interface d'administration
+├── views.py                   # Vues principales (entraînement, stats, erratas…)
+├── views_admin.py             # Vues interface admin web (/admin-site/)
+├── admin.py                   # Interface Django Admin (/admin/)
 ├── migrations/                # Migrations de base de données
 └── management/commands/
     ├── moodle_parser.py       # Parser du dump SQL Moodle
     └── import_moodle.py       # Commande d'import
 tests/                         # Tests pytest
 ```
+
+## Interface admin web
+
+Une section staff-only `/admin-site/` permet de gérer les données sans passer par le Django Admin technique. Elle est implémentée dans `qcm/views_admin.py` avec un `StaffRequiredMixin` qui redirige les non-staff vers l'accueil.
+
+| URL | Fonctionnalité |
+|-----|----------------|
+| `/admin-site/` | Tableau de bord (compteurs) |
+| `/admin-site/demandes/` | Accepter/refuser les inscriptions |
+| `/admin-site/utilisateurs/` | Liste, activer/désactiver, supprimer, changer d'année |
+| `/admin-site/questions/` | Liste paginée, modifier, supprimer |
+| `/admin-site/cours/` | Ajouter un cours, assigner un semestre |
+| `/admin-site/tags/` | Ajouter des tags EC/chapitre avec leur appartenance |
+
+La logique d'acceptation d'inscription (`accept_registration`) est centralisée dans `views_admin.py` et réutilisée par `admin.py`.
 
 ## Modèles de données
 

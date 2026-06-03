@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import views, views_admin
 
 
 app_name = "qcm"
@@ -93,5 +93,86 @@ urlpatterns = [
         "inscription/merci/",
         views.InscriptionDoneView.as_view(),
         name="inscription_done",
+    ),
+    # ── Admin site web ────────────────────────────────────────────────────────
+    path(
+        "admin-site/",
+        views_admin.AdminDashboardView.as_view(),
+        name="admin_dashboard",
+    ),
+    path(
+        "admin-site/demandes/",
+        views_admin.AdminRegistrationsView.as_view(),
+        name="admin_registrations",
+    ),
+    path(
+        "admin-site/demandes/<int:pk>/accepter/",
+        views_admin.AdminAcceptRegistrationView.as_view(),
+        name="admin_registration_accept",
+    ),
+    path(
+        "admin-site/demandes/<int:pk>/refuser/",
+        views_admin.AdminRejectRegistrationView.as_view(),
+        name="admin_registration_reject",
+    ),
+    path(
+        "admin-site/utilisateurs/",
+        views_admin.AdminUsersView.as_view(),
+        name="admin_users",
+    ),
+    path(
+        "admin-site/utilisateurs/<int:pk>/toggle/",
+        views_admin.AdminToggleUserView.as_view(),
+        name="admin_user_toggle",
+    ),
+    path(
+        "admin-site/utilisateurs/<int:pk>/supprimer/",
+        views_admin.AdminDeleteUserView.as_view(),
+        name="admin_user_delete",
+    ),
+    path(
+        "admin-site/utilisateurs/<int:pk>/changer-annee/",
+        views_admin.AdminChangeUserYearView.as_view(),
+        name="admin_user_change_year",
+    ),
+    path(
+        "admin-site/questions/",
+        views_admin.AdminQuestionsView.as_view(),
+        name="admin_questions",
+    ),
+    path(
+        "admin-site/questions/ajouter/",
+        views_admin.AdminQuestionAddView.as_view(),
+        name="admin_question_add",
+    ),
+    path(
+        "admin-site/questions/<int:pk>/modifier/",
+        views_admin.AdminQuestionEditView.as_view(),
+        name="admin_question_edit",
+    ),
+    path(
+        "admin-site/questions/<int:pk>/supprimer/",
+        views_admin.AdminQuestionDeleteView.as_view(),
+        name="admin_question_delete",
+    ),
+    path(
+        "admin-site/cours/",
+        views_admin.AdminCoursesView.as_view(),
+        name="admin_courses",
+    ),
+    path(
+        "admin-site/cours/<int:pk>/",
+        views_admin.AdminCourseEditView.as_view(),
+        name="admin_course_edit",
+    ),
+    path(
+        "admin-site/tags/",
+        views_admin.AdminTagsView.as_view(),
+        name="admin_tags",
+    ),
+    path(
+        "admin-site/tags/<int:pk>/supprimer/",
+        views_admin.AdminTagDeleteView.as_view(),
+        name="admin_tag_delete",
     ),
 ]

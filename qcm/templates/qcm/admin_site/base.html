@@ -1,0 +1,37 @@
+{% extends "qcm/base.html" %}
+{% block content %}
+<div class="row">
+  <!-- Sidebar -->
+  <div class="col-md-2 mb-3">
+    <div class="list-group list-group-flush">
+      <a href="/admin-site/" class="list-group-item list-group-item-action {% if request.path == '/admin-site/' %}active{% endif %}">
+        📊 Tableau de bord
+      </a>
+      <a href="/admin-site/demandes/" class="list-group-item list-group-item-action {% if '/demandes' in request.path %}active{% endif %}">
+        📋 Demandes
+        {% if admin_pending_registrations %}
+        <span class="badge bg-danger ms-1">{{ admin_pending_registrations }}</span>
+        {% endif %}
+      </a>
+      <a href="/admin-site/utilisateurs/" class="list-group-item list-group-item-action {% if '/utilisateurs' in request.path %}active{% endif %}">
+        👥 Utilisateurs
+      </a>
+      <a href="/admin-site/cours/" class="list-group-item list-group-item-action {% if '/cours' in request.path %}active{% endif %}">
+        📚 Cours
+      </a>
+      <a href="/admin-site/tags/" class="list-group-item list-group-item-action {% if '/tags' in request.path %}active{% endif %}">
+        🏷 Tags
+      </a>
+      <hr class="my-1">
+      <a href="/admin/" class="list-group-item list-group-item-action text-muted small">
+        ⚙ Django Admin
+      </a>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="col-md-10">
+    {% block admin_content %}{% endblock %}
+  </div>
+</div>
+{% endblock %}

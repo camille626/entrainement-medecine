@@ -1,0 +1,137 @@
+{% extends "qcm/admin_site/base.html" %}
+{% block title %}Utilisateurs — Admin{% endblock %}
+
+{% block admin_content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Utilisateurs</h2>
+  <form method="get" class="d-flex gap-2">
+    <input type="text" name="q" value="{{ search }}" class="form-control form-control-sm"
+           placeholder="Rechercher…" style="max-width:220px;">
+    <button type="submit" class="btn btn-sm btn-outline-secondary">🔍</button>
+    {% if search %}<a href="/admin-site/utilisateurs/" class="btn btn-sm btn-outline-secondary">✕</a>{% endif %}
+  </form>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>Username</th>
+        <th>Nom complet</th>
+        <th>Email</th>
+        <th>Année</th>
+        <th>Staff</th>
+        <th>Actif</th>
+        <th>Inscrit le</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in user_rows %}
+      {% with u=row.user %}
+      <tr class="{% if not u.is_active %}table-secondary text-muted{% endif %}">
+        <td class="fw-semibold">{{ u.username }}</td>
+        <td>{{ u.get_full_name|default:"—" }}</td>
+        <td class="small">{{ u.email }}</td>
+        <td>
+          <div class="mb-1">
+            {% if row.year %}
+            <span class="badge bg-primary">{{ row.year }}</span>
+            {% if row.parcours %}<span class="badge bg-secondary ms-1">{{ row.parcours }}</span>{% endif %}
+            {% else %}
+            <span class="text-muted small">—</span>
+            {% endif %}
+          </div>
+          <!-- Changer d'année -->
+          <form method="post" action="/admin-site/utilisateurs/{{ u.pk }}/changer-annee/"
+                class="d-flex gap-1 align-items-center">
+            {% csrf_token %}
+            <select name="package" class="form-select form-select-sm" style="max-width:140px;">
+              <option value="">— Aucun menu —</option>
+              {% for pkg in packages %}
+              <option value="{{ pkg.pk }}"
+                      {% if row.package_pk == pkg.pk %}selected{% endif %}>
+                {{ pkg.year }} — {{ pkg.parcours }}
+              </option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-sm btn-outline-secondary" title="Changer les inscriptions">💾</button>
+          </form>
+        </td>
+        <td>{% if u.is_staff %}<span class="badge bg-primary">Staff</span>{% endif %}</td>
+        <td>
+          {% if u.is_active %}
+          <span class="badge bg-success">Actif</span>
+          {% else %}
+          <span class="badge bg-danger">Inactif</span>
+          {% endif %}
+        </td>
+        <td class="small text-muted">{{ u.date_joined|date:"d/m/Y" }}</td>
+        <td>
+          <div class="d-flex gap-1">
+            {% if u.pk != request.user.pk %}
+            <form method="post" action="/admin-site/utilisateurs/{{ u.pk }}/toggle/" class="m-0">
+              {% csrf_token %}
+              <button type="submit"
+                      class="btn btn-sm {% if u.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}"
+                      title="{% if u.is_active %}Désactiver{% else %}Réactiver{% endif %}">
+                {% if u.is_active %}⏸{% else %}▶{% endif %}
+              </button>
+            </form>
+            <!-- Supprimer avec confirmation -->
+            <button type="button"
+                    class="btn btn-sm btn-outline-danger"
+                    title="Supprimer le compte"
+                    data-bs-toggle="modal"
+                    data-bs-target="#deleteModal"
+                    data-user-pk="{{ u.pk }}"
+                    data-user-name="{{ u.get_full_name|default:u.username }}">
+              🗑
+            </button>
+            {% else %}
+            <span class="text-muted small">(vous)</span>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% endwith %}
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Modal de confirmation de suppression -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title text-danger">⚠ Confirmer la suppression</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Êtes-vous sûr de vouloir supprimer le compte de <strong id="deleteUserName"></strong> ?</p>
+        <p class="text-danger small mb-0">
+          Cette action est <strong>irréversible</strong>. Toutes les sessions, réponses et données associées seront supprimées.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+        <form method="post" id="deleteForm" class="m-0">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger">Supprimer définitivement</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.getElementById('deleteModal').addEventListener('show.bs.modal', function(e) {
+  const btn = e.relatedTarget;
+  const pk = btn.dataset.userPk;
+  const name = btn.dataset.userName;
+  document.getElementById('deleteUserName').textContent = name;
+  document.getElementById('deleteForm').action = `/admin-site/utilisateurs/${pk}/supprimer/`;
+});
+</script>
+{% endblock %}
