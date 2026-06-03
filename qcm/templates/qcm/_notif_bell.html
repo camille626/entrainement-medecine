@@ -16,7 +16,7 @@
         <span class="fw-bold small">Notifications</span>
         {% if unread_notifications %}
         <button class="btn btn-link btn-sm p-0 text-muted lh-1"
-                style="font-size:1rem;"
+                style="font-size:1rem; text-decoration:none;"
                 title="Tout marquer comme vu"
                 hx-post="/notifications/mark-all-read/"
                 hx-target="#notif-bell-zone"
