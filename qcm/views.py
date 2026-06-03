@@ -241,8 +241,29 @@ class ConfigurationView(LoginRequiredMixin, View):
         form = SessionConfigForm(user=request.user)
         semesters = self._get_semesters(request.user)
         return render(
-            request, self.template_name, {"form": form, "semesters": semesters}
+            request,
+            self.template_name,
+            {
+                "form": form,
+                "semesters": semesters,
+                "ongoing_session": self._get_ongoing_session(request.user),
+            },
         )
+
+    def _get_ongoing_session(self, user):
+        """Return the most recent incomplete session, or None."""
+        for session in (
+            QuizSession.objects.filter(user=user)
+            .prefetch_related("session_questions", "user_answers")
+            .order_by("-started_at")[:10]
+        ):
+            total = session.session_questions.count()
+            if total == 0:
+                continue
+            answered = session.user_answers.values("question_id").distinct().count()
+            if answered < total:
+                return session
+        return None
 
     def post(self, request):
         form = SessionConfigForm(request.POST, user=request.user)
