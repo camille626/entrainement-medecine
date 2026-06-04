@@ -1,8 +1,21 @@
 """Django management command to import Moodle data into QCM models."""
 
+from pathlib import Path
+
+from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 
-from qcm.models import Answer, Category, Course, Question, Semester, Tag
+from qcm.models import (
+    Answer,
+    Category,
+    Course,
+    ImageDragItem,
+    ImageDropZone,
+    Question,
+    QuestionImage,
+    Semester,
+    Tag,
+)
 
 from .moodle_parser import build_context_to_course, parse_sql_dump
 
@@ -32,6 +45,11 @@ class Command(BaseCommand):
             default=DEFAULT_DUMP,
             help="Path to the Moodle PostgreSQL dump file",
         )
+        parser.add_argument(
+            "--moodledata",
+            default=None,
+            help="Path to the Moodle data directory (filedir) for background images",
+        )
 
     def handle(self, *args, **options):
         dump_path = options["dump"]
@@ -45,6 +63,17 @@ class Command(BaseCommand):
         questions_created = self._import_questions(data, excluded_q_ids)
         answers_created = self._import_answers(data)
         tags_created, links_created = self._import_tags(data)
+        drags_created, zones_created = self._import_ddimageortext_data(data)
+
+        moodledata = options.get("moodledata")
+        if moodledata is None:
+            dump_dir = Path(dump_path).parent
+            candidate = dump_dir / "moodledata" / "filedir"
+            if candidate.exists():
+                moodledata = str(dump_dir / "moodledata")
+        images_created = 0
+        if moodledata:
+            images_created = self._import_ddimageortext_images(data, moodledata)
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -53,7 +82,10 @@ class Command(BaseCommand):
                 f"  Catégories  : {cats_created} créées\n"
                 f"  Questions   : {questions_created} créées\n"
                 f"  Réponses    : {answers_created} créées\n"
-                f"  Tags        : {tags_created} créés, {links_created} liaisons"
+                f"  Tags        : {tags_created} créés, {links_created} liaisons\n"
+                f"  Drag items  : {drags_created} créés\n"
+                f"  Drop zones  : {zones_created} créées\n"
+                f"  Images bg   : {images_created} créées"
             )
         )
 
@@ -131,7 +163,7 @@ class Command(BaseCommand):
             c.moodle_id: c for c in Category.objects.all()
         }
 
-        supported_qtypes = {"multichoice", "shortanswer"}
+        supported_qtypes = {"multichoice", "shortanswer", "ddimageortext"}
         for row in data.get("m_question", []):
             qtype = row.get("qtype")
             if qtype not in supported_qtypes:
@@ -249,3 +281,112 @@ class Command(BaseCommand):
             links_created += len(tags)
 
         return tags_created, links_created
+
+    def _import_ddimageortext_data(self, data: dict) -> tuple[int, int]:
+        """Import drag items and drop zones for ddimageortext questions."""
+        drags_created = 0
+        zones_created = 0
+
+        q_by_moodle: dict[int, Question] = {
+            q.moodle_id: q
+            for q in Question.objects.filter(qtype=Question.DDIMAGEORTEXT)
+            if q.moodle_id is not None
+        }
+
+        # Import drag items — keyed by (questionid, drag_no)
+        drag_by_moodle: dict[tuple[int, int], str] = {}
+        for row in data.get("m_qtype_ddimageortext_drags", []):
+            q_id = int(row["questionid"])
+            question = q_by_moodle.get(q_id)
+            if question is None:
+                continue
+            no = int(row["no"])
+            label = _decode_pg_copy(row.get("label") or "")
+            draggroup = int(row.get("draggroup") or 1)
+            _, is_new = ImageDragItem.objects.update_or_create(
+                question=question,
+                no=no,
+                defaults={"label": label, "draggroup": draggroup},
+            )
+            drag_by_moodle[(q_id, no)] = label
+            if is_new:
+                drags_created += 1
+
+        # Import drop zones (need drag labels for correct_label)
+        for row in data.get("m_qtype_ddimageortext_drops", []):
+            q_id = int(row["questionid"])
+            question = q_by_moodle.get(q_id)
+            if question is None:
+                continue
+            no = int(row["no"])
+            xleft = int(row.get("xleft") or 0)
+            ytop = int(row.get("ytop") or 0)
+            correct_drag_no = int(row.get("choice") or 0)
+            correct_label = drag_by_moodle.get((q_id, correct_drag_no), "")
+            _, is_new = ImageDropZone.objects.update_or_create(
+                question=question,
+                no=no,
+                defaults={
+                    "xleft": xleft,
+                    "ytop": ytop,
+                    "correct_drag_no": correct_drag_no,
+                    "correct_label": correct_label,
+                },
+            )
+            if is_new:
+                zones_created += 1
+
+        return drags_created, zones_created
+
+    def _import_ddimageortext_images(self, data: dict, moodledata_dir: str) -> int:
+        """Import background images for ddimageortext questions from moodledata/filedir."""
+        filedir = Path(moodledata_dir) / "filedir"
+        if not filedir.exists():
+            self.stdout.write(
+                self.style.WARNING(f"filedir not found at {filedir}, skipping images")
+            )
+            return 0
+
+        q_by_moodle: dict[int, Question] = {
+            q.moodle_id: q
+            for q in Question.objects.filter(qtype=Question.DDIMAGEORTEXT)
+            if q.moodle_id is not None
+        }
+
+        created = 0
+        for row in data.get("m_files", []):
+            if row.get("component") != "qtype_ddimageortext":
+                continue
+            filename = row.get("filename", "")
+            if not filename or filename == "." or filename == "\\N":
+                continue
+            contenthash = row.get("contenthash", "")
+            if not contenthash or len(contenthash) < 4:
+                continue
+            q_id_str = row.get("itemid")
+            if not q_id_str:
+                continue
+            try:
+                q_id = int(q_id_str)
+            except (ValueError, TypeError):
+                continue
+            question = q_by_moodle.get(q_id)
+            if question is None:
+                continue
+
+            src = filedir / contenthash[:2] / contenthash[2:4] / contenthash
+            if not src.exists():
+                continue
+
+            existing = QuestionImage.objects.filter(
+                question=question, moodle_filename=filename
+            ).first()
+            if existing:
+                continue
+
+            with open(src, "rb") as fh:
+                qi = QuestionImage(question=question, moodle_filename=filename)
+                qi.file.save(filename, ContentFile(fh.read()), save=True)
+            created += 1
+
+        return created

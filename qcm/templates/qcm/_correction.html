@@ -21,7 +21,27 @@
   if (btn) btn.style.display = 'none';
 </script>
 
-{% if question.qtype == "shortanswer" %}
+{% if question.qtype == "ddimageortext" %}
+<!-- ── Correction légende interactive ── -->
+{% if zone_results %}
+<div class="mb-2">
+  {% for zr in zone_results %}
+  <div class="mb-1 p-2 rounded d-flex align-items-start
+    {% if zr.is_correct %}border border-success bg-success bg-opacity-10
+    {% else %}border border-danger bg-danger bg-opacity-10{% endif %}">
+    <span class="me-2 fw-bold">{% if zr.is_correct %}✓{% else %}✗{% endif %}</span>
+    <span class="flex-grow-1">
+      Zone {{ zr.zone.no }} — Votre réponse : <strong>{{ zr.selected_label|default:"(aucune)" }}</strong>
+      {% if not zr.is_correct %}
+        <span class="text-muted small ms-1">→ attendu : <em>{{ zr.zone.correct_label }}</em></span>
+      {% endif %}
+    </span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% elif question.qtype == "shortanswer" %}
 <!-- ── Correction QROC ── -->
 <div class="mb-3 p-2 rounded d-flex align-items-center gap-2
   {% if status == 'correct' %}border border-success bg-success bg-opacity-10

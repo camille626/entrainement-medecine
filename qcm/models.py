@@ -139,10 +139,12 @@ class Question(models.Model):
     MULTICHOICE = "multichoice"
     SHORTANSWER = "shortanswer"
     MATCH = "match"
+    DDIMAGEORTEXT = "ddimageortext"
     QTYPE_CHOICES = [
         (MULTICHOICE, "Choix multiple"),
         (SHORTANSWER, "Réponse courte"),
         (MATCH, "Appariement"),
+        (DDIMAGEORTEXT, "Légende interactive"),
     ]
 
     text = models.TextField()
@@ -279,6 +281,8 @@ class UserAnswer(models.Model):
     # QROC-specific fields (null for multichoice questions)
     qroc_text = models.TextField(null=True, blank=True)
     is_self_evaluated = models.BooleanField(default=False)
+    # ddimageortext: partial fraction override (computed from zone results)
+    fraction_override = models.FloatField(null=True, blank=True)
     answered_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -289,7 +293,9 @@ class UserAnswer(models.Model):
 
     @property
     def effective_fraction(self) -> float:
-        """Fraction effective : answer.fraction si disponible, sinon 1.0/0.0 (auto-éval QROC)."""
+        """Fraction effective : fraction_override > answer.fraction > is_correct (QROC)."""
+        if self.fraction_override is not None:
+            return self.fraction_override
         if self.answer_id is not None and self.answer is not None:
             return self.answer.fraction
         return 1.0 if self.is_correct else 0.0
@@ -481,3 +487,45 @@ class Errata(models.Model):
 
     def __str__(self) -> str:
         return f"[{self.get_error_type_display()}] Q#{self.question_id} — {self.reported_by.username}"
+
+
+class ImageDragItem(models.Model):
+    """Étiquette draggable pour une question ddimageortext."""
+
+    question = models.ForeignKey(
+        Question, on_delete=models.CASCADE, related_name="drag_items"
+    )
+    no = models.IntegerField()
+    label = models.CharField(max_length=500)
+    draggroup = models.IntegerField(default=1)
+
+    class Meta:
+        ordering = ["no"]
+        unique_together = [("question", "no")]
+        verbose_name = "Étiquette drag"
+        verbose_name_plural = "Étiquettes drag"
+
+    def __str__(self) -> str:
+        return f"Drag #{self.no} '{self.label}' (Q#{self.question_id})"
+
+
+class ImageDropZone(models.Model):
+    """Zone cible positionnée sur l'image de fond d'une question ddimageortext."""
+
+    question = models.ForeignKey(
+        Question, on_delete=models.CASCADE, related_name="drop_zones"
+    )
+    no = models.IntegerField()
+    xleft = models.IntegerField()
+    ytop = models.IntegerField()
+    correct_drag_no = models.IntegerField()
+    correct_label = models.CharField(max_length=500)
+
+    class Meta:
+        ordering = ["no"]
+        unique_together = [("question", "no")]
+        verbose_name = "Zone drop"
+        verbose_name_plural = "Zones drop"
+
+    def __str__(self) -> str:
+        return f"Zone #{self.no} '{self.correct_label}' (Q#{self.question_id})"

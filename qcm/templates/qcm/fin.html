@@ -64,7 +64,19 @@
               {{ result.question.text|safe }}
             </div>
 
-            <!-- Propositions -->
+            <!-- Propositions / Zones -->
+            {% if result.question.qtype == "ddimageortext" %}
+            {% for zr in result.zone_results %}
+            <div class="mb-1 p-2 rounded d-flex align-items-start
+              {% if zr.is_correct %}border border-success bg-success bg-opacity-10
+              {% else %}border border-danger bg-danger bg-opacity-10{% endif %}">
+              <span class="me-2 fw-bold">{% if zr.is_correct %}✓{% else %}✗{% endif %}</span>
+              <span>Zone {{ zr.zone.no }} — <strong>{{ zr.selected_label|default:"(aucune)" }}</strong>
+                {% if not zr.is_correct %}<span class="text-muted small ms-1">→ {{ zr.zone.correct_label }}</span>{% endif %}
+              </span>
+            </div>
+            {% endfor %}
+            {% else %}
             {% for answer in result.answers %}
             <div class="mb-1 p-2 rounded d-flex align-items-start
               {% if answer.pk in result.selected_ids and answer.is_correct %}border border-success bg-success bg-opacity-10
@@ -84,6 +96,7 @@
               {% endif %}
             </div>
             {% endfor %}
+            {% endif %}
 
             <!-- Correction -->
             {% if result.question.feedback %}
