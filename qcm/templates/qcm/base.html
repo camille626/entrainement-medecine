@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="fr">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -8,38 +9,76 @@
   {% block extra_head %}{% endblock %}
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <style>
-    .nav-tabs .nav-link { color: #495057; font-weight: 500; }
-    .nav-tabs .nav-link.active { color: #0d6efd; border-bottom: 2px solid #0d6efd; }
-    .nav-tabs .nav-link.disabled { color: #adb5bd; cursor: default; }
-    .admin-alert-badge { display:inline-flex; align-items:center; justify-content:center; width:1.1rem; height:1.1rem; border-radius:50%; background-color:#dc3545; color:#fff !important; font-size:0.6rem; font-weight:700; vertical-align:middle; margin-left:3px; line-height:1; }
-    .navbar-brand { font-weight: 700; font-size: 1.1rem; }
-    body { background-color: #f8f9fa; }
-    .main-content { padding-top: 1.5rem; }
+    .nav-tabs .nav-link {
+      color: #495057;
+      font-weight: 500;
+    }
+
+    .nav-tabs .nav-link.active {
+      color: #0d6efd;
+      border-bottom: 2px solid #0d6efd;
+    }
+
+    .nav-tabs .nav-link.disabled {
+      color: #adb5bd;
+      cursor: default;
+    }
+
+    .admin-alert-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 1.1rem;
+      height: 1.1rem;
+      padding: 0 0.25rem;
+      border-radius: 0.55rem;
+      background-color: #dc3545;
+      color: #fff !important;
+      font-size: 0.6rem;
+      font-weight: 700;
+      vertical-align: middle;
+      margin-left: 3px;
+      line-height: 1;
+      overflow: hidden;
+    }
+
+    .navbar-brand {
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+
+    body {
+      background-color: #f8f9fa;
+    }
+
+    .main-content {
+      padding-top: 1.5rem;
+    }
   </style>
 </head>
+
 <body>
   <!-- Top navbar -->
   <nav class="navbar navbar-expand navbar-light bg-white border-bottom shadow-sm px-3">
-    <a class="navbar-brand text-primary me-4" href="/">📚 StudyMed</a>
+    <a class="navbar-brand text-primary me-4" href="/">🩺 StudyMed</a>
 
     <!-- Navigation tabs -->
     <ul class="nav nav-tabs border-0 flex-grow-1" id="mainNav">
       <li class="nav-item">
-        <a class="nav-link {% if request.path == '/' %}active{% endif %}"
-           href="/">Accueil</a>
+        <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/">Accueil</a>
       </li>
       <li class="nav-item">
         <a class="nav-link {% if '/entrainement' in request.path %}active{% endif %}"
-           href="/entrainement/">Entraînement</a>
+          href="/entrainement/">Entraînement</a>
       </li>
       <li class="nav-item">
         <a class="nav-link {% if '/statistiques' in request.path %}active{% endif %}"
-           href="/statistiques/">Statistiques</a>
+          href="/statistiques/">Statistiques</a>
       </li>
       {% if user.is_staff %}
       <li class="nav-item dropdown">
-        <a class="nav-link dropdown-toggle {% if '/questions' in request.path %}active{% endif %}"
-           href="#" role="button" data-bs-toggle="dropdown">Questions</a>
+        <a class="nav-link dropdown-toggle {% if '/questions' in request.path %}active{% endif %}" href="#"
+          role="button" data-bs-toggle="dropdown">Questions</a>
         <ul class="dropdown-menu">
           <li><a class="dropdown-item" href="/questions/upload/">📤 Importer (XML Moodle)</a></li>
           <li><a class="dropdown-item" href="/admin-site/questions/">📋 Gérer les questions</a></li>
@@ -49,26 +88,24 @@
       {% endif %}
       {% if user.is_staff %}
       <li class="nav-item">
-        <a class="nav-link {% if '/errata' in request.path %}active{% endif %}"
-           href="/errata/">Erratas
+        <a class="nav-link {% if '/errata' in request.path %}active{% endif %}" href="/errata/">Erratas
           {% if admin_pending_erratas %}
-          <span class="admin-alert-badge" class="badge bg-danger ms-1" style="font-size:0.6rem;">{{ admin_pending_erratas }}</span>
+          <span class="admin-alert-badge">{{ admin_pending_erratas }}</span>
           {% endif %}
         </a>
       </li>
       {% endif %}
       <li class="nav-item">
-        <a class="nav-link disabled" tabindex="-1" aria-disabled="true"
-           title="Bientôt disponible" data-bs-toggle="tooltip">Flashcards</a>
+        <a class="nav-link disabled" tabindex="-1" aria-disabled="true" title="Bientôt disponible"
+          data-bs-toggle="tooltip">Flashcards</a>
       </li>
       <li class="nav-item">
-        <a class="nav-link {% if '/historique' in request.path %}active{% endif %}"
-           href="/historique/">Historique</a>
+        <a class="nav-link {% if '/historique' in request.path %}active{% endif %}" href="/historique/">Historique</a>
       </li>
       {% if user.is_staff %}
       <li class="nav-item">
         <a class="nav-link {% if '/admin-site' in request.path and '/admin-site/questions' not in request.path %}active{% endif %}"
-           href="/admin-site/">Admin
+          href="/admin-site/">Admin
           {% if admin_pending_registrations %}
           <span class="admin-alert-badge" style="font-size:0.6rem;">{{ admin_pending_registrations }}</span>
           {% endif %}
@@ -85,18 +122,21 @@
 
       <!-- User dropdown -->
       <div class="dropdown">
-        <button class="btn btn-sm btn-outline-primary dropdown-toggle d-flex align-items-center gap-1"
-                type="button" data-bs-toggle="dropdown" aria-expanded="false">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
-               class="bi bi-person-circle" viewBox="0 0 16 16">
-            <path d="M11 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0"/>
-            <path fill-rule="evenodd" d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8m8-7a7 7 0 0 0-5.468 11.37C3.242 11.226 4.805 10 8 10s4.757 1.225 5.468 2.37A7 7 0 0 0 8 1"/>
+        <button class="btn btn-sm btn-outline-primary dropdown-toggle d-flex align-items-center gap-1" type="button"
+          data-bs-toggle="dropdown" aria-expanded="false">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-person-circle"
+            viewBox="0 0 16 16">
+            <path d="M11 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0" />
+            <path fill-rule="evenodd"
+              d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8m8-7a7 7 0 0 0-5.468 11.37C3.242 11.226 4.805 10 8 10s4.757 1.225 5.468 2.37A7 7 0 0 0 8 1" />
           </svg>
           <span class="d-none d-md-inline">{{ user.get_full_name|default:user.username }}</span>
         </button>
         <ul class="dropdown-menu dropdown-menu-end shadow">
           <li><span class="dropdown-item-text text-muted small">{{ user.username }}</span></li>
-          <li><hr class="dropdown-divider"></li>
+          <li>
+            <hr class="dropdown-divider">
+          </li>
           <li><a class="dropdown-item disabled" href="#" title="Bientôt disponible">👤 Profil</a></li>
           <li>
             <form method="post" action="/logout/" class="m-0">
@@ -124,4 +164,5 @@
   </script>
   {% block extra_scripts %}{% endblock %}
 </body>
+
 </html>
