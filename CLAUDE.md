@@ -103,6 +103,13 @@ uv run --active python manage.py makemigrations
 # Importe multichoice ET shortanswer (QROC). Nécessite postgresql-client-17 (installé dans le devcontainer).
 uv run --active python manage.py import_moodle --dump data/raw/plateforme-medecine_moodlecloud.sql
 
+# Lister les questions avec des images @@PLUGINFILE@@ non encore uploadées
+uv run --active python manage.py find_missing_images
+
+# Créer les erratas IMAGE pour toutes les questions avec des <img> cassés (idempotent)
+# --dry-run pour prévisualiser, --reporter <username> pour choisir le reporter
+uv run --active python manage.py seed_image_erratas [--dry-run] [--reporter <username>]
+
 # URLs de l'application
 # /                          → accueil (cours par semestre)
 # /entrainement/             → configuration d'une session
@@ -116,6 +123,7 @@ uv run --active python manage.py import_moodle --dump data/raw/plateforme-medeci
 # /admin-site/questions/     → liste/modification/suppression des questions
 # /admin-site/cours/         → gestion des cours et semestres
 # /admin-site/tags/          → gestion des tags
+# /errata/<pk>/upload-image/ → upload image pour un errata type IMAGE (POST, staff)
 ```
 
 **Important** : toujours utiliser `uv run --active` pour éviter de créer un environnement `.venv` parasite.

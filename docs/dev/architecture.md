@@ -92,6 +92,16 @@ User
 | `fraction` | FloatField [0.0–1.0] | 1.0 = correcte, 0.0 = incorrecte |
 | `is_correct` | BooleanField | Raccourci booléen |
 
+**`QuestionImage`** — une image associée à une question
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `question` | FK → Question (CASCADE) | Question parente |
+| `moodle_filename` | CharField(255) | Nom du fichier tel que référencé dans `@@PLUGINFILE@@/filename` |
+| `file` | FileField | Fichier stocké sous `MEDIA_ROOT/question_images/` |
+
+Contrainte `unique_together = (question, moodle_filename)`. La méthode `Question.render_text()` résout dynamiquement les `@@PLUGINFILE@@/filename` en URLs locales lors du rendu HTML.
+
 **`QuizSession`** — une session d'entraînement d'un utilisateur
 
 | Champ | Type | Description |

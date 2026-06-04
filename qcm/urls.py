@@ -48,6 +48,11 @@ urlpatterns = [
         name="errata_feedback",
     ),
     path(
+        "errata/<int:pk>/upload-image/",
+        views.ErrataUploadImageView.as_view(),
+        name="errata_upload_image",
+    ),
+    path(
         "notifications/<int:pk>/mark-read/",
         views.NotificationMarkReadView.as_view(),
         name="notification_mark_read",
