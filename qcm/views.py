@@ -89,6 +89,35 @@ def _ua_fraction(answer_fraction: "float | None", is_correct: bool) -> float:
     return 1.0 if is_correct else 0.0
 
 
+def _build_zone_results(question: "QuestionModel", qroc_text: "str | None") -> list:
+    """Build zone-result dicts for a ddimageortext question from stored JSON."""
+    if question.qtype != Question.DDIMAGEORTEXT or not qroc_text:
+        return []
+    try:
+        zone_selections = json.loads(qroc_text)
+    except (ValueError, TypeError):
+        zone_selections = {}
+    results = []
+    for zone in question.drop_zones.all():
+        user_text = str(zone_selections.get(str(zone.no), ""))
+        is_correct = normalize_qroc(user_text) == normalize_qroc(zone.correct_label)
+        results.append(
+            {
+                "zone": zone,
+                "selected_label": user_text,
+                "is_correct": is_correct,
+            }
+        )
+    return results
+
+
+def _max_score_for_question(question: "QuestionModel") -> float:
+    """Return the maximum possible score for a question (1.0 for QROC & ddimage, sum fractions for multichoice)."""
+    if question.qtype in ("shortanswer", Question.DDIMAGEORTEXT):
+        return 1.0
+    return sum(a.fraction for a in question.answers.filter(fraction__gt=0))
+
+
 def get_answers(question: "QuestionModel", shuffle: bool = True) -> list:
     """Return answers, optionally shuffled with a deterministic seed."""
     answers = list(question.answers.all())
@@ -279,6 +308,7 @@ class ConfigurationView(LoginRequiredMixin, View):
         tags = form.cleaned_data.get("tags")
         question_filter = form.cleaned_data.get("question_filter") or "all"
         include_qroc = form.cleaned_data.get("include_qroc", False)
+        include_ddimageortext = form.cleaned_data.get("include_ddimageortext", False)
 
         # Select questions from chosen courses
         from .models import Question
@@ -286,6 +316,8 @@ class ConfigurationView(LoginRequiredMixin, View):
         qtypes = ["multichoice"]
         if include_qroc:
             qtypes.append("shortanswer")
+        if include_ddimageortext:
+            qtypes.append(Question.DDIMAGEORTEXT)
 
         qs = Question.objects.filter(
             category__course__in=courses,
@@ -410,12 +442,7 @@ class QuestionView(LoginRequiredMixin, View):
                     0.0,
                     min(1.0, sum(ua.effective_fraction for ua in ua_list)),
                 )
-                if sq.question.qtype == "shortanswer":
-                    max_score = 1.0
-                else:
-                    max_score = sum(
-                        a.fraction for a in sq.question.answers.filter(fraction__gt=0)
-                    )
+                max_score = _max_score_for_question(sq.question)
                 ratio = score / max_score if max_score > 0 else 0.0
                 if ratio >= 1.0 - 1e-6:
                     status = "correct"
@@ -434,6 +461,14 @@ class QuestionView(LoginRequiredMixin, View):
 
         # If navigating to an already-answered question, prepare correction context
         is_answered = question.pk in answered_question_ids
+
+        # ddimageortext-specific context
+        drag_items: list = []
+        drop_zones: list = []
+        if question.qtype == Question.DDIMAGEORTEXT:
+            drag_items = list(question.drag_items.all())
+            drop_zones = list(question.drop_zones.all())
+
         ctx: dict = {
             "session": session,
             "question": question,
@@ -447,18 +482,15 @@ class QuestionView(LoginRequiredMixin, View):
             "is_answered": is_answered,
             "prev_order": current_sq.order - 1 if current_sq.order > 1 else None,
             "next_order": current_sq.order + 1 if current_sq.order < total else None,
+            "drag_items": drag_items,
+            "drop_zones": drop_zones,
         }
 
         if is_answered:
             ua_list = ua_by_qid.get(question.pk, [])
             selected_ids = [ua.answer_id for ua in ua_list if ua.answer_id is not None]
             score = max(0.0, min(1.0, sum(ua.effective_fraction for ua in ua_list)))
-            if question.qtype == "shortanswer":
-                max_score = 1.0
-            else:
-                max_score = sum(
-                    a.fraction for a in question.answers.filter(fraction__gt=0)
-                )
+            max_score = _max_score_for_question(question)
             ratio = score / max_score if max_score > 0 else 0.0
             if ratio >= 1.0 - 1e-6:
                 q_status = "correct"
@@ -467,7 +499,6 @@ class QuestionView(LoginRequiredMixin, View):
             else:
                 q_status = "incorrect"
             is_last = answered_count >= total
-            # QROC-specific context for answered questions
             qroc_text = next(
                 (ua.qroc_text for ua in ua_list if ua.qroc_text is not None), None
             )
@@ -484,6 +515,7 @@ class QuestionView(LoginRequiredMixin, View):
                     "is_last": is_last,
                     "qroc_text": qroc_text,
                     "accepted_answers": accepted_answers,
+                    "zone_results": _build_zone_results(question, qroc_text),
                 }
             )
 
@@ -515,6 +547,10 @@ class CheckView(LoginRequiredMixin, View):
             return HttpResponse("Session terminée", status=400)
 
         question = current_sq.question
+
+        # ── Branche ddimageortext ─────────────────────────────────────────────
+        if question.qtype == Question.DDIMAGEORTEXT:
+            return self._handle_ddimageortext(request, session, current_sq, question)
 
         # ── Branche QROC ──────────────────────────────────────────────────────
         if question.qtype == "shortanswer":
@@ -639,6 +675,95 @@ class CheckView(LoginRequiredMixin, View):
             },
         )
 
+    def _handle_ddimageortext(self, request, session, current_sq, question):
+        """Gère la soumission d'une réponse ddimageortext (légende interactive — saisie QROC par zone)."""
+        drop_zones = list(question.drop_zones.all())
+
+        total_zones = len(drop_zones)
+        if total_zones == 0:
+            UserAnswer.objects.get_or_create(
+                session=session,
+                question=question,
+                answer=None,
+                defaults={"is_correct": True, "fraction_override": 1.0},
+            )
+            fraction = 1.0
+            zone_results: list[dict] = []
+        else:
+            # Collect user text for each zone: POST key "zone_<no>" → free text
+            zone_selections: dict[str, str] = {}
+            for zone in drop_zones:
+                zone_selections[str(zone.no)] = request.POST.get(
+                    f"zone_{zone.no}", ""
+                ).strip()
+
+            # Evaluate each zone (normalized comparison, like QROC)
+            correct_count = 0
+            zone_results = []
+            for zone in drop_zones:
+                user_text = zone_selections.get(str(zone.no), "")
+                is_zone_correct = normalize_qroc(user_text) == normalize_qroc(
+                    zone.correct_label
+                )
+                if is_zone_correct:
+                    correct_count += 1
+                zone_results.append(
+                    {
+                        "zone": zone,
+                        "selected_label": user_text,
+                        "is_correct": is_zone_correct,
+                    }
+                )
+
+            fraction = correct_count / total_zones
+            is_correct = correct_count == total_zones
+
+            UserAnswer.objects.get_or_create(
+                session=session,
+                question=question,
+                answer=None,
+                defaults={
+                    "is_correct": is_correct,
+                    "fraction_override": fraction,
+                    "qroc_text": json.dumps(zone_selections),
+                },
+            )
+
+        if fraction >= 1.0 - 1e-6:
+            status = "correct"
+        elif fraction > 0:
+            status = "partial"
+        else:
+            status = "incorrect"
+
+        total = session.session_questions.count()
+        new_answered = set(
+            session.user_answers.values_list("question_id", flat=True).distinct()
+        )
+        position = len(new_answered)
+        is_last = position >= total
+        prev_order = current_sq.order - 1 if current_sq.order > 1 else None
+        next_order = current_sq.order + 1 if current_sq.order < total else None
+
+        return render(
+            request,
+            "qcm/_correction.html",
+            {
+                "question": question,
+                "answers": [],
+                "selected_ids": [],
+                "score": fraction,
+                "status": status,
+                "session": session,
+                "is_last": is_last,
+                "position": position,
+                "total": total,
+                "prev_order": prev_order,
+                "next_order": next_order,
+                "zone_results": zone_results,
+            },
+        )
+
 
 class CheckQROCSelfView(LoginRequiredMixin, View):
     """Enregistre l'auto-évaluation d'une réponse QROC sans correspondance automatique."""
@@ -741,10 +866,7 @@ class FinView(LoginRequiredMixin, View):
             score = max(0.0, min(1.0, raw_score))
             total_score += score
 
-            if q.qtype == "shortanswer":
-                max_score = 1.0
-            else:
-                max_score = sum(a.fraction for a in q.answers.filter(fraction__gt=0))
+            max_score = _max_score_for_question(q)
             ratio = score / max_score if max_score > 0 else 0.0
 
             qroc_text = next(
@@ -776,6 +898,7 @@ class FinView(LoginRequiredMixin, View):
                     "answered": bool(user_answers),
                     "qroc_text": qroc_text,
                     "accepted_answers": accepted_answers,
+                    "zone_results": _build_zone_results(q, qroc_text),
                 }
             )
 
@@ -1664,6 +1787,7 @@ class SessionDetailView(LoginRequiredMixin, View):
                     "answered": bool(user_answers),
                     "qroc_text": qroc_text,
                     "accepted_answers": accepted_answers,
+                    "zone_results": _build_zone_results(q, qroc_text),
                 }
             )
 

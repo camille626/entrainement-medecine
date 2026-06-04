@@ -65,6 +65,9 @@
         <div id="answers-zone">
           {% if is_answered %}
           {% include "qcm/_correction.html" %}
+          {% elif question.qtype == "ddimageortext" %}
+          <!-- Légende interactive -->
+          {% include "qcm/_ddimageortext_question.html" %}
           {% elif question.qtype == "shortanswer" %}
           <!-- QROC : champ texte libre -->
           <p class="text-muted small">Tapez votre réponse :</p>

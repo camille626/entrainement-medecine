@@ -74,13 +74,13 @@ User
 | `course` | FK → Course | Cours parent |
 | `moodle_id` | IntegerField (unique) | ID d'origine Moodle (import idempotent) |
 
-**`Question`** — une question QCM
+**`Question`** — une question
 
 | Champ | Type | Description |
 |-------|------|-------------|
 | `text` | TextField | Énoncé en HTML |
 | `category` | FK → Category | Catégorie parente |
-| `qtype` | CharField | `multichoice`, `shortanswer`, `match` |
+| `qtype` | CharField | `multichoice`, `shortanswer`, `ddimageortext`, `match` |
 | `moodle_id` | IntegerField (unique) | ID d'origine Moodle |
 
 **`Answer`** — une proposition de réponse
@@ -118,13 +118,34 @@ Contrainte `unique_together = (question, moodle_filename)`. La méthode `Questio
 |-------|------|-------------|
 | `session` | FK → QuizSession (CASCADE) | Session parente |
 | `question` | FK → Question (PROTECT) | Question répondue |
-| `answer` | FK → Answer (PROTECT, **nullable**) | Réponse choisie — `None` pour les auto-évaluations QROC |
+| `answer` | FK → Answer (PROTECT, **nullable**) | Réponse choisie — `None` pour QROC et ddimageortext |
 | `is_correct` | BooleanField | Résultat |
-| `qroc_text` | TextField (nullable) | Texte tapé par l'étudiant (QROC uniquement) |
-| `is_self_evaluated` | BooleanField | `True` si l'étudiant s'est auto-évalué (QROC sans correspondance) |
+| `qroc_text` | TextField (nullable) | Texte tapé (QROC) ou JSON des saisies par zone (ddimageortext) |
+| `is_self_evaluated` | BooleanField | `True` si auto-évaluation QROC sans correspondance |
+| `fraction_override` | FloatField (nullable) | Fraction partielle explicite — utilisé par ddimageortext (ex: 2/3 zones correctes) |
 | `answered_at` | DateTimeField | Horodatage |
 
-La propriété `effective_fraction` retourne `answer.fraction` si `answer` est défini, sinon `1.0` ou `0.0` selon `is_correct`. Tous les calculs de score utilisent cette propriété.
+La propriété `effective_fraction` suit la priorité : `fraction_override` > `answer.fraction` > `is_correct` (1.0/0.0). Tous les calculs de score utilisent cette propriété.
+
+**`ImageDragItem`** — étiquette d'une question ddimageortext
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `question` | FK → Question (CASCADE) | Question parente |
+| `no` | IntegerField | Numéro Moodle (1-indexé, unique par question) |
+| `label` | CharField(500) | Texte de l'étiquette |
+| `draggroup` | IntegerField | Groupe Moodle (ignoré à l'affichage) |
+
+**`ImageDropZone`** — zone cible sur l'image d'une question ddimageortext
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `question` | FK → Question (CASCADE) | Question parente |
+| `no` | IntegerField | Numéro Moodle (1-indexé, unique par question) |
+| `xleft` | IntegerField | Position X en pixels dans l'image naturelle |
+| `ytop` | IntegerField | Position Y en pixels dans l'image naturelle |
+| `correct_drag_no` | IntegerField | `no` du drag item correct pour cette zone |
+| `correct_label` | CharField(500) | Label attendu (dénormalisé pour les comparaisons) |
 
 ## Questions QROC (shortanswer)
 
@@ -147,6 +168,43 @@ La correspondance est insensible à la casse et aux accents via `normalize_qroc(
 ### Errata QROC
 
 Le type `Errata.QROC_ANSWER` permet à un étudiant de suggérer une nouvelle variante acceptée. L'admin fixe une fraction (1.0 par défaut) et accepte → un nouvel `Answer` est créé pour la question.
+
+## Questions légendes interactives (ddimageortext)
+
+Les questions de type `ddimageortext` affichent une image anatomique sur laquelle l'étudiant saisit le nom de chaque structure zone par zone, comme un QROC.
+
+### Modèles spécifiques
+
+- `ImageDragItem` — les étiquettes possibles (incluant des distracteurs)
+- `ImageDropZone` — les zones cibles positionnées en pixels sur l'image (`xleft`, `ytop`)
+- `QuestionImage` — l'image de fond (même modèle que les images dans les énoncés multichoix)
+
+### Flux de réponse
+
+```
+Étudiant saisit texte par zone → POST /check/
+  └─ _handle_ddimageortext()
+       → normalize_qroc(user_text) == normalize_qroc(zone.correct_label) par zone
+       → fraction = zones_correctes / total_zones
+       → UserAnswer(answer=None, fraction_override=fraction, qroc_text=JSON)
+```
+
+Le JSON stocké dans `qroc_text` a la forme `{"1": "sclérotique", "2": "choroide", ...}` (clé = `zone.no` en string).
+
+### Import depuis Moodle
+
+La commande `import_moodle` importe automatiquement :
+
+- Les questions `ddimageortext` depuis `m_question`
+- Les drag items depuis `m_qtype_ddimageortext_drags`
+- Les drop zones depuis `m_qtype_ddimageortext_drops`
+- Les images de fond depuis `moodledata/filedir/{hash[:2]}/{hash[2:4]}/{hash}`
+
+Le répertoire `moodledata/` est détecté automatiquement s'il est voisin du fichier dump.
+
+### Positionnement responsive
+
+Les coordonnées `xleft`/`ytop` sont en pixels dans l'image à sa taille naturelle. Un JS minimal (`ddiScaleZones`) recalcule les positions après chargement de l'image pour s'adapter à la taille affichée (responsive).
 
 ## Configuration de la base de données
 

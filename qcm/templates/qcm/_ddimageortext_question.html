@@ -1,0 +1,110 @@
+<!-- ── Légende interactive : image + saisie QROC par zone ── -->
+<style>
+.ddi-container { position: relative; display: inline-block; max-width: 100%; }
+.ddi-zone { position: absolute; transform: translate(-50%, -50%); }
+.ddi-input {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 4px;
+  border: 2px solid rgba(13,110,253,0.75);
+  background: rgba(255,255,255,0.88);
+  font-size: 0.72rem;
+  padding: 0 0.3rem;
+  transition: width 0.22s ease, background 0.12s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.28);
+  outline: none;
+  cursor: text;
+  white-space: nowrap;
+  overflow: hidden;
+  vertical-align: middle;
+}
+.ddi-input:focus,
+.ddi-input.filled {
+  width: 9rem;
+  background: rgba(255,255,255,0.97);
+  border-color: #0d6efd;
+}
+/* Sur mobile : inputs un peu plus larges par défaut */
+@media (max-width: 576px) {
+  .ddi-input { width: 2.5rem; }
+  .ddi-input:focus, .ddi-input.filled { width: 7rem; }
+}
+</style>
+
+<p class="text-muted small mb-2">Saisissez le nom de chaque structure anatomique :</p>
+
+<form id="answer-form"
+      hx-post="/entrainement/session/{{ session.pk }}/check/"
+      hx-target="#answers-zone"
+      hx-swap="innerHTML"
+      hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+  {% csrf_token %}
+  <input type="hidden" name="question_id" value="{{ question.pk }}">
+
+  {% with bg_image=question.images.first %}
+  {% if bg_image %}
+  <div class="ddi-container mb-3 overflow-auto">
+    <img id="ddi-img" src="{{ bg_image.file.url }}"
+         alt="Image anatomique"
+         style="max-width:100%; display:block; border-radius:4px; border:1px solid #dee2e6;"
+         onload="ddiScaleZones(this)">
+    {% for zone in drop_zones %}
+    <div class="ddi-zone"
+         style="left:{{ zone.xleft }}px; top:{{ zone.ytop }}px;"
+         data-xleft="{{ zone.xleft }}" data-ytop="{{ zone.ytop }}">
+      <input type="text"
+             name="zone_{{ zone.no }}"
+             class="ddi-input"
+             placeholder="?"
+             autocomplete="off"
+             autocorrect="off"
+             spellcheck="false"
+             title="Zone {{ zone.no }}">
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-warning small">Image non disponible.</p>
+  {% endif %}
+  {% endwith %}
+
+  <!-- Saisie en liste (fallback sans image, ou toujours visible) -->
+  {% if not question.images.first %}
+  <div class="mb-3">
+    {% for zone in drop_zones %}
+    <div class="mb-2 d-flex align-items-center gap-2">
+      <span class="text-muted small" style="min-width:4rem;">Zone {{ zone.no }}</span>
+      <input type="text"
+             name="zone_{{ zone.no }}"
+             class="form-control form-control-sm"
+             placeholder="Votre réponse…"
+             autocomplete="off" autocorrect="off" spellcheck="false">
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <button type="submit" class="btn btn-secondary mt-2" id="check-btn">Vérifier</button>
+</form>
+
+<script>
+function ddiScaleZones(img) {
+  var container = img.parentElement;
+  var scaleX = img.clientWidth / img.naturalWidth;
+  var scaleY = img.clientHeight / img.naturalHeight;
+  container.querySelectorAll('.ddi-zone').forEach(function(zone) {
+    zone.style.left = (parseInt(zone.dataset.xleft) * scaleX) + 'px';
+    zone.style.top  = (parseInt(zone.dataset.ytop)  * scaleY) + 'px';
+  });
+}
+window.addEventListener('resize', function() {
+  var img = document.getElementById('ddi-img');
+  if (img && img.complete) ddiScaleZones(img);
+});
+// Marque les inputs remplis pour les garder expansés
+document.querySelectorAll('.ddi-input').forEach(function(inp) {
+  inp.addEventListener('input', function() {
+    this.classList.toggle('filled', this.value.trim().length > 0);
+  });
+});
+</script>

@@ -40,7 +40,7 @@ Plateforme web de QCMs interactifs pour l'apprentissage des cours de médecine (
 │   ├── migrations/        # Migrations de base de données
 │   ├── admin.py           # Interface d'administration
 │   ├── apps.py
-│   └── models.py          # Course, Category, Question, Answer, QuizSession, UserAnswer
+│   └── models.py          # Course, Category, Question, Answer, QuizSession, UserAnswer, ImageDragItem, ImageDropZone
 ├── src/                   # Code source Python (utilitaires, scripts)
 ├── tests/                 # Tests unitaires et d'intégration
 │   └── test_models.py     # Tests des modèles Django (18 tests)
@@ -100,8 +100,12 @@ uv run --active python manage.py createsuperuser
 uv run --active python manage.py makemigrations
 
 # Importer les données depuis le dump Moodle (idempotent, relançable)
-# Importe multichoice ET shortanswer (QROC). Nécessite postgresql-client-17 (installé dans le devcontainer).
+# Importe multichoice, shortanswer (QROC) ET ddimageortext (légendes interactives).
+# Détecte automatiquement moodledata/ voisin du dump pour les images de fond ddimageortext.
+# Nécessite postgresql-client-17 (installé dans le devcontainer).
 uv run --active python manage.py import_moodle --dump data/raw/plateforme-medecine_moodlecloud.sql
+# Optionnel : spécifier le répertoire moodledata manuellement
+# uv run --active python manage.py import_moodle --dump ... --moodledata data/raw/moodledata
 
 # Lister les questions avec des images @@PLUGINFILE@@ non encore uploadées
 uv run --active python manage.py find_missing_images
