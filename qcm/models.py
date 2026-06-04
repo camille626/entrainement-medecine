@@ -1,6 +1,14 @@
+import re
+
 from django.contrib.auth.models import User
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+
+
+_PLUGINFILE_IMG_RE = re.compile(
+    r'<img\b([^>]*)src=["\']@@PLUGINFILE@@/([^"\'>\s]+)["\']([^>]*)>',
+    re.IGNORECASE,
+)
 
 
 class StudyYear(models.Model):
@@ -152,6 +160,36 @@ class Question(models.Model):
 
     def __str__(self) -> str:
         return f"Question #{self.moodle_id or 'N/A'} ({self.category})"
+
+    def render_text(self) -> str:
+        """Return question text with @@PLUGINFILE@@ refs resolved to media URLs."""
+        images_map = {img.moodle_filename: img.file.url for img in self.images.all()}
+
+        def _replace(m: re.Match) -> str:
+            before_src, filename, after_src = m.group(1), m.group(2), m.group(3)
+            if filename in images_map:
+                return f'<img{before_src}src="{images_map[filename]}"{after_src}>'
+            return (
+                '<span class="badge bg-secondary border">⚠ Image non disponible</span>'
+            )
+
+        return _PLUGINFILE_IMG_RE.sub(_replace, self.text)
+
+
+class QuestionImage(models.Model):
+    question = models.ForeignKey(
+        Question, on_delete=models.CASCADE, related_name="images"
+    )
+    moodle_filename = models.CharField(max_length=255)
+    file = models.FileField(upload_to="question_images/")
+
+    class Meta:
+        unique_together = [("question", "moodle_filename")]
+        verbose_name = "Image de question"
+        verbose_name_plural = "Images de questions"
+
+    def __str__(self) -> str:
+        return f"Image {self.moodle_filename} pour Q#{self.question_id}"
 
 
 class Answer(models.Model):

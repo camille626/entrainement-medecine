@@ -9,6 +9,7 @@ from .models import (
     Errata,
     Notification,
     Question,
+    QuestionImage,
     QuizSession,
     RegistrationRequest,
     Semester,
@@ -49,6 +50,12 @@ class TagAdmin(admin.ModelAdmin):
     raw_id_fields = ["parent_ec"]
 
 
+class QuestionImageInline(admin.TabularInline):
+    model = QuestionImage
+    extra = 1
+    fields = ["moodle_filename", "file"]
+
+
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):
     list_display = ["moodle_id", "category", "qtype"]
@@ -56,6 +63,7 @@ class QuestionAdmin(admin.ModelAdmin):
     search_fields = ["text", "moodle_id"]
     raw_id_fields = ["category"]
     filter_horizontal = ["tags"]
+    inlines = [QuestionImageInline]
 
 
 @admin.register(Answer)

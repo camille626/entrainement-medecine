@@ -13,8 +13,9 @@
 <div class="alert alert-danger">{{ error }}</div>
 {% endif %}
 
-<form method="post">
+<form method="post" enctype="multipart/form-data">
   {% csrf_token %}
+  {% load qcm_extras %}
 
   <div class="card mb-3">
     <div class="card-header fw-bold">Informations générales</div>
@@ -22,8 +23,10 @@
 
       <div class="row g-3 mb-3">
         <div class="col-md-6">
-          <label class="form-label fw-semibold small">Cours</label>
-          <select id="course-select" class="form-select form-select-sm"
+          <label class="form-label fw-semibold small">
+            Cours <span class="text-danger">*</span>
+          </label>
+          <select id="course-select" class="form-select form-select-sm" required
                   onchange="filterCategories(this.value)">
             <option value="">— Sélectionner un cours —</option>
             {% for c in courses %}
@@ -35,9 +38,7 @@
           </select>
         </div>
         <div class="col-md-6">
-          <label for="id_category" class="form-label fw-semibold small">
-            Catégorie <span class="text-danger">*</span>
-          </label>
+          <label for="id_category" class="form-label fw-semibold small">Catégorie</label>
           <select name="category" id="id_category" class="form-select form-select-sm" required>
             <option value="">— Sélectionner une catégorie —</option>
             {% for cat in categories %}
@@ -75,6 +76,69 @@
         <textarea name="feedback" id="id_feedback" rows="3"
                   class="form-control form-control-sm"
                   placeholder="Correction affichée aux étudiants après réponse…">{% if question %}{{ question.feedback|striptags }}{% endif %}</textarea>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Images -->
+  <div class="card mb-3">
+    <div class="card-header fw-bold">Images <span class="text-muted fw-normal small">(optionnel)</span></div>
+    <div class="card-body">
+
+      {% if question and question.images.exists %}
+      <div class="mb-3">
+        <div class="text-muted small fw-semibold mb-2">Images déjà uploadées :</div>
+        {% for img in question.images.all %}
+        <div class="d-flex align-items-center gap-2 mb-1 p-2 rounded border bg-light">
+          <span class="small flex-grow-1">
+            <code>@@PLUGINFILE@@/{{ img.moodle_filename }}</code>
+            <a href="{{ img.file.url }}" target="_blank" class="ms-2 small">Voir ↗</a>
+          </span>
+          <div class="form-check mb-0">
+            <input class="form-check-input" type="checkbox"
+                   name="delete_image_{{ img.pk }}"
+                   id="del_img_{{ img.pk }}">
+            <label class="form-check-label small text-danger" for="del_img_{{ img.pk }}">
+              Supprimer
+            </label>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <div class="mb-2">
+        <div class="text-muted small fw-semibold mb-2">
+          {% if question and question.images.exists %}Ajouter une image :{% else %}Uploader une image :{% endif %}
+        </div>
+        <div class="row g-2 align-items-start">
+          <div class="col-md-4">
+            <label class="form-label small mb-1">Nom du fichier Moodle</label>
+            <input type="text" name="new_image_filename"
+                   class="form-control form-control-sm"
+                   placeholder="ex: schema_anatomique.png"
+                   value="{{ question.text|pluginfile_names|first }}">
+            <div class="text-muted" style="font-size:0.75rem; margin-top:3px;">
+              Correspond à <code>@@PLUGINFILE@@/<strong>ce_nom</strong></code>
+            </div>
+          </div>
+          <div class="col-md-5">
+            <label class="form-label small mb-1">Fichier image</label>
+            <input type="file" name="new_image_file" id="new_image_file"
+                   accept="image/*"
+                   class="form-control form-control-sm"
+                   onchange="previewImage(this)">
+            <div id="image-preview-zone" class="mt-2 d-none">
+              <img id="image-preview" src="" alt="preview"
+                   style="max-height:120px; max-width:100%; border-radius:4px; border:1px solid #dee2e6;">
+              <div class="mt-1">
+                <button type="button" class="btn btn-sm btn-outline-danger"
+                        onclick="clearImagePreview()">✕ Annuler</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
     </div>
@@ -261,8 +325,34 @@ function filterCategories(courseId) {
     if (!opt.value) return;
     opt.style.display = (!courseId || opt.dataset.course === courseId) ? '' : 'none';
   });
+  // Reset category selection when course changes
+  if (!courseId) select.value = '';
 }
 const courseSelect = document.getElementById('course-select');
 if (courseSelect.value) filterCategories(courseSelect.value);
+
+function previewImage(input) {
+  const zone = document.getElementById('image-preview-zone');
+  const img  = document.getElementById('image-preview');
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      img.src = e.target.result;
+      zone.classList.remove('d-none');
+    };
+    reader.readAsDataURL(input.files[0]);
+  } else {
+    clearImagePreview();
+  }
+}
+
+function clearImagePreview() {
+  const input = document.getElementById('new_image_file');
+  const zone  = document.getElementById('image-preview-zone');
+  const img   = document.getElementById('image-preview');
+  input.value = '';
+  img.src = '';
+  zone.classList.add('d-none');
+}
 </script>
 {% endblock content %}

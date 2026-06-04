@@ -16,6 +16,7 @@ from .models import (
     Course,
     CoursePackage,
     Question,
+    QuestionImage,
     RegistrationRequest,
     Semester,
     UserEnrollment,
@@ -388,6 +389,15 @@ class AdminQuestionAddView(StaffRequiredMixin, View):
             for answer in formset.deleted_objects:
                 answer.delete()
 
+        image_file = request.FILES.get("new_image_file")
+        image_filename = request.POST.get("new_image_filename", "").strip()
+        if image_file and image_filename:
+            QuestionImage.objects.create(
+                question=question,
+                moodle_filename=image_filename,
+                file=image_file,
+            )
+
         return redirect("qcm:admin_questions")
 
 
@@ -455,6 +465,7 @@ class AdminQuestionEditView(StaffRequiredMixin, View):
             "direct_chapters": direct_chapters,
             "selected_tag_ids": selected_tag_ids,
             "action": "edit",
+            "existing_images": list(question.images.all()),
             **extra,
         }
 
@@ -498,6 +509,22 @@ class AdminQuestionEditView(StaffRequiredMixin, View):
                 answer.save()
             for answer in formset.deleted_objects:
                 answer.delete()
+
+        # Handle image deletions
+        for img in question.images.all():
+            if request.POST.get(f"delete_image_{img.pk}"):
+                img.file.delete(save=False)
+                img.delete()
+
+        # Handle new image upload
+        image_file = request.FILES.get("new_image_file")
+        image_filename = request.POST.get("new_image_filename", "").strip()
+        if image_file and image_filename:
+            QuestionImage.objects.update_or_create(
+                question=question,
+                moodle_filename=image_filename,
+                defaults={"file": image_file},
+            )
 
         return redirect(back_url)
 

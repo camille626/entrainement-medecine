@@ -18,6 +18,7 @@ from .models import (
     Course,
     Errata,
     Question,
+    QuestionImage,
     QuizSession,
     QuizSessionQuestion,
     RegistrationRequest,
@@ -1306,6 +1307,13 @@ class HistoryView(LoginRequiredMixin, View):
         )
 
 
+def _errata_list_redirect(request):
+    """Redirect back to errata list, preserving filters passed as 'back' POST param."""
+    back = request.POST.get("back", "")
+    url = "/errata/?" + back if back else "/errata/"
+    return redirect(url)
+
+
 class ErrataAcceptView(LoginRequiredMixin, View):
     """Staff-only: accept an errata and apply changes."""
 
@@ -1401,7 +1409,7 @@ class ErrataAcceptView(LoginRequiredMixin, View):
             ),
             link="/",
         )
-        return redirect("qcm:errata_list")
+        return _errata_list_redirect(request)
 
 
 class ErrataRejectView(LoginRequiredMixin, View):
@@ -1420,7 +1428,7 @@ class ErrataRejectView(LoginRequiredMixin, View):
         errata.resolved_at = timezone.now()
         errata.admin_note = request.POST.get("admin_note", "")
         errata.save()
-        return redirect("qcm:errata_list")
+        return _errata_list_redirect(request)
 
 
 class ErrataFeedbackView(LoginRequiredMixin, View):
@@ -1434,7 +1442,7 @@ class ErrataFeedbackView(LoginRequiredMixin, View):
         errata = get_object_or_404(Errata, pk=pk)
         errata.question.feedback = request.POST.get("general_feedback", "")
         errata.question.save(update_fields=["feedback"])
-        return redirect("qcm:errata_list")
+        return _errata_list_redirect(request)
 
 
 class NotificationMarkReadView(LoginRequiredMixin, View):
@@ -1489,6 +1497,8 @@ class ErrataListView(LoginRequiredMixin, View):
                 ).select_related("course")
             ]
 
+        back_params = request.GET.urlencode()
+
         return render(
             request,
             self.template_name,
@@ -1498,6 +1508,7 @@ class ErrataListView(LoginRequiredMixin, View):
                 "selected_course": course_filter,
                 "selected_status": status_filter,
                 "status_choices": Errata.STATUS_CHOICES,
+                "back_params": back_params,
             },
         )
 
@@ -2001,3 +2012,39 @@ class AdminQuestionsConfirmView(LoginRequiredMixin, View):
 
         request.session.pop("upload_questions", None)
         return redirect(f"/questions/upload/?success={created}")
+
+
+class ErrataUploadImageView(LoginRequiredMixin, View):
+    """Staff-only: upload an image for an errata of type IMAGE and accept it."""
+
+    def post(self, request, pk):
+        from django.http import Http404
+        from django.utils import timezone
+
+        if not request.user.is_staff:
+            raise Http404
+        errata = get_object_or_404(Errata, pk=pk)
+        image_file = request.FILES.get("image_file")
+        moodle_filename = request.POST.get("moodle_filename", "").strip()
+        if image_file and moodle_filename:
+            QuestionImage.objects.update_or_create(
+                question=errata.question,
+                moodle_filename=moodle_filename,
+                defaults={"file": image_file},
+            )
+        errata.status = Errata.ACCEPTED
+        errata.resolved_by = request.user
+        errata.resolved_at = timezone.now()
+        errata.save()
+
+        from .models import Notification
+
+        Notification.objects.create(
+            user=errata.reported_by,
+            message=(
+                f"✅ Votre signalement « {errata.get_error_type_display()} » "
+                f"a été accepté — merci pour votre contribution !"
+            ),
+            link="/",
+        )
+        return _errata_list_redirect(request)
