@@ -1480,10 +1480,13 @@ class ErrataListView(LoginRequiredMixin, View):
 
         course_filter = request.GET.get("course")
         status_filter = request.GET.get("status", "pending")  # default: pending
+        type_filter = request.GET.get("error_type")
         if course_filter:
             qs = qs.filter(question__category__course_id=course_filter)
         if status_filter:
             qs = qs.filter(status=status_filter)
+        if type_filter:
+            qs = qs.filter(error_type=type_filter)
 
         from .models import UserEnrollment
 
@@ -1507,6 +1510,8 @@ class ErrataListView(LoginRequiredMixin, View):
                 "courses": courses,
                 "selected_course": course_filter,
                 "selected_status": status_filter,
+                "selected_type": type_filter,
+                "type_choices": Errata.TYPE_CHOICES,
                 "status_choices": Errata.STATUS_CHOICES,
                 "back_params": back_params,
             },

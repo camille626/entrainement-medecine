@@ -31,7 +31,13 @@
         <option value="rejected" {% if selected_status == 'rejected' %}selected{% endif %}>Refusés</option>
         <option value="">Tous les statuts</option>
       </select>
-      {% if selected_course %}<a href="/errata/" class="btn btn-sm btn-outline-secondary">✕ Réinitialiser</a>{% endif %}
+      <select name="error_type" class="form-select form-select-sm" style="max-width:220px;" onchange="this.form.submit()">
+        <option value="">Tous les types</option>
+        {% for value, label in type_choices %}
+        <option value="{{ value }}" {% if selected_type == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      {% if selected_course or selected_type %}<a href="/errata/" class="btn btn-sm btn-outline-secondary">✕ Réinitialiser</a>{% endif %}
     </form>
 
     {% if erratas %}
