@@ -93,6 +93,7 @@ urlpatterns = [
         views.AdminQuestionsConfirmView.as_view(),
         name="questions_confirm",
     ),
+    path("profil/", views.ProfileView.as_view(), name="profile"),
     path("inscription/", views.InscriptionView.as_view(), name="inscription"),
     path(
         "inscription/merci/",

@@ -1,6 +1,7 @@
 from django import forms
+from django.contrib.auth.models import User
 
-from .models import Course, RegistrationRequest, Tag
+from .models import Course, RegistrationRequest, Tag, UserProfile
 
 
 class SessionConfigForm(forms.Form):
@@ -141,3 +142,51 @@ class InscriptionForm(forms.Form):
             if cert.size > 5 * 1024 * 1024:  # 5 MB
                 raise forms.ValidationError("Le fichier ne doit pas dépasser 5 Mo.")
         return cert
+
+
+class ProfileForm(forms.Form):
+    first_name = forms.CharField(max_length=150, required=False, label="Prénom")
+    last_name = forms.CharField(max_length=150, required=False, label="Nom")
+    email = forms.EmailField(label="Adresse e-mail")
+    photo = forms.ImageField(
+        required=False,
+        label="Photo de profil",
+        widget=forms.ClearableFileInput(attrs={"accept": "image/*"}),
+    )
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._user = user
+        if user is not None:
+            self.fields["first_name"].initial = user.first_name
+            self.fields["last_name"].initial = user.last_name
+            self.fields["email"].initial = user.email
+
+    def clean_email(self):
+        email = self.cleaned_data["email"]
+        if (
+            self._user is not None
+            and User.objects.filter(email=email).exclude(pk=self._user.pk).exists()
+        ):
+            raise forms.ValidationError("Cette adresse e-mail est déjà utilisée.")
+        return email
+
+    def clean_photo(self):
+        photo = self.cleaned_data.get("photo")
+        if photo and hasattr(photo, "size") and photo.size > 2 * 1024 * 1024:
+            raise forms.ValidationError("La photo ne doit pas dépasser 2 Mo.")
+        return photo
+
+    def save(self):
+        u = self._user
+        assert u is not None
+        u.first_name = self.cleaned_data["first_name"]
+        u.last_name = self.cleaned_data["last_name"]
+        u.email = self.cleaned_data["email"]
+        u.save(update_fields=["first_name", "last_name", "email"])
+        photo = self.cleaned_data.get("photo")
+        if photo:
+            profile, _ = UserProfile.objects.get_or_create(user=u)
+            profile.photo = photo
+            profile.save()
+        return u

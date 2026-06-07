@@ -529,3 +529,15 @@ class ImageDropZone(models.Model):
 
     def __str__(self) -> str:
         return f"Zone #{self.no} '{self.correct_label}' (Q#{self.question_id})"
+
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
+    photo = models.ImageField(upload_to="profile_photos/", blank=True, null=True)
+
+    class Meta:
+        verbose_name = "Profil utilisateur"
+        verbose_name_plural = "Profils utilisateurs"
+
+    def __str__(self) -> str:
+        return f"Profil de {self.user.username}"

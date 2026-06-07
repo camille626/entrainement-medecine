@@ -43,5 +43,20 @@ urlpatterns = [
         ),
         name="password_reset_complete",
     ),
+    path(
+        "profil/mot-de-passe/",
+        auth_views.PasswordChangeView.as_view(
+            template_name="registration/password_change.html",
+            success_url="/profil/?saved=1",
+        ),
+        name="password_change",
+    ),
+    path(
+        "profil/mot-de-passe/confirme/",
+        auth_views.PasswordChangeDoneView.as_view(
+            template_name="registration/password_change_done.html"
+        ),
+        name="password_change_done",
+    ),
     path("", include("qcm.urls")),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
