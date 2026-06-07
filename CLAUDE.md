@@ -40,7 +40,7 @@ Plateforme web de QCMs interactifs pour l'apprentissage des cours de médecine (
 │   ├── migrations/        # Migrations de base de données
 │   ├── admin.py           # Interface d'administration
 │   ├── apps.py
-│   └── models.py          # Course, Category, Question, Answer, QuizSession, UserAnswer, ImageDragItem, ImageDropZone
+│   └── models.py          # Course, Category, Question, Answer, QuizSession, UserAnswer, UserProfile, ImageDragItem, ImageDropZone
 ├── src/                   # Code source Python (utilitaires, scripts)
 ├── tests/                 # Tests unitaires et d'intégration
 │   └── test_models.py     # Tests des modèles Django (18 tests)
@@ -128,6 +128,8 @@ uv run --active python manage.py seed_image_erratas [--dry-run] [--reporter <use
 # /admin-site/cours/         → gestion des cours et semestres
 # /admin-site/tags/          → gestion des tags
 # /errata/<pk>/upload-image/ → upload image pour un errata type IMAGE (POST, staff)
+# /profil/                  → page profil utilisateur (GET/POST : infos + photo)
+# /profil/mot-de-passe/     → changement de mot de passe (Django PasswordChangeView)
 ```
 
 **Important** : toujours utiliser `uv run --active` pour éviter de créer un environnement `.venv` parasite.

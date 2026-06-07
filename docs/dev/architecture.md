@@ -53,6 +53,7 @@ StudyYear (P2, P3...)
 
 ```
 User
+  ├── UserProfile (photo de profil — OneToOne)
   └── QuizSession (mode: training | review, course optionnel)
         └── UserAnswer (question, answer choisie, is_correct, timestamp)
 ```
@@ -101,6 +102,15 @@ User
 | `file` | FileField | Fichier stocké sous `MEDIA_ROOT/question_images/` |
 
 Contrainte `unique_together = (question, moodle_filename)`. La méthode `Question.render_text()` résout dynamiquement les `@@PLUGINFILE@@/filename` en URLs locales lors du rendu HTML.
+
+**`UserProfile`** — profil étendu d'un utilisateur (OneToOne avec User)
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `user` | OneToOneField → User (CASCADE) | Utilisateur Django (related_name `profile`) |
+| `photo` | ImageField (nullable) | Photo de profil stockée sous `MEDIA_ROOT/profile_photos/` |
+
+Créé à la demande via `get_or_create` dans `ProfileView`. Accessible depuis les templates via `user.profile.photo` — Django intercepte silencieusement `RelatedObjectDoesNotExist` (hérite de `AttributeError`), ce qui rend `{% if user.profile.photo %}` safe même sans profil existant.
 
 **`QuizSession`** — une session d'entraînement d'un utilisateur
 

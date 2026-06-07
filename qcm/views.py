@@ -9,10 +9,11 @@ from typing import TYPE_CHECKING
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views import View
 from django.views.generic import TemplateView
 
-from .forms import InscriptionForm, SessionConfigForm
+from .forms import InscriptionForm, ProfileForm, SessionConfigForm
 from .models import (
     Answer,
     Course,
@@ -27,6 +28,7 @@ from .models import (
     Tag,
     TagCategory,
     UserAnswer,
+    UserProfile,
 )
 
 
@@ -2177,3 +2179,67 @@ class ErrataUploadImageView(LoginRequiredMixin, View):
             link="/",
         )
         return _errata_list_redirect(request)
+
+
+# ---------------------------------------------------------------------------
+# Profil utilisateur
+# ---------------------------------------------------------------------------
+
+
+class ProfileView(LoginRequiredMixin, View):
+    template_name = "qcm/profile.html"
+
+    def _build_context(self, request, form=None):
+        from collections import defaultdict
+
+        user = request.user
+        if form is None:
+            form = ProfileForm(user=user)
+
+        reg = (
+            RegistrationRequest.objects.filter(
+                email=user.email, status=RegistrationRequest.ACCEPTED
+            )
+            .order_by("-created_at")
+            .first()
+        )
+
+        # Même calcul que StatsView : grouper par (session, question)
+        raw = list(
+            UserAnswer.objects.filter(session__user=user).values(
+                "session_id", "question_id", "is_correct", "answer__fraction"
+            )
+        )
+        pair_fracs: dict = defaultdict(list)
+        for r in raw:
+            pair_fracs[(r["session_id"], r["question_id"])].append(
+                _ua_fraction(r["answer__fraction"], r["is_correct"])
+            )
+        q_scores = [max(0.0, min(1.0, sum(fracs))) for fracs in pair_fracs.values()]
+        total_questions = len(q_scores)
+        avg_score = (
+            round(sum(q_scores) / total_questions * 20, 1) if total_questions else None
+        )
+
+        user_profile, _ = UserProfile.objects.get_or_create(user=user)
+
+        return {
+            "form": form,
+            "reg": reg,
+            "total_questions": total_questions,
+            "avg_score": avg_score,
+            "saved": request.GET.get("saved") == "1",
+            "user_profile": user_profile,
+        }
+
+    def get(self, request):
+        return render(request, self.template_name, self._build_context(request))
+
+    def post(self, request):
+        form = ProfileForm(request.POST, request.FILES, user=request.user)
+        if not form.is_valid():
+            return render(
+                request, self.template_name, self._build_context(request, form=form)
+            )
+        form.save()
+        return redirect(f"{reverse('qcm:profile')}?saved=1")
