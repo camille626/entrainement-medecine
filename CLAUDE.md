@@ -40,10 +40,12 @@ Plateforme web de QCMs interactifs pour l'apprentissage des cours de médecine (
 │   ├── migrations/        # Migrations de base de données
 │   ├── admin.py           # Interface d'administration
 │   ├── apps.py
-│   └── models.py          # Course, Category, Question, Answer, QuizSession, UserAnswer, UserProfile, ImageDragItem, ImageDropZone
+│   ├── models.py          # Course, Category, Question, Answer, QuizSession, UserAnswer, UserProfile, ImageDragItem, ImageDropZone, Trophy, UserTrophy, LoginEvent
+│   └── trophies.py        # Service d'attribution des trophées (check_and_award_trophies, award_login_trophies)
 ├── src/                   # Code source Python (utilitaires, scripts)
 ├── tests/                 # Tests unitaires et d'intégration
-│   └── test_models.py     # Tests des modèles Django (18 tests)
+│   ├── test_models.py     # Tests des modèles Django
+│   └── test_trophies.py   # Tests du système de trophées (27 tests)
 ├── manage.py              # Point d'entrée Django
 ├── .gitignore
 ├── .pre-commit-config.yaml
@@ -114,6 +116,9 @@ uv run --active python manage.py find_missing_images
 # --dry-run pour prévisualiser, --reporter <username> pour choisir le reporter
 uv run --active python manage.py seed_image_erratas [--dry-run] [--reporter <username>]
 
+# Initialiser ou mettre à jour les trophées (idempotent via get_or_create sur le nom)
+uv run --active python manage.py seed_trophies
+
 # URLs de l'application
 # /                          → accueil (cours par semestre)
 # /entrainement/             → configuration d'une session
@@ -128,7 +133,7 @@ uv run --active python manage.py seed_image_erratas [--dry-run] [--reporter <use
 # /admin-site/cours/         → gestion des cours et semestres
 # /admin-site/tags/          → gestion des tags
 # /errata/<pk>/upload-image/ → upload image pour un errata type IMAGE (POST, staff)
-# /profil/                  → page profil utilisateur (GET/POST : infos + photo)
+# /profil/                  → page profil utilisateur (GET/POST : infos + photo + onglet trophées)
 # /profil/mot-de-passe/     → changement de mot de passe (Django PasswordChangeView)
 ```
 

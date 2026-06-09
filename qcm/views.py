@@ -27,9 +27,12 @@ from .models import (
     StudyYear,
     Tag,
     TagCategory,
+    Trophy,
     UserAnswer,
     UserProfile,
+    UserTrophy,
 )
+from .trophies import check_and_award_trophies
 
 
 # Fraction choices for the question upload preview form
@@ -585,6 +588,8 @@ class CheckView(LoginRequiredMixin, View):
         else:
             status = "incorrect"
 
+        check_and_award_trophies(request, session)
+
         total = session.session_questions.count()
         new_answered = set(
             session.user_answers.values_list("question_id", flat=True).distinct()
@@ -637,6 +642,7 @@ class CheckView(LoginRequiredMixin, View):
             )
             score = matched_answer.fraction
             status = "correct" if matched_answer.is_correct else "incorrect"
+            check_and_award_trophies(request, session)
             new_answered = set(
                 session.user_answers.values_list("question_id", flat=True).distinct()
             )
@@ -738,6 +744,8 @@ class CheckView(LoginRequiredMixin, View):
         else:
             status = "incorrect"
 
+        check_and_award_trophies(request, session)
+
         total = session.session_questions.count()
         new_answered = set(
             session.user_answers.values_list("question_id", flat=True).distinct()
@@ -814,6 +822,7 @@ class CheckQROCSelfView(LoginRequiredMixin, View):
 
         score = 1.0 if is_correct else 0.0
         status = "correct" if is_correct else "incorrect"
+        check_and_award_trophies(request, session)
         total = session.session_questions.count()
         new_answered = set(
             session.user_answers.values_list("question_id", flat=True).distinct()
@@ -2223,6 +2232,55 @@ class ProfileView(LoginRequiredMixin, View):
 
         user_profile, _ = UserProfile.objects.get_or_create(user=user)
 
+        # Trophées
+        from django.contrib.auth.models import User as AuthUser
+
+        rarity_colors = {
+            Trophy.GOLD: "#FFD700",
+            Trophy.SILVER: "#B0B0B0",
+            Trophy.BRONZE: "#CD7F32",
+        }
+        locked_color = "#2a2a2a"
+
+        from django.db.models import Case, IntegerField, When
+
+        year_order = Case(
+            When(study_year=Trophy.YEAR_ALL, then=0),
+            When(study_year=Trophy.YEAR_P2, then=1),
+            When(study_year=Trophy.YEAR_D1, then=2),
+            default=3,
+            output_field=IntegerField(),
+        )
+        all_trophies = Trophy.objects.select_related("condition_tag").order_by(
+            year_order, "name"
+        )
+        earned_map: dict = {
+            ut.trophy_id: ut.unlocked_at
+            for ut in UserTrophy.objects.filter(user=user).select_related("trophy")
+        }
+        total_users = max(1, AuthUser.objects.filter(is_active=True).count())
+        trophy_data = []
+        year_label_map = dict(Trophy.YEAR_CHOICES)
+        for t in all_trophies:
+            earned = t.pk in earned_map
+            unlock_count = UserTrophy.objects.filter(trophy=t).count()
+            pct = round(unlock_count / total_users * 100, 1)
+            icon_color = rarity_colors.get(t.rarity, "#888") if earned else locked_color
+            year_label = year_label_map.get(t.study_year, "Non classé")
+            is_hidden = t.hidden and not earned
+            trophy_data.append(
+                {
+                    "trophy": t,
+                    "earned": earned,
+                    "pct": pct,
+                    "earned_at": earned_map.get(t.pk),
+                    "icon_color": icon_color,
+                    "year_label": year_label,
+                    "is_hidden": is_hidden,
+                }
+            )
+        earned_count = sum(1 for d in trophy_data if d["earned"])
+
         return {
             "form": form,
             "reg": reg,
@@ -2230,6 +2288,9 @@ class ProfileView(LoginRequiredMixin, View):
             "avg_score": avg_score,
             "saved": request.GET.get("saved") == "1",
             "user_profile": user_profile,
+            "trophy_data": trophy_data,
+            "earned_count": earned_count,
+            "total_trophies": len(trophy_data),
         }
 
     def get(self, request):

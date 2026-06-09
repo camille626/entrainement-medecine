@@ -167,6 +167,33 @@
       new bootstrap.Tooltip(el, { placement: 'bottom' });
     });
   </script>
+
+  {% if messages %}
+  {% for message in messages %}{% if 'trophy' in message.tags %}
+  <div class="toast-container position-fixed top-0 start-0 p-3" style="z-index:1200">
+    <div id="trophy-toast-{{ forloop.counter }}"
+         class="toast align-items-center text-bg-dark border-0 shadow"
+         role="alert" aria-live="assertive" aria-atomic="true"
+         data-bs-delay="3000">
+      <div class="d-flex">
+        <div class="toast-body">
+          <div class="fw-semibold mb-1">🏆 Trophée débloqué !</div>
+          <div>{{ message.message }}</div>
+        </div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto"
+                data-bs-dismiss="toast" aria-label="Fermer"></button>
+      </div>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var el = document.getElementById('trophy-toast-{{ forloop.counter }}');
+      if (el) { new bootstrap.Toast(el).show(); }
+    })();
+  </script>
+  {% endif %}{% endfor %}
+  {% endif %}
+
   {% block extra_scripts %}{% endblock %}
 </body>
 
