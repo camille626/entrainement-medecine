@@ -541,3 +541,123 @@ class UserProfile(models.Model):
 
     def __str__(self) -> str:
         return f"Profil de {self.user.username}"
+
+
+class Trophy(models.Model):
+    BRONZE = "bronze"
+    SILVER = "silver"
+    GOLD = "gold"
+    RARITY_CHOICES = [
+        (BRONZE, "Bronze"),
+        (SILVER, "Argent"),
+        (GOLD, "Or"),
+    ]
+
+    QUESTIONS_COUNT = "questions_count"
+    CORRECT_COUNT = "correct_count"
+    QUESTIONS_COUNT_TAG = "questions_count_tag"
+    CORRECT_COUNT_TAG = "correct_count_tag"
+    PERFECT_SESSION = "perfect_session"
+    SESSIONS_COUNT = "sessions_count"
+    ERRATAS_ACCEPTED = "erratas_accepted"
+    ZERO_SCORE_COUNT = "zero_score_count"
+    ZERO_SCORE_COUNT_TAG = "zero_score_count_tag"
+    LOGIN_COUNT = "login_count"
+    CONSECUTIVE_DAYS = "consecutive_days"
+    CONDITION_CHOICES = [
+        (QUESTIONS_COUNT, "Nombre de questions réalisées"),
+        (CORRECT_COUNT, "Nombre de bonnes réponses"),
+        (QUESTIONS_COUNT_TAG, "Nombre de questions réalisées (tag)"),
+        (CORRECT_COUNT_TAG, "Nombre de bonnes réponses (tag)"),
+        (PERFECT_SESSION, "Session parfaite (20/20)"),
+        (SESSIONS_COUNT, "Nombre de sessions complétées"),
+        (ERRATAS_ACCEPTED, "Erratas acceptés par l'admin"),
+        (ZERO_SCORE_COUNT, "Questions avec score nul (0 point)"),
+        (ZERO_SCORE_COUNT_TAG, "Questions avec score nul (0 point) — tag"),
+        (LOGIN_COUNT, "Nombre de connexions à la plateforme"),
+        (CONSECUTIVE_DAYS, "Jours de connexion consécutifs"),
+    ]
+
+    YEAR_ALL = "ALL"
+    YEAR_P2 = "P2"
+    YEAR_D1 = "D1"
+    YEAR_CHOICES = [
+        (YEAR_ALL, "Transversal"),
+        (YEAR_P2, "P2"),
+        (YEAR_D1, "D1"),
+    ]
+
+    name = models.CharField(max_length=100, unique=True, verbose_name="Nom")
+    description = models.TextField(verbose_name="Description")
+    icon_emoji = models.CharField(max_length=10, default="🏆", verbose_name="Emoji")
+    rarity = models.CharField(
+        max_length=10,
+        choices=RARITY_CHOICES,
+        verbose_name="Rareté",
+    )
+    study_year = models.CharField(
+        max_length=5,
+        choices=YEAR_CHOICES,
+        blank=True,
+        default="",
+        verbose_name="Année",
+    )
+    hidden = models.BooleanField(
+        default=False,
+        verbose_name="Masqué avant obtention",
+    )
+    condition_type = models.CharField(
+        max_length=30,
+        choices=CONDITION_CHOICES,
+        verbose_name="Type de condition",
+    )
+    condition_value = models.IntegerField(default=1, verbose_name="Valeur seuil")
+    condition_tag = models.ForeignKey(
+        Tag,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="trophies",
+        verbose_name="Tag (pour trophées par EC)",
+    )
+
+    class Meta:
+        verbose_name = "Trophée"
+        verbose_name_plural = "Trophées"
+
+    def __str__(self) -> str:
+        return f"{self.icon_emoji} {self.name} ({self.get_rarity_display()})"
+
+
+class UserTrophy(models.Model):
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="user_trophies"
+    )
+    trophy = models.ForeignKey(
+        Trophy, on_delete=models.CASCADE, related_name="user_trophies"
+    )
+    unlocked_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [("user", "trophy")]
+        ordering = ["-unlocked_at"]
+        verbose_name = "Trophée utilisateur"
+        verbose_name_plural = "Trophées utilisateurs"
+
+    def __str__(self) -> str:
+        return f"{self.user.username} — {self.trophy.name}"
+
+
+class LoginEvent(models.Model):
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="login_events"
+    )
+    logged_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Connexion"
+        verbose_name_plural = "Connexions"
+        indexes = [models.Index(fields=["user", "logged_at"])]
+
+    def __str__(self) -> str:
+        return f"{self.user.username} — {self.logged_at.date()}"

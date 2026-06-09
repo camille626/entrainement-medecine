@@ -54,9 +54,26 @@ StudyYear (P2, P3...)
 ```
 User
   ├── UserProfile (photo de profil — OneToOne)
+  ├── LoginEvent (logged_at — enregistré via signal user_logged_in)
+  ├── UserTrophy (trophy, unlocked_at — unique_together user+trophy)
   └── QuizSession (mode: training | review, course optionnel)
         └── UserAnswer (question, answer choisie, is_correct, timestamp)
 ```
+
+### Système de trophées
+
+`Trophy` — définition d'un trophée : `name` (unique), `rarity` (bronze/silver/gold), `study_year` (ALL/P2/D1/blank), `hidden` (bool), `condition_type` (11 types), `condition_value` (seuil entier), `condition_tag` (FK → Tag, nullable).
+
+`UserTrophy` — attribution à un utilisateur, idempotente via `get_or_create`.
+
+`LoginEvent` — une ligne par connexion. Le signal `user_logged_in` dans `qcm/apps.py` crée l'entrée et appelle `award_login_trophies(request, user)`.
+
+Le service `qcm/trophies.py` expose deux fonctions publiques :
+
+- `check_and_award_trophies(request, session)` — appelé après chaque soumission de réponse, vérifie tous les types de conditions.
+- `award_login_trophies(request, user)` — appelé au login, vérifie uniquement `login_count` et `consecutive_days`.
+
+Les trophées débloqués génèrent un message Django `extra_tags="trophy"` consommé par le toast Bootstrap dans `base.html`.
 
 ### Détail des modèles
 

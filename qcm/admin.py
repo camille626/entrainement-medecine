@@ -7,6 +7,7 @@ from .models import (
     Course,
     CoursePackage,
     Errata,
+    LoginEvent,
     Notification,
     Question,
     QuestionImage,
@@ -16,8 +17,10 @@ from .models import (
     StudyYear,
     Tag,
     TagCategory,
+    Trophy,
     UserAnswer,
     UserEnrollment,
+    UserTrophy,
 )
 
 
@@ -362,3 +365,47 @@ class ErrataAdmin(admin.ModelAdmin):
             resolved_at=timezone.now(),
         )
         self.message_user(request, f"{count} errata(s) refusé(s).")
+
+
+@admin.register(Trophy)
+class TrophyAdmin(admin.ModelAdmin):
+    list_display = [
+        "icon_emoji",
+        "name",
+        "description",
+        "rarity",
+        "study_year",
+        "hidden",
+        "condition_type",
+        "condition_value",
+        "condition_tag",
+    ]
+    list_display_links = ["icon_emoji"]
+    list_editable = [
+        "name",
+        "description",
+        "rarity",
+        "study_year",
+        "hidden",
+        "condition_type",
+        "condition_value",
+    ]
+    list_filter = ["rarity", "study_year", "hidden", "condition_type"]
+    search_fields = ["name", "description"]
+
+
+@admin.register(UserTrophy)
+class UserTrophyAdmin(admin.ModelAdmin):
+    list_display = ["user", "trophy", "unlocked_at"]
+    list_filter = ["trophy__rarity"]
+    search_fields = ["user__username", "trophy__name"]
+    raw_id_fields = ["user", "trophy"]
+
+
+@admin.register(LoginEvent)
+class LoginEventAdmin(admin.ModelAdmin):
+    list_display = ["user", "logged_at"]
+    list_filter = ["logged_at"]
+    search_fields = ["user__username"]
+    raw_id_fields = ["user"]
+    date_hierarchy = "logged_at"
