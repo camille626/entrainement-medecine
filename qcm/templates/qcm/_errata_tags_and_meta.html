@@ -17,7 +17,7 @@
   <span class="fw-semibold small">Type d'errata :</span>
   <span class="small">{{ e.get_error_type_display }}</span>
 </div>
-{% if e.description %}
+{% if e.description and e.error_type != 'image' %}
 <div class="mb-2">
   <span class="fw-semibold small">Description signalée :</span>
   <span class="small text-muted">{{ e.description }}</span>
