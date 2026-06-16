@@ -316,7 +316,7 @@
               <input type="hidden" name="back" value="{{ back_params }}">
                 <button type="submit" class="btn btn-sm btn-success">✅ Accepter la suggestion</button>
               </form>
-              {% else %}
+              {% elif e.error_type != 'image' %}
               <form method="post" action="/errata/{{ e.pk }}/accept/" class="m-0">
                 {% csrf_token %}
               <input type="hidden" name="back" value="{{ back_params }}">
