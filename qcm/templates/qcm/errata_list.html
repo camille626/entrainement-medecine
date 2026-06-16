@@ -277,7 +277,7 @@
             </div>
             {% endif %}
 
-            {% if e.description %}
+            {% if e.description and e.error_type != 'image' %}
             <div class="mb-2">
               <span class="fw-semibold small">Description :</span>
               <span class="small">{{ e.description }}</span>
@@ -293,17 +293,9 @@
                   enctype="multipart/form-data" class="mb-2">
               {% csrf_token %}
               <input type="hidden" name="back" value="{{ back_params }}">
-              <div class="mb-2">
-                <label class="small fw-semibold d-block mb-1">Nom du fichier Moodle :</label>
-                <input type="text" name="moodle_filename"
-                       class="form-control form-control-sm"
-                       placeholder="ex: schema_anatomique.png"
-                       value="{{ e.question.text|pluginfile_names|first }}"
-                       required style="max-width:300px;">
-                <div class="text-muted small mt-1">
-                  Correspond à <code>@@PLUGINFILE@@/<strong>ce_nom</strong></code> dans l'énoncé.
-                </div>
-              </div>
+              <input type="hidden" name="moodle_filename"
+                     value="{{ e.question.text|pluginfile_names|first }}"
+                     required>
               <div class="mb-2">
                 <label class="small fw-semibold d-block mb-1">Fichier image :</label>
                 <input type="file" name="image_file"
