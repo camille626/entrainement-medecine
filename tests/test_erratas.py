@@ -102,3 +102,54 @@ class TestErrataImageTemplate:
         response = client.get("/errata/")
         content = response.content.decode()
         assert "Image(s) non r" not in content
+
+    def test_no_standalone_accept_button_for_image(
+        self, client, staff_user, errata_image
+    ):
+        """Le bouton 'Accepter le signalement' seul ne doit pas apparaître pour IMAGE."""
+        client.force_login(staff_user)
+        response = client.get("/errata/")
+        content = response.content.decode()
+        # Le bouton standalone pointe vers /accept/ sans upload
+        assert f'action="/errata/{errata_image.pk}/accept/"' not in content
+
+    def test_upload_and_accept_button_present_for_image(
+        self, client, staff_user, errata_image
+    ):
+        """Le bouton 'Uploader et accepter' doit être présent pour IMAGE."""
+        client.force_login(staff_user)
+        response = client.get("/errata/")
+        content = response.content.decode()
+        assert "Uploader et accepter le signalement" in content
+
+
+@pytest.fixture
+def question_simple(category):
+    return Question.objects.create(
+        text="<p>Quelle est la capitale de la France ?</p>",
+        category=category,
+        qtype="multichoice",
+        moodle_id=1002,
+    )
+
+
+@pytest.fixture
+def errata_tag(question_simple, staff_user):
+    return Errata.objects.create(
+        question=question_simple,
+        reported_by=staff_user,
+        error_type=Errata.TAG,
+        description="Tag manquant",
+    )
+
+
+@pytest.mark.django_db
+class TestErrataTagTemplate:
+    """Les erratas non-IMAGE conservent leur bouton 'Accepter le signalement'."""
+
+    def test_accept_button_present_for_tag(self, client, staff_user, errata_tag):
+        """Le bouton 'Accepter le signalement' doit rester pour les erratas TAG."""
+        client.force_login(staff_user)
+        response = client.get("/errata/")
+        content = response.content.decode()
+        assert f'action="/errata/{errata_tag.pk}/accept/"' in content
