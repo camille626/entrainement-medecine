@@ -153,3 +153,61 @@ class TestErrataTagTemplate:
         response = client.get("/errata/")
         content = response.content.decode()
         assert f'action="/errata/{errata_tag.pk}/accept/"' in content
+
+
+@pytest.mark.django_db
+class TestErrataModifyQuestionLink:
+    """Le bouton 'Modifier la question' doit pointer vers l'éditeur custom."""
+
+    def test_errata_image_modifier_link_points_to_custom_editor(
+        self, client, staff_user, errata_image
+    ):
+        """Pour IMAGE : le lien modifier pointe vers /admin-site/questions/."""
+        client.force_login(staff_user)
+        response = client.get("/errata/")
+        content = response.content.decode()
+        assert f"/admin-site/questions/{errata_image.question_id}/modifier/" in content
+
+    def test_errata_image_no_django_admin_link(self, client, staff_user, errata_image):
+        """Plus aucun lien vers l'admin Django pour modifier une question."""
+        client.force_login(staff_user)
+        response = client.get("/errata/")
+        content = response.content.decode()
+        assert "/admin/qcm/question/" not in content
+
+    def test_errata_tag_modifier_link_points_to_custom_editor(
+        self, client, staff_user, errata_tag
+    ):
+        """Pour TAG : le lien modifier pointe aussi vers /admin-site/questions/."""
+        client.force_login(staff_user)
+        response = client.get("/errata/")
+        content = response.content.decode()
+        assert f"/admin-site/questions/{errata_tag.question_id}/modifier/" in content
+
+
+@pytest.mark.django_db
+class TestQuestionFormMoodleFilename:
+    """L'éditeur custom de question ne doit pas afficher le champ nom Moodle."""
+
+    def test_moodle_filename_label_not_in_question_form(
+        self, client, staff_user, question_with_pluginfile
+    ):
+        """Le label 'Nom du fichier Moodle' n'apparaît pas dans l'éditeur."""
+        client.force_login(staff_user)
+        response = client.get(
+            f"/admin-site/questions/{question_with_pluginfile.pk}/modifier/"
+        )
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "Nom du fichier Moodle" not in content
+
+    def test_new_image_filename_hidden_input_in_question_form(
+        self, client, staff_user, question_with_pluginfile
+    ):
+        """L'input new_image_filename est présent en hidden dans l'éditeur."""
+        client.force_login(staff_user)
+        response = client.get(
+            f"/admin-site/questions/{question_with_pluginfile.pk}/modifier/"
+        )
+        content = response.content.decode()
+        assert 'type="hidden" name="new_image_filename"' in content

@@ -112,17 +112,9 @@
         <div class="text-muted small fw-semibold mb-2">
           {% if question and question.images.exists %}Ajouter une image :{% else %}Uploader une image :{% endif %}
         </div>
+        <input type="hidden" name="new_image_filename"
+               value="{{ question.text|pluginfile_names|first }}">
         <div class="row g-2 align-items-start">
-          <div class="col-md-4">
-            <label class="form-label small mb-1">Nom du fichier Moodle</label>
-            <input type="text" name="new_image_filename"
-                   class="form-control form-control-sm"
-                   placeholder="ex: schema_anatomique.png"
-                   value="{{ question.text|pluginfile_names|first }}">
-            <div class="text-muted" style="font-size:0.75rem; margin-top:3px;">
-              Correspond à <code>@@PLUGINFILE@@/<strong>ce_nom</strong></code>
-            </div>
-          </div>
           <div class="col-md-5">
             <label class="form-label small mb-1">Fichier image</label>
             <input type="file" name="new_image_file" id="new_image_file"
