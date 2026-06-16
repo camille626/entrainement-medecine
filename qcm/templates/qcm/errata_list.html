@@ -111,8 +111,8 @@
 
               <div class="d-flex gap-2 flex-wrap mt-2">
                 <button type="submit" class="btn btn-sm btn-success">✅ Appliquer la correction</button>
-                <a href="/admin/qcm/question/{{ e.question_id }}/change/"
-                   class="btn btn-sm btn-outline-primary" target="_blank">✏️ Modifier dans admin</a>
+                <a href="/admin-site/questions/{{ e.question_id }}/modifier/?back=/errata/"
+                   class="btn btn-sm btn-outline-primary" target="_blank">✏️ Modifier la question</a>
               </div>
             </form>
             <form method="post" action="/errata/{{ e.pk }}/reject/" class="mt-2 d-flex gap-1">
@@ -162,8 +162,8 @@
 
               <div class="d-flex gap-2 flex-wrap mt-2">
                 <button type="submit" class="btn btn-sm btn-success">✅ Appliquer les fractions</button>
-                <a href="/admin/qcm/question/{{ e.question_id }}/change/"
-                   class="btn btn-sm btn-outline-primary" target="_blank">✏️ Modifier dans admin</a>
+                <a href="/admin-site/questions/{{ e.question_id }}/modifier/?back=/errata/"
+                   class="btn btn-sm btn-outline-primary" target="_blank">✏️ Modifier la question</a>
               </div>
             </form>
             <form method="post" action="/errata/{{ e.pk }}/reject/" class="mt-2 d-flex gap-1">
@@ -211,8 +211,8 @@
                 <button type="submit" class="btn btn-sm btn-success">
                   ✅ Accepter — ajouter « {{ e.qroc_suggested_text }} » aux réponses
                 </button>
-                <a href="/admin/qcm/question/{{ e.question_id }}/change/"
-                   class="btn btn-sm btn-outline-primary" target="_blank">✏️ Modifier dans admin</a>
+                <a href="/admin-site/questions/{{ e.question_id }}/modifier/?back=/errata/"
+                   class="btn btn-sm btn-outline-primary" target="_blank">✏️ Modifier la question</a>
               </div>
             </form>
             {% else %}
@@ -323,7 +323,7 @@
                 <button type="submit" class="btn btn-sm btn-success">✅ Accepter le signalement</button>
               </form>
               {% endif %}
-              <a href="/admin/qcm/question/{{ e.question_id }}/change/"
+              <a href="/admin-site/questions/{{ e.question_id }}/modifier/?back=/errata/"
                  class="btn btn-sm btn-outline-primary" target="_blank">✏️ Modifier la question</a>
               <form method="post" action="/errata/{{ e.pk }}/reject/" class="m-0 ms-auto d-flex gap-1">
                 {% csrf_token %}
