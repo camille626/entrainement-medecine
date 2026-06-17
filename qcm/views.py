@@ -288,7 +288,7 @@ class ConfigurationView(LoginRequiredMixin, View):
     def _get_ongoing_session(self, user):
         """Return the most recent incomplete session, or None."""
         for session in (
-            QuizSession.objects.filter(user=user)
+            QuizSession.objects.filter(user=user, hidden_by_user=False)
             .prefetch_related("session_questions", "user_answers")
             .order_by("-started_at")[:10]
         ):
@@ -396,6 +396,8 @@ class QuestionView(LoginRequiredMixin, View):
         from collections import defaultdict
 
         session = get_object_or_404(QuizSession, pk=pk)
+        if session.hidden_by_user:
+            return redirect("qcm:history")
         total = session.session_questions.count()
 
         # Fetch all user answers once — avoids N+1 in status computation
@@ -1354,7 +1356,7 @@ class HistoryView(LoginRequiredMixin, View):
 
     def get(self, request):
         sessions = (
-            QuizSession.objects.filter(user=request.user)
+            QuizSession.objects.filter(user=request.user, hidden_by_user=False)
             .select_related("course")
             .prefetch_related("user_answers__answer")
             .order_by("-started_at")
@@ -1439,6 +1441,16 @@ class HistoryView(LoginRequiredMixin, View):
                 "selected_course": course_filter,
             },
         )
+
+
+class HideSessionView(LoginRequiredMixin, View):
+    """Masque une session de l'historique sans toucher aux UserAnswer."""
+
+    def post(self, request, pk):
+        session = get_object_or_404(QuizSession, pk=pk, user=request.user)
+        session.hidden_by_user = True
+        session.save(update_fields=["hidden_by_user"])
+        return redirect("qcm:history")
 
 
 def _errata_list_redirect(request):
@@ -1749,6 +1761,8 @@ class SessionDetailView(LoginRequiredMixin, View):
             from django.http import Http404
 
             raise Http404
+        if session.hidden_by_user:
+            return redirect("qcm:history")
 
         total = session.session_questions.count()
         question_results = []

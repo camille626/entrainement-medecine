@@ -159,6 +159,19 @@ class TestConfigurationView:
         )
         assert "/entrainement/session/" in response["Location"]
 
+    def test_hidden_ongoing_session_not_proposed(
+        self, client, logged_user, course, question
+    ):
+        session = QuizSession.objects.create(
+            user=logged_user,
+            course=course,
+            mode="training",
+            hidden_by_user=True,
+        )
+        QuizSessionQuestion.objects.create(session=session, question=question, order=1)
+        response = client.get("/entrainement/")
+        assert f"/entrainement/session/{session.pk}/".encode() not in response.content
+
 
 # ---------------------------------------------------------------------------
 # Tests de la page de question
@@ -198,6 +211,13 @@ class TestQuestionView:
         response = client.get(f"/entrainement/session/{session.pk}/")
         assert response.status_code == 302
         assert "/fin/" in response["Location"]
+
+    def test_hidden_session_redirects_to_history(self, client, session):
+        session.hidden_by_user = True
+        session.save(update_fields=["hidden_by_user"])
+        response = client.get(f"/entrainement/session/{session.pk}/")
+        assert response.status_code == 302
+        assert response["Location"] == "/historique/"
 
 
 # ---------------------------------------------------------------------------

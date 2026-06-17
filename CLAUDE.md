@@ -126,6 +126,7 @@ uv run --active python manage.py seed_trophies
 # /entrainement/session/<id>/check/ → soumission réponse (multichoix ou QROC)
 # /entrainement/session/<id>/check-qroc/ → auto-évaluation QROC (j'avais bon/faux)
 # /entrainement/session/<id>/fin/ → résultats
+# /historique/session/<id>/masquer/ → masquer une session de l'historique (POST, soft-delete, stats conservées)
 # /admin-site/               → tableau de bord admin web (staff uniquement)
 # /admin-site/demandes/      → gestion des demandes d'inscription
 # /admin-site/utilisateurs/  → gestion des utilisateurs

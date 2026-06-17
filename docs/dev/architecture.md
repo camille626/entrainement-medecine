@@ -138,6 +138,7 @@ Créé à la demande via `get_or_create` dans `ProfileView`. Accessible depuis l
 | `mode` | CharField | `training` ou `review` |
 | `started_at` | DateTimeField | Début de session |
 | `completed_at` | DateTimeField (nullable) | Fin de session |
+| `hidden_by_user` | BooleanField | Soft-delete : masque la session de l'historique sans toucher aux `UserAnswer`, qui restent comptabilisés dans les statistiques |
 
 **`UserAnswer`** — la réponse d'un utilisateur à une question
 

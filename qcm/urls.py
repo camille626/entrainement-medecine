@@ -74,6 +74,11 @@ urlpatterns = [
         name="session_detail",
     ),
     path(
+        "historique/session/<int:pk>/masquer/",
+        views.HideSessionView.as_view(),
+        name="hide_session",
+    ),
+    path(
         "statistiques/cours/<int:course_id>/",
         views.CourseStatsView.as_view(),
         name="course_stats",
