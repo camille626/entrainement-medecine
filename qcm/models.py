@@ -231,6 +231,7 @@ class QuizSession(models.Model):
     shuffle_answers = models.BooleanField(default=True)
     started_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    hidden_by_user = models.BooleanField(default=False)
     questions: models.ManyToManyField = models.ManyToManyField(
         "Question",
         through="QuizSessionQuestion",

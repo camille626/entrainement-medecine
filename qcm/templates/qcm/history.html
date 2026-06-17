@@ -78,14 +78,31 @@
               <span class="text-muted">—</span>
               {% endif %}
             </td>
-            <td style="white-space:nowrap; width:110px;">
-              {% if not item.is_complete %}
-              <a href="/entrainement/session/{{ item.session.pk }}/"
-                 class="btn btn-sm btn-outline-primary w-100">▶ Reprendre</a>
-              {% elif item.nb_answered_distinct > 0 %}
-              <a href="/historique/session/{{ item.session.pk }}/"
-                 class="btn btn-sm btn-outline-primary w-100">🔍 Relecture</a>
-              {% endif %}
+            <td style="white-space:nowrap; width:130px;">
+              <div class="d-flex align-items-center gap-1">
+                {% if not item.is_complete %}
+                <a href="/entrainement/session/{{ item.session.pk }}/"
+                   class="btn btn-sm btn-outline-primary">▶ Reprendre</a>
+                {% elif item.nb_answered_distinct > 0 %}
+                <a href="/historique/session/{{ item.session.pk }}/"
+                   class="btn btn-sm btn-outline-primary">🔍 Relecture</a>
+                {% endif %}
+                <div class="dropdown">
+                  <button type="button" class="btn btn-sm btn-outline-secondary"
+                          data-bs-toggle="dropdown" aria-expanded="false">
+                    ⋯
+                  </button>
+                  <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                      <button type="button" class="dropdown-item text-danger"
+                              data-bs-toggle="modal" data-bs-target="#hideSessionModal"
+                              data-session-pk="{{ item.session.pk }}">
+                        Supprimer de l'historique
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+              </div>
             </td>
           </tr>
           {% endfor %}
@@ -97,6 +114,32 @@
       Aucune session trouvée. <a href="/entrainement/">Démarrer une session</a> pour commencer.
     </div>
     {% endif %}
+  </div>
+</div>
+
+<!-- Modal confirmation suppression de l'historique -->
+<div class="modal fade" id="hideSessionModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title text-danger">⚠ Confirmer la suppression</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Supprimer cette session de votre historique ?</p>
+        <p class="text-muted small mb-0">
+          Vos réponses resteront comptabilisées dans vos statistiques. Cette action est
+          irréversible depuis l'interface.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+        <form method="post" id="hideSessionForm" class="m-0">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger">Supprimer</button>
+        </form>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -112,5 +155,11 @@ function toggleMore(id, btn) {
     btn.textContent = '+' + n + ' cours';
   }
 }
+
+document.getElementById('hideSessionModal').addEventListener('show.bs.modal', function (e) {
+  const btn = e.relatedTarget;
+  document.getElementById('hideSessionForm').action =
+    `/historique/session/${btn.dataset.sessionPk}/masquer/`;
+});
 </script>
 {% endblock %}

@@ -103,6 +103,14 @@ class TestSessionDetailPage:
         response = client.get(f"/historique/session/{session_with_answers.pk}/")
         assert response.status_code == 404
 
+    def test_detail_redirects_when_hidden(self, client, user, session_with_answers):
+        session_with_answers.hidden_by_user = True
+        session_with_answers.save(update_fields=["hidden_by_user"])
+        client.force_login(user)
+        response = client.get(f"/historique/session/{session_with_answers.pk}/")
+        assert response.status_code == 302
+        assert response["Location"] == "/historique/"
+
 
 @pytest.mark.django_db
 class TestHistoryNavbar:
@@ -110,3 +118,68 @@ class TestHistoryNavbar:
         client.force_login(user)
         response = client.get("/historique/")
         assert b"Historique" in response.content
+
+
+@pytest.mark.django_db
+class TestHideSession:
+    def test_hide_session_marks_hidden_and_redirects(
+        self, client, user, session_with_answers
+    ):
+        client.force_login(user)
+        response = client.post(
+            f"/historique/session/{session_with_answers.pk}/masquer/"
+        )
+        assert response.status_code == 302
+        assert response["Location"] == "/historique/"
+        session_with_answers.refresh_from_db()
+        assert session_with_answers.hidden_by_user is True
+
+    def test_hide_session_requires_login(self, client, session_with_answers):
+        response = client.post(
+            f"/historique/session/{session_with_answers.pk}/masquer/"
+        )
+        assert response.status_code == 302
+        assert "/login/" in response["Location"]
+
+    def test_hide_session_other_user_404(self, client, session_with_answers):
+        other = User.objects.create_user(
+            username="autre",
+            password="pass",  # pragma: allowlist secret
+        )
+        client.force_login(other)
+        response = client.post(
+            f"/historique/session/{session_with_answers.pk}/masquer/"
+        )
+        assert response.status_code == 404
+        session_with_answers.refresh_from_db()
+        assert session_with_answers.hidden_by_user is False
+
+    def test_hide_session_get_not_allowed(self, client, user, session_with_answers):
+        client.force_login(user)
+        response = client.get(f"/historique/session/{session_with_answers.pk}/masquer/")
+        assert response.status_code == 405
+
+
+@pytest.mark.django_db
+class TestHiddenSessionExcludedFromHistory:
+    def test_hidden_session_excluded_from_history_list(
+        self, client, user, session_with_answers
+    ):
+        session_with_answers.hidden_by_user = True
+        session_with_answers.save(update_fields=["hidden_by_user"])
+        client.force_login(user)
+        response = client.get("/historique/")
+        assert response.context["session_data"] == []
+
+    def test_hidden_session_still_counted_in_stats(
+        self, client, user, session_with_answers
+    ):
+        client.force_login(user)
+        before = client.get("/statistiques/")
+        assert b"sur 1 tentatives" in before.content
+
+        session_with_answers.hidden_by_user = True
+        session_with_answers.save(update_fields=["hidden_by_user"])
+
+        after = client.get("/statistiques/")
+        assert b"sur 1 tentatives" in after.content
