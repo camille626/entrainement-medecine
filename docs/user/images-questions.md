@@ -29,6 +29,11 @@ Lors de la création ou modification d'une question (`/admin-site/questions/`) :
 - Une prévisualisation s'affiche dès la sélection du fichier
 - En mode édition, les images existantes sont listées avec une option de suppression
 
+Pour les questions de type **Légende interactive** (ddimageortext), l'image de fond se gère dans la
+section dédiée **Légende interactive** du formulaire, pas dans la section **Images** générique
+(masquée pour ce type de question). Voir la documentation développeur pour le détail du
+positionnement des zones.
+
 ### Détecter les images manquantes
 
 ```bash

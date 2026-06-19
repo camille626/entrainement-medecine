@@ -169,11 +169,20 @@ La propriété `effective_fraction` suit la priorité : `fraction_override` > `a
 | Champ | Type | Description |
 |-------|------|-------------|
 | `question` | FK → Question (CASCADE) | Question parente |
-| `no` | IntegerField | Numéro Moodle (1-indexé, unique par question) |
+| `no` | IntegerField | Numéro (1-indexé, unique par question) |
 | `xleft` | IntegerField | Position X en pixels dans l'image naturelle |
 | `ytop` | IntegerField | Position Y en pixels dans l'image naturelle |
-| `correct_drag_no` | IntegerField | `no` du drag item correct pour cette zone |
-| `correct_label` | CharField(500) | Label attendu (dénormalisé pour les comparaisons) |
+| `correct_drag_no` | IntegerField | `no` du drag item correct pour cette zone (vestige Moodle, non utilisé pour la correction — voir ci-dessous) |
+| `correct_label` | CharField(500) | Label principal attendu |
+
+**`ImageDropZoneLabel`** — réponse alternative acceptée pour une zone
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `zone` | FK → ImageDropZone (CASCADE, `related_name="accepted_labels"`) | Zone parente |
+| `text` | CharField(500) | Texte alternatif accepté (synonyme, variante orthographique...) |
+
+Une zone est validée si la saisie correspond à `correct_label` **ou** à n'importe lequel de ses `accepted_labels`, via `match_zone_label()` (`qcm/views.py`) — même logique que `match_qroc_answer()` pour les QROC (insensible casse/accents, joker `*` supporté).
 
 ## Questions QROC (shortanswer)
 
@@ -212,12 +221,27 @@ Les questions de type `ddimageortext` affichent une image anatomique sur laquell
 ```
 Étudiant saisit texte par zone → POST /check/
   └─ _handle_ddimageortext()
-       → normalize_qroc(user_text) == normalize_qroc(zone.correct_label) par zone
+       → match_zone_label(zone, user_text) par zone (correct_label OU une alternative)
        → fraction = zones_correctes / total_zones
        → UserAnswer(answer=None, fraction_override=fraction, qroc_text=JSON)
 ```
 
 Le JSON stocké dans `qroc_text` a la forme `{"1": "sclérotique", "2": "choroide", ...}` (clé = `zone.no` en string).
+
+### Création et modification depuis l'admin
+
+`/admin-site/questions/ajouter/?qtype=ddimageortext` (ou le bouton « Nouvelle question légende » depuis `/admin-site/questions/`) ouvre le formulaire d'ajout de question avec le type « Légende interactive » présélectionné. La fiche question (`/admin-site/questions/<id>/modifier/`) permet de modifier une question existante, y compris celles importées de Moodle.
+
+Le formulaire propose :
+
+- l'upload d'une image de fond (remplace systématiquement l'image précédente, quel que soit son nom de fichier d'origine — une question ddimageortext n'a jamais qu'une seule image de fond) ;
+- le positionnement des zones par clic sur l'image (la zone est ajoutée à la position cliquée), ou par glisser-déposer d'un repère existant pour le repositionner, ou par saisie manuelle des coordonnées X/Y ;
+- pour chaque zone : le label principal attendu et une liste de réponses alternatives acceptées, séparées par `;` ;
+- la gestion des étiquettes (`ImageDragItem`) : une liste de labels éditable, sans effet sur la correction (voir limitation ci-dessous).
+
+Le champ `no` des zones et des étiquettes est attribué automatiquement (incrémental par question), il n'est jamais saisi par l'admin.
+
+**Limitation connue** : les étiquettes (`ImageDragItem`) ne sont actuellement affichées ni utilisées nulle part côté étudiant — la saisie reste un champ texte libre par zone (comme un QROC), comparée à `correct_label`/`accepted_labels`. `correct_drag_no` n'a donc pas de rôle fonctionnel pour les zones créées depuis l'admin (mis à `0`).
 
 ### Import depuis Moodle
 

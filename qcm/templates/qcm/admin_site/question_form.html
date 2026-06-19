@@ -6,6 +6,18 @@
 <style>
   .ql-container { font-size: 0.9rem; }
   .ql-editor { min-height: 80px; }
+  .ddi-marker {
+    position: absolute;
+    width: 1.1rem;
+    height: 1.1rem;
+    margin-left: -0.55rem;
+    margin-top: -0.55rem;
+    border-radius: 50%;
+    background: rgba(13, 110, 253, 0.85);
+    border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    cursor: move;
+  }
 </style>
 {% endblock %}
 
@@ -62,9 +74,11 @@
 
       <div class="mb-3">
         <label for="id_qtype" class="form-label fw-semibold small">Type de question</label>
-        <select name="qtype" id="id_qtype" class="form-select form-select-sm" style="max-width:240px;">
-          <option value="multichoice" {% if not question or question.qtype == 'multichoice' %}selected{% endif %}>Choix multiple (QCM)</option>
-          <option value="shortanswer" {% if question and question.qtype == 'shortanswer' %}selected{% endif %}>Réponse courte (QROC)</option>
+        <select name="qtype" id="id_qtype" class="form-select form-select-sm" style="max-width:240px;"
+                onchange="toggleQtypeCards()">
+          <option value="multichoice" {% if selected_qtype == 'multichoice' %}selected{% endif %}>Choix multiple (QCM)</option>
+          <option value="shortanswer" {% if selected_qtype == 'shortanswer' %}selected{% endif %}>Réponse courte (QROC)</option>
+          <option value="ddimageortext" {% if selected_qtype == 'ddimageortext' %}selected{% endif %}>Légende interactive</option>
         </select>
       </div>
 
@@ -90,7 +104,7 @@
   </div>
 
   <!-- Images -->
-  <div class="card mb-3">
+  <div class="card mb-3" id="card-generic-images">
     <div class="card-header fw-bold">Images <span class="text-muted fw-normal small">(optionnel)</span></div>
     <div class="card-body">
 
@@ -227,8 +241,96 @@
   </div>
   {% endif %}
 
+  <!-- Légende interactive (ddimageortext) -->
+  <div class="card mb-3" id="card-ddi" style="display:none;">
+    <div class="card-header fw-bold">Légende interactive</div>
+    <div class="card-body">
+
+      <div class="mb-3">
+        <label class="form-label small fw-semibold">Image de fond</label><br>
+        <input type="file" name="new_bg_image_file" id="new_bg_image_file"
+               accept="image/*" class="form-control form-control-sm" style="max-width:320px;"
+               onchange="ddiOnBgImageChange(this)">
+        {% if existing_bg_image %}
+        <div class="form-text">Laisser vide pour conserver l'image actuelle.</div>
+        {% endif %}
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label small fw-semibold">
+          Zones — cliquer sur l'image pour ajouter une zone, glisser un repère pour le déplacer
+        </label>
+        <div id="ddi-canvas" class="position-relative d-inline-block border rounded bg-light" style="max-width:100%;">
+          <img id="ddi-edit-img"
+               src="{% if existing_bg_image %}{{ existing_bg_image.file.url }}{% endif %}"
+               alt="Image de fond"
+               style="max-width:100%; display:{% if existing_bg_image %}block{% else %}none{% endif %};"
+               onload="ddiInitMarkers()">
+          <p id="ddi-no-image-msg" class="text-muted small p-3 mb-0"
+             style="{% if existing_bg_image %}display:none;{% endif %}">
+            Uploadez une image de fond pour positionner les zones.
+          </p>
+        </div>
+      </div>
+
+      {{ zone_formset.management_form }}
+      <div id="ddi-zones-container">
+        {% for form in zone_formset %}
+        <div class="ddi-zone-row border rounded p-2 mb-2" data-prefix="{{ form.prefix }}">
+          {% if form.instance.pk %}{{ form.id }}{% endif %}
+          <div class="row g-2 align-items-end">
+            <div class="col-auto">
+              <label class="form-label small mb-0">X</label>
+              {{ form.xleft }}
+            </div>
+            <div class="col-auto">
+              <label class="form-label small mb-0">Y</label>
+              {{ form.ytop }}
+            </div>
+            <div class="col">
+              <label class="form-label small mb-0">Label attendu</label>
+              {{ form.correct_label }}
+            </div>
+            <div class="col">
+              <label class="form-label small mb-0">Alternatives (séparées par ;)</label>
+              <input type="text" name="{{ form.prefix }}-alts" class="form-control form-control-sm"
+                     value="{{ form.instance.accepted_labels_text }}"
+                     placeholder="ex : sclere; sclerotic">
+            </div>
+            <div class="col-auto">
+              <div class="form-check" style="display:none;">{{ form.DELETE }}</div>
+              <button type="button" class="btn btn-sm btn-outline-danger" onclick="ddiRemoveZoneRow(this)">✕</button>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      <button type="button" class="btn btn-sm btn-outline-secondary mb-3" onclick="ddiAddZoneRowManual()">
+        + Ajouter une zone manuellement
+      </button>
+
+      <hr>
+      <label class="form-label small fw-semibold">Étiquettes (drag items)</label>
+      {{ drag_formset.management_form }}
+      <div id="ddi-drag-container">
+        {% for form in drag_formset %}
+        <div class="ddi-drag-row d-flex gap-2 align-items-center mb-2" data-prefix="{{ form.prefix }}">
+          {% if form.instance.pk %}{{ form.id }}{% endif %}
+          {{ form.label }}
+          <div style="display:none;">{{ form.DELETE }}</div>
+          <button type="button" class="btn btn-sm btn-outline-danger" onclick="ddiRemoveDragRow(this)">✕</button>
+        </div>
+        {% endfor %}
+      </div>
+      <button type="button" class="btn btn-sm btn-outline-success" onclick="addDragItem()">
+        + Ajouter une étiquette
+      </button>
+
+    </div>
+  </div>
+
   <!-- Propositions de réponse -->
-  <div class="card mb-3">
+  <div class="card mb-3" id="card-answers">
     <div class="card-header d-flex justify-content-between align-items-center">
       <span class="fw-bold">Propositions de réponse</span>
       <button type="button" class="btn btn-outline-success" onclick="addAnswer()">
@@ -271,8 +373,39 @@
       {% if action == 'edit' %}💾 Enregistrer{% else %}✅ Créer la question{% endif %}
     </button>
     <a href="{{ back_url|default:'/admin-site/questions/' }}" class="btn btn-outline-secondary">Annuler</a>
+    {% if action == 'edit' %}
+    <button type="button" class="btn btn-outline-danger ms-auto" data-bs-toggle="modal" data-bs-target="#deleteQModal">
+      🗑 Supprimer la question
+    </button>
+    {% endif %}
   </div>
 </form>
+
+{% if action == 'edit' %}
+<!-- Modal confirmation suppression -->
+<div class="modal fade" id="deleteQModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title text-danger">⚠ Confirmer la suppression</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Supprimer définitivement cette question ?</p>
+        <p class="text-danger small mb-0">Les réponses et données associées seront supprimées.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+        <form method="post" action="/admin-site/questions/{{ question.pk }}/supprimer/" class="m-0">
+          {% csrf_token %}
+          <input type="hidden" name="back_url" value="{{ back_url|default:'/admin-site/questions/' }}">
+          <button type="submit" class="btn btn-danger">Supprimer</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 <script>
 // Afficher/masquer les chapitres d'une EC selon si elle est cochée
@@ -354,6 +487,270 @@ function clearImagePreview() {
   img.src = '';
   zone.classList.add('d-none');
 }
+
+// ── Légende interactive (ddimageortext) ───────────────────────────────────────
+
+function toggleQtypeCards() {
+  const isDdi = document.getElementById('id_qtype').value === 'ddimageortext';
+  document.getElementById('card-answers').style.display = isDdi ? 'none' : '';
+  document.getElementById('card-generic-images').style.display = isDdi ? 'none' : '';
+  document.getElementById('card-ddi').style.display = isDdi ? '' : 'none';
+}
+toggleQtypeCards();
+
+// Style des champs ddimageortext rendus par les formsets Django
+document.querySelectorAll('.ddi-zone-row input, .ddi-drag-row input[type="text"]').forEach(el => {
+  if (el.type !== 'checkbox' && el.type !== 'hidden') {
+    el.classList.add('form-control', 'form-control-sm');
+  }
+});
+document.querySelectorAll('.ddi-zone-row input[name$="-xleft"], .ddi-zone-row input[name$="-ytop"]').forEach(el => {
+  el.style.width = '80px';
+});
+
+function ddiGetImg() {
+  return document.getElementById('ddi-edit-img');
+}
+
+function ddiOnBgImageChange(input) {
+  const img = ddiGetImg();
+  const msg = document.getElementById('ddi-no-image-msg');
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      img.src = e.target.result;
+      img.style.display = 'block';
+      msg.style.display = 'none';
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+
+function ddiScaleMarkers() {
+  const img = ddiGetImg();
+  if (!img || !img.clientWidth || !img.naturalWidth) return;
+  const scaleX = img.clientWidth / img.naturalWidth;
+  const scaleY = img.clientHeight / img.naturalHeight;
+  document.querySelectorAll('.ddi-marker').forEach(marker => {
+    marker.style.left = (parseFloat(marker.dataset.xleft) * scaleX) + 'px';
+    marker.style.top = (parseFloat(marker.dataset.ytop) * scaleY) + 'px';
+  });
+}
+function ddiInitMarkers() {
+  ddiScaleMarkers();
+}
+window.addEventListener('resize', ddiScaleMarkers);
+
+function ddiAddMarker(prefix, xleft, ytop) {
+  const canvas = document.getElementById('ddi-canvas');
+  const marker = document.createElement('div');
+  marker.className = 'ddi-marker';
+  marker.dataset.prefix = prefix;
+  marker.dataset.xleft = xleft;
+  marker.dataset.ytop = ytop;
+  marker.title = 'Glisser pour repositionner';
+  canvas.appendChild(marker);
+  ddiMakeMarkerDraggable(marker);
+  ddiScaleMarkers();
+  return marker;
+}
+
+function ddiMakeMarkerDraggable(marker) {
+  marker.addEventListener('mousedown', function (ev) {
+    ev.stopPropagation();
+    ev.preventDefault();
+    const img = ddiGetImg();
+    const rect = img.getBoundingClientRect();
+    function onMove(moveEv) {
+      let x = moveEv.clientX - rect.left;
+      let y = moveEv.clientY - rect.top;
+      x = Math.max(0, Math.min(x, img.clientWidth));
+      y = Math.max(0, Math.min(y, img.clientHeight));
+      marker.style.left = x + 'px';
+      marker.style.top = y + 'px';
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      const scaleX = img.clientWidth / img.naturalWidth;
+      const scaleY = img.clientHeight / img.naturalHeight;
+      const natX = Math.round(parseFloat(marker.style.left) / scaleX);
+      const natY = Math.round(parseFloat(marker.style.top) / scaleY);
+      marker.dataset.xleft = natX;
+      marker.dataset.ytop = natY;
+      ddiSyncRowCoords(marker.dataset.prefix, natX, natY);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+function ddiSyncRowCoords(prefix, xleft, ytop) {
+  const row = document.querySelector('.ddi-zone-row[data-prefix="' + prefix + '"]');
+  if (!row) return;
+  const xInput = row.querySelector('input[name$="-xleft"]');
+  const yInput = row.querySelector('input[name$="-ytop"]');
+  if (xInput) xInput.value = xleft;
+  if (yInput) yInput.value = ytop;
+}
+
+// Saisie manuelle des coordonnées X/Y : répercute en direct sur le repère
+document.getElementById('ddi-zones-container').addEventListener('input', function (ev) {
+  const name = ev.target.name || '';
+  if (!name.endsWith('-xleft') && !name.endsWith('-ytop')) return;
+  const row = ev.target.closest('.ddi-zone-row');
+  if (!row) return;
+  const prefix = row.dataset.prefix;
+  const marker = document.querySelector('.ddi-marker[data-prefix="' + prefix + '"]');
+  if (!marker) return;
+  const xInput = row.querySelector('input[name$="-xleft"]');
+  const yInput = row.querySelector('input[name$="-ytop"]');
+  marker.dataset.xleft = xInput.value || 0;
+  marker.dataset.ytop = yInput.value || 0;
+  ddiScaleMarkers();
+});
+
+function ddiAddZoneRow(xleft, ytop) {
+  const total = document.getElementById('id_zoneform-TOTAL_FORMS');
+  const idx = parseInt(total.value);
+  const prefix = 'zoneform-' + idx;
+  const container = document.getElementById('ddi-zones-container');
+  const row = document.createElement('div');
+  row.className = 'ddi-zone-row border rounded p-2 mb-2';
+  row.dataset.prefix = prefix;
+  row.innerHTML = `
+    <div class="row g-2 align-items-end">
+      <div class="col-auto">
+        <label class="form-label small mb-0">X</label>
+        <input type="number" name="${prefix}-xleft" value="${xleft}" class="form-control form-control-sm" style="width:80px;">
+      </div>
+      <div class="col-auto">
+        <label class="form-label small mb-0">Y</label>
+        <input type="number" name="${prefix}-ytop" value="${ytop}" class="form-control form-control-sm" style="width:80px;">
+      </div>
+      <div class="col">
+        <label class="form-label small mb-0">Label attendu</label>
+        <input type="text" name="${prefix}-correct_label" class="form-control form-control-sm">
+      </div>
+      <div class="col">
+        <label class="form-label small mb-0">Alternatives (séparées par ;)</label>
+        <input type="text" name="${prefix}-alts" class="form-control form-control-sm" placeholder="ex : sclere; sclerotic">
+      </div>
+      <div class="col-auto">
+        <button type="button" class="btn btn-sm btn-outline-danger" onclick="ddiRemoveZoneRow(this)">✕</button>
+      </div>
+    </div>
+  `;
+  container.appendChild(row);
+  total.value = idx + 1;
+  ddiAddMarker(prefix, xleft, ytop);
+}
+
+function ddiAddZoneRowManual() {
+  const img = ddiGetImg();
+  const cx = img && img.clientWidth ? Math.round(img.naturalWidth / 2) : 50;
+  const cy = img && img.clientHeight ? Math.round(img.naturalHeight / 2) : 50;
+  ddiAddZoneRow(cx, cy);
+}
+
+function ddiRemoveZoneRow(button) {
+  const row = button.closest('.ddi-zone-row');
+  const prefix = row.dataset.prefix;
+  const marker = document.querySelector('.ddi-marker[data-prefix="' + prefix + '"]');
+  const deleteCheckbox = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+  if (deleteCheckbox) {
+    deleteCheckbox.checked = true;
+    row.style.display = 'none';
+    if (marker) marker.style.display = 'none';
+  } else {
+    row.remove();
+    if (marker) marker.remove();
+    ddiReindexZoneForms();
+  }
+}
+
+function ddiReindexZoneForms() {
+  const initialCount = parseInt(document.getElementById('id_zoneform-INITIAL_FORMS').value);
+  const newRows = Array.from(document.querySelectorAll('.ddi-zone-row'))
+    .filter(row => !row.querySelector('input[name$="-id"]'));
+  newRows.forEach((row, i) => {
+    const oldPrefix = row.dataset.prefix;
+    const newPrefix = 'zoneform-' + (initialCount + i);
+    if (oldPrefix !== newPrefix) {
+      row.querySelectorAll('[name]').forEach(el => {
+        el.name = newPrefix + el.name.slice(oldPrefix.length);
+      });
+      const marker = document.querySelector('.ddi-marker[data-prefix="' + oldPrefix + '"]');
+      if (marker) marker.dataset.prefix = newPrefix;
+      row.dataset.prefix = newPrefix;
+    }
+  });
+  document.getElementById('id_zoneform-TOTAL_FORMS').value = initialCount + newRows.length;
+}
+
+document.getElementById('ddi-canvas').addEventListener('click', function (ev) {
+  if (ev.target.closest('.ddi-marker')) return;
+  const img = ddiGetImg();
+  if (!img || img.style.display === 'none' || !img.clientWidth) return;
+  const rect = img.getBoundingClientRect();
+  const scaleX = img.clientWidth / img.naturalWidth;
+  const scaleY = img.clientHeight / img.naturalHeight;
+  const xleft = Math.round((ev.clientX - rect.left) / scaleX);
+  const ytop = Math.round((ev.clientY - rect.top) / scaleY);
+  ddiAddZoneRow(xleft, ytop);
+});
+
+function addDragItem() {
+  const container = document.getElementById('ddi-drag-container');
+  const total = document.getElementById('id_dragform-TOTAL_FORMS');
+  const idx = parseInt(total.value);
+  const prefix = 'dragform-' + idx;
+  const row = document.createElement('div');
+  row.className = 'ddi-drag-row d-flex gap-2 align-items-center mb-2';
+  row.dataset.prefix = prefix;
+  row.innerHTML = `
+    <input type="text" name="${prefix}-label" class="form-control form-control-sm" placeholder="Étiquette…">
+    <button type="button" class="btn btn-sm btn-outline-danger" onclick="ddiRemoveDragRow(this)">✕</button>
+  `;
+  container.appendChild(row);
+  total.value = idx + 1;
+}
+
+function ddiRemoveDragRow(button) {
+  const row = button.closest('.ddi-drag-row');
+  const deleteCheckbox = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+  if (deleteCheckbox) {
+    deleteCheckbox.checked = true;
+    row.style.display = 'none';
+  } else {
+    row.remove();
+    ddiReindexDragForms();
+  }
+}
+
+function ddiReindexDragForms() {
+  const initialCount = parseInt(document.getElementById('id_dragform-INITIAL_FORMS').value);
+  const newRows = Array.from(document.querySelectorAll('.ddi-drag-row'))
+    .filter(row => !row.querySelector('input[name$="-id"]'));
+  newRows.forEach((row, i) => {
+    const oldPrefix = row.dataset.prefix;
+    const newPrefix = 'dragform-' + (initialCount + i);
+    if (oldPrefix !== newPrefix) {
+      row.querySelectorAll('[name]').forEach(el => {
+        el.name = newPrefix + el.name.slice(oldPrefix.length);
+      });
+      row.dataset.prefix = newPrefix;
+    }
+  });
+  document.getElementById('id_dragform-TOTAL_FORMS').value = initialCount + newRows.length;
+}
+
+// Repères pour les zones déjà existantes (mode édition)
+{% for form in zone_formset %}
+{% if form.instance.pk %}
+ddiAddMarker("{{ form.prefix }}", {{ form.instance.xleft }}, {{ form.instance.ytop }});
+{% endif %}
+{% endfor %}
 </script>
 {% endblock content %}
 

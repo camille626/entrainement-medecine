@@ -18,6 +18,7 @@ from .models import (
     Answer,
     Course,
     Errata,
+    ImageDropZone,
     Question,
     QuestionImage,
     QuizSession,
@@ -84,6 +85,27 @@ def match_qroc_answer(
     return False, None
 
 
+def match_zone_label(zone: "ImageDropZone", user_text: str) -> bool:
+    """Vérifie si le texte saisi correspond au label principal ou à un label alternatif de la zone.
+
+    Supporte le joker * comme pour les réponses QROC (cf. match_qroc_answer).
+    """
+    n = normalize_qroc(user_text)
+    if not n:
+        return False
+    candidates = [zone.correct_label] + list(
+        zone.accepted_labels.values_list("text", flat=True)
+    )
+    for candidate in candidates:
+        pattern = normalize_qroc(candidate)
+        if "*" in pattern:
+            if fnmatch.fnmatch(n, pattern):
+                return True
+        elif pattern == n:
+            return True
+    return False
+
+
 # ── Helpers de score ─────────────────────────────────────────────────────────
 
 
@@ -105,7 +127,7 @@ def _build_zone_results(question: "QuestionModel", qroc_text: "str | None") -> l
     results = []
     for zone in question.drop_zones.all():
         user_text = str(zone_selections.get(str(zone.no), ""))
-        is_correct = normalize_qroc(user_text) == normalize_qroc(zone.correct_label)
+        is_correct = match_zone_label(zone, user_text)
         results.append(
             {
                 "zone": zone,
@@ -712,9 +734,7 @@ class CheckView(LoginRequiredMixin, View):
             zone_results = []
             for zone in drop_zones:
                 user_text = zone_selections.get(str(zone.no), "")
-                is_zone_correct = normalize_qroc(user_text) == normalize_qroc(
-                    zone.correct_label
-                )
+                is_zone_correct = match_zone_label(zone, user_text)
                 if is_zone_correct:
                     correct_count += 1
                 zone_results.append(

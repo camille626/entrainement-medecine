@@ -11,6 +11,7 @@ from qcm.models import (
     Course,
     ImageDragItem,
     ImageDropZone,
+    ImageDropZoneLabel,
     Question,
     QuizSession,
     QuizSessionQuestion,
@@ -162,6 +163,147 @@ class TestImageDropZone:
         )
         ddi_question.delete()
         assert not ImageDropZone.objects.filter(pk=zone.pk).exists()
+
+
+@pytest.mark.django_db
+class TestImageDropZoneLabel:
+    def test_create(self, ddi_question):
+        zone = ImageDropZone.objects.create(
+            question=ddi_question,
+            no=1,
+            xleft=100,
+            ytop=50,
+            correct_drag_no=1,
+            correct_label="sclérotique",
+        )
+        label = ImageDropZoneLabel.objects.create(zone=zone, text="sclere")
+        assert label.pk is not None
+        assert label.text == "sclere"
+        assert label.zone_id == zone.pk
+
+    def test_str(self, ddi_question):
+        zone = ImageDropZone.objects.create(
+            question=ddi_question,
+            no=1,
+            xleft=100,
+            ytop=50,
+            correct_drag_no=1,
+            correct_label="sclérotique",
+        )
+        label = ImageDropZoneLabel.objects.create(zone=zone, text="sclere")
+        assert "sclere" in str(label)
+
+    def test_cascade_delete_with_zone(self, ddi_question):
+        zone = ImageDropZone.objects.create(
+            question=ddi_question,
+            no=1,
+            xleft=100,
+            ytop=50,
+            correct_drag_no=1,
+            correct_label="sclérotique",
+        )
+        label = ImageDropZoneLabel.objects.create(zone=zone, text="sclere")
+        zone.delete()
+        assert not ImageDropZoneLabel.objects.filter(pk=label.pk).exists()
+
+    def test_accessible_via_zone_accepted_labels(self, ddi_question):
+        zone = ImageDropZone.objects.create(
+            question=ddi_question,
+            no=1,
+            xleft=100,
+            ytop=50,
+            correct_drag_no=1,
+            correct_label="sclérotique",
+        )
+        ImageDropZoneLabel.objects.create(zone=zone, text="sclere")
+        ImageDropZoneLabel.objects.create(zone=zone, text="sclerotic")
+        assert zone.accepted_labels.count() == 2
+
+
+@pytest.mark.django_db
+class TestMatchZoneLabel:
+    def test_matches_correct_label_exact(self, ddi_question):
+        from qcm.views import match_zone_label
+
+        zone = ImageDropZone.objects.create(
+            question=ddi_question,
+            no=1,
+            xleft=100,
+            ytop=50,
+            correct_drag_no=1,
+            correct_label="sclérotique",
+        )
+        assert match_zone_label(zone, "sclérotique") is True
+
+    def test_matches_correct_label_case_insensitive_accents(self, ddi_question):
+        from qcm.views import match_zone_label
+
+        zone = ImageDropZone.objects.create(
+            question=ddi_question,
+            no=1,
+            xleft=100,
+            ytop=50,
+            correct_drag_no=1,
+            correct_label="sclérotique",
+        )
+        assert match_zone_label(zone, "SCLEROTIQUE") is True
+
+    def test_matches_accepted_alternative(self, ddi_question):
+        from qcm.views import match_zone_label
+
+        zone = ImageDropZone.objects.create(
+            question=ddi_question,
+            no=1,
+            xleft=100,
+            ytop=50,
+            correct_drag_no=1,
+            correct_label="sclérotique",
+        )
+        ImageDropZoneLabel.objects.create(zone=zone, text="sclere")
+        assert match_zone_label(zone, "sclere") is True
+        assert match_zone_label(zone, "Sclere") is True
+
+    def test_matches_accepted_alternative_with_wildcard(self, ddi_question):
+        from qcm.views import match_zone_label
+
+        zone = ImageDropZone.objects.create(
+            question=ddi_question,
+            no=1,
+            xleft=100,
+            ytop=50,
+            correct_drag_no=1,
+            correct_label="myélome",
+        )
+        ImageDropZoneLabel.objects.create(zone=zone, text="myelome*")
+        assert match_zone_label(zone, "myelome multiple") is True
+
+    def test_no_match_returns_false(self, ddi_question):
+        from qcm.views import match_zone_label
+
+        zone = ImageDropZone.objects.create(
+            question=ddi_question,
+            no=1,
+            xleft=100,
+            ytop=50,
+            correct_drag_no=1,
+            correct_label="sclérotique",
+        )
+        ImageDropZoneLabel.objects.create(zone=zone, text="sclere")
+        assert match_zone_label(zone, "rétine") is False
+
+    def test_empty_user_text_returns_false(self, ddi_question):
+        from qcm.views import match_zone_label
+
+        zone = ImageDropZone.objects.create(
+            question=ddi_question,
+            no=1,
+            xleft=100,
+            ytop=50,
+            correct_drag_no=1,
+            correct_label="sclérotique",
+        )
+        assert match_zone_label(zone, "") is False
+        assert match_zone_label(zone, "   ") is False
 
 
 @pytest.mark.django_db
@@ -335,6 +477,29 @@ class TestCheckViewDDIImageOrText:
         ua = UserAnswer.objects.get(session=session, question=ddi_question)
         assert ua.is_correct is False
         assert ua.effective_fraction == 0.0
+
+    def test_correct_via_accepted_alternative_label(
+        self, client, user, session, ddi_question, drop_zones, drag_items
+    ):
+        """Une zone est comptée correcte si la réponse correspond à une alternative acceptée."""
+        ImageDropZoneLabel.objects.create(zone=drop_zones[1], text="choroïde")
+        client.force_login(user)
+        QuizSessionQuestion.objects.create(
+            session=session, question=ddi_question, order=1
+        )
+        response = client.post(
+            f"/entrainement/session/{session.pk}/check/",
+            {
+                "question_id": str(ddi_question.pk),
+                "zone_1": "sclérotique",  # correct ✓ (label principal)
+                "zone_2": "choroïde",  # correct ✓ (alternative acceptée)
+                "zone_3": "rétine",  # correct ✓
+            },
+        )
+        assert response.status_code == 200
+        ua = UserAnswer.objects.get(session=session, question=ddi_question)
+        assert ua.is_correct is True
+        assert abs(ua.effective_fraction - 1.0) < 1e-6
 
     def test_response_contains_zone_results(
         self, client, user, session, ddi_question, drop_zones, drag_items
