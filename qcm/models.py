@@ -531,6 +531,27 @@ class ImageDropZone(models.Model):
     def __str__(self) -> str:
         return f"Zone #{self.no} '{self.correct_label}' (Q#{self.question_id})"
 
+    @property
+    def accepted_labels_text(self) -> str:
+        """Labels alternatifs acceptés, joints par '; ' (pour pré-remplir le formulaire admin)."""
+        return "; ".join(self.accepted_labels.values_list("text", flat=True))
+
+
+class ImageDropZoneLabel(models.Model):
+    """Réponse alternative acceptée pour une zone ddimageortext (en plus du label principal)."""
+
+    zone = models.ForeignKey(
+        ImageDropZone, on_delete=models.CASCADE, related_name="accepted_labels"
+    )
+    text = models.CharField(max_length=500)
+
+    class Meta:
+        verbose_name = "Label accepté (zone)"
+        verbose_name_plural = "Labels acceptés (zone)"
+
+    def __str__(self) -> str:
+        return f"'{self.text}' (zone #{self.zone_id})"
+
 
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")

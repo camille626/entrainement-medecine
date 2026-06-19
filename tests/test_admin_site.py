@@ -8,7 +8,11 @@ from qcm.models import (
     Category,
     Course,
     CoursePackage,
+    ImageDragItem,
+    ImageDropZone,
+    ImageDropZoneLabel,
     Question,
+    QuestionImage,
     RegistrationRequest,
     Semester,
     StudyYear,
@@ -256,12 +260,35 @@ class TestAdminQuestions:
         response = client.get("/admin-site/questions/")
         assert response.status_code == 200
 
+    def test_list_shows_new_legend_question_button(self, client, staff_user):
+        """Un bouton dédié permet de créer une question légende interactive."""
+        client.force_login(staff_user)
+        response = client.get("/admin-site/questions/")
+        assert b"/admin-site/questions/ajouter/?qtype=ddimageortext" in response.content
+
     def test_list_filtered_by_course(self, client, staff_user, question, course):
         """Le filtre par cours fonctionne."""
         client.force_login(staff_user)
         response = client.get(f"/admin-site/questions/?course={course.pk}")
         assert response.status_code == 200
         assert b"Question test admin" in response.content
+
+    def test_list_shows_qtype_filter_options(self, client, staff_user):
+        """Le filtre par type de question propose les qtypes existants."""
+        client.force_login(staff_user)
+        response = client.get("/admin-site/questions/")
+        content = response.content.decode()
+        assert 'name="qtype"' in content
+        assert "Légende interactive" in content
+
+    def test_list_filtered_by_qtype(self, client, staff_user, question, ddi_question):
+        """Le filtre par type de question (qtype) n'affiche que les questions du type choisi."""
+        client.force_login(staff_user)
+        response = client.get("/admin-site/questions/?qtype=ddimageortext")
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "Question test admin" not in content
+        assert "Légender l" in content
 
     def test_add_question_page_accessible(self, client, staff_user):
         """La page d'ajout de question est accessible."""
@@ -316,6 +343,366 @@ class TestAdminQuestions:
         )
         question.refresh_from_db()
         assert question.text == "<p>Texte modifié</p>"
+
+    def test_delete_list_form_carries_current_filters_as_back_url(
+        self, client, staff_user, question, course
+    ):
+        """Le formulaire de suppression depuis la liste conserve les filtres actuels."""
+        client.force_login(staff_user)
+        response = client.get(
+            f"/admin-site/questions/?course={course.pk}&qtype=multichoice"
+        )
+        content = response.content.decode()
+        assert (
+            f'value="/admin-site/questions/?course={course.pk}&amp;qtype=multichoice"'
+            in content
+        )
+
+    def test_delete_redirects_to_posted_back_url(self, client, staff_user, question):
+        """La suppression redirige vers back_url si fourni, en conservant les filtres."""
+        client.force_login(staff_user)
+        back_url = "/admin-site/questions/?course=9&qtype=ddimageortext"
+        response = client.post(
+            f"/admin-site/questions/{question.pk}/supprimer/",
+            {"back_url": back_url},
+        )
+        assert response.status_code == 302
+        assert response["Location"] == back_url
+        assert not Question.objects.filter(pk=question.pk).exists()
+
+    def test_delete_without_back_url_defaults_to_list(
+        self, client, staff_user, question
+    ):
+        """Sans back_url, la suppression redirige vers la liste non filtrée (comportement historique)."""
+        client.force_login(staff_user)
+        response = client.post(f"/admin-site/questions/{question.pk}/supprimer/")
+        assert response.status_code == 302
+        assert response["Location"] == "/admin-site/questions/"
+
+    def test_edit_page_shows_delete_button(self, client, staff_user, question):
+        """La page de modification propose un bouton de suppression."""
+        client.force_login(staff_user)
+        response = client.get(f"/admin-site/questions/{question.pk}/modifier/")
+        content = response.content.decode()
+        assert f"/admin-site/questions/{question.pk}/supprimer/" in content
+
+    def test_edit_page_delete_form_carries_back_url(self, client, staff_user, question):
+        """Le formulaire de suppression de la page d'édition conserve le back_url d'origine."""
+        from urllib.parse import quote
+
+        client.force_login(staff_user)
+        back_url = "/admin-site/questions/?course=9&qtype=multichoice"
+        response = client.get(
+            f"/admin-site/questions/{question.pk}/modifier/?back={quote(back_url, safe='')}"
+        )
+        content = response.content.decode()
+        assert (
+            'value="/admin-site/questions/?course=9&amp;qtype=multichoice"' in content
+        )
+
+    def test_delete_from_edit_page_deletes_question(self, client, staff_user, question):
+        """Soumettre la suppression depuis la page d'édition supprime bien la question."""
+        client.force_login(staff_user)
+        back_url = "/admin-site/questions/?qtype=multichoice"
+        response = client.post(
+            f"/admin-site/questions/{question.pk}/supprimer/",
+            {"back_url": back_url},
+        )
+        assert response.status_code == 302
+        assert response["Location"] == back_url
+        assert not Question.objects.filter(pk=question.pk).exists()
+
+
+# ── Gestion des questions ddimageortext (légende interactive) ─────────────────
+
+
+@pytest.fixture
+def bg_image_file():
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    return SimpleUploadedFile("fond.png", b"fake-image-bytes", content_type="image/png")
+
+
+@pytest.fixture
+def ddi_question(category):
+    return Question.objects.create(
+        text="<p>Légender l'oeil</p>",
+        category=category,
+        qtype=Question.DDIMAGEORTEXT,
+    )
+
+
+@pytest.fixture
+def ddi_zones(ddi_question):
+    return [
+        ImageDropZone.objects.create(
+            question=ddi_question,
+            no=1,
+            xleft=100,
+            ytop=50,
+            correct_drag_no=0,
+            correct_label="sclérotique",
+        ),
+        ImageDropZone.objects.create(
+            question=ddi_question,
+            no=2,
+            xleft=200,
+            ytop=100,
+            correct_drag_no=0,
+            correct_label="rétine",
+        ),
+    ]
+
+
+@pytest.mark.django_db
+class TestAdminQuestionsDDImageOrText:
+    def test_add_page_select_includes_ddimageortext_option(self, client, staff_user):
+        client.force_login(staff_user)
+        response = client.get("/admin-site/questions/ajouter/")
+        assert b"ddimageortext" in response.content
+
+    def test_add_page_preselects_qtype_from_query_param(self, client, staff_user):
+        client.force_login(staff_user)
+        response = client.get("/admin-site/questions/ajouter/?qtype=ddimageortext")
+        assert response.status_code == 200
+        # Le select doit marquer ddimageortext comme sélectionné par défaut
+        content = response.content.decode()
+        idx = content.index('value="ddimageortext"')
+        assert "selected" in content[idx : idx + 60]
+
+    def test_create_ddimageortext_question_with_image_zones_and_drag_items(
+        self, client, staff_user, category, bg_image_file
+    ):
+        client.force_login(staff_user)
+        response = client.post(
+            "/admin-site/questions/ajouter/",
+            {
+                "text": "<p>Légender l'oeil</p>",
+                "category": category.pk,
+                "qtype": "ddimageortext",
+                "new_bg_image_file": bg_image_file,
+                "dragform-TOTAL_FORMS": "2",
+                "dragform-INITIAL_FORMS": "0",
+                "dragform-0-label": "sclérotique",
+                "dragform-1-label": "rétine",
+                "zoneform-TOTAL_FORMS": "2",
+                "zoneform-INITIAL_FORMS": "0",
+                "zoneform-0-xleft": "100",
+                "zoneform-0-ytop": "50",
+                "zoneform-0-correct_label": "sclérotique",
+                "zoneform-0-alts": "sclere; sclerotic",
+                "zoneform-1-xleft": "200",
+                "zoneform-1-ytop": "100",
+                "zoneform-1-correct_label": "rétine",
+                "zoneform-1-alts": "",
+            },
+        )
+        assert response.status_code == 302
+        question = Question.objects.get(text="<p>Légender l'oeil</p>")
+        assert question.qtype == Question.DDIMAGEORTEXT
+        assert question.images.filter(moodle_filename="background").count() == 1
+        assert ImageDragItem.objects.filter(question=question).count() == 2
+        zones = ImageDropZone.objects.filter(question=question).order_by("no")
+        assert zones.count() == 2
+        assert list(zones.values_list("no", flat=True)) == [1, 2]
+        zone1 = zones.get(no=1)
+        assert zone1.correct_label == "sclérotique"
+        alt_texts = set(zone1.accepted_labels.values_list("text", flat=True))
+        assert alt_texts == {"sclere", "sclerotic"}
+        zone2 = zones.get(no=2)
+        assert zone2.accepted_labels.count() == 0
+
+    def test_edit_ddimageortext_adds_zone_assigns_next_no(
+        self, client, staff_user, category, ddi_question, ddi_zones
+    ):
+        client.force_login(staff_user)
+        client.post(
+            f"/admin-site/questions/{ddi_question.pk}/modifier/",
+            {
+                "text": ddi_question.text,
+                "category": category.pk,
+                "qtype": "ddimageortext",
+                "dragform-TOTAL_FORMS": "0",
+                "dragform-INITIAL_FORMS": "0",
+                "zoneform-TOTAL_FORMS": "3",
+                "zoneform-INITIAL_FORMS": "2",
+                "zoneform-0-id": ddi_zones[0].pk,
+                "zoneform-0-xleft": "100",
+                "zoneform-0-ytop": "50",
+                "zoneform-0-correct_label": "sclérotique",
+                "zoneform-0-alts": "",
+                "zoneform-1-id": ddi_zones[1].pk,
+                "zoneform-1-xleft": "200",
+                "zoneform-1-ytop": "100",
+                "zoneform-1-correct_label": "rétine",
+                "zoneform-1-alts": "",
+                "zoneform-2-xleft": "300",
+                "zoneform-2-ytop": "150",
+                "zoneform-2-correct_label": "choroide",
+                "zoneform-2-alts": "",
+            },
+        )
+        zones = ImageDropZone.objects.filter(question=ddi_question).order_by("no")
+        assert list(zones.values_list("no", flat=True)) == [1, 2, 3]
+        assert zones.get(no=3).correct_label == "choroide"
+
+    def test_edit_ddimageortext_deletes_zone(
+        self, client, staff_user, category, ddi_question, ddi_zones
+    ):
+        client.force_login(staff_user)
+        client.post(
+            f"/admin-site/questions/{ddi_question.pk}/modifier/",
+            {
+                "text": ddi_question.text,
+                "category": category.pk,
+                "qtype": "ddimageortext",
+                "dragform-TOTAL_FORMS": "0",
+                "dragform-INITIAL_FORMS": "0",
+                "zoneform-TOTAL_FORMS": "2",
+                "zoneform-INITIAL_FORMS": "2",
+                "zoneform-0-id": ddi_zones[0].pk,
+                "zoneform-0-xleft": "100",
+                "zoneform-0-ytop": "50",
+                "zoneform-0-correct_label": "sclérotique",
+                "zoneform-0-alts": "",
+                "zoneform-1-id": ddi_zones[1].pk,
+                "zoneform-1-xleft": "200",
+                "zoneform-1-ytop": "100",
+                "zoneform-1-correct_label": "rétine",
+                "zoneform-1-alts": "",
+                "zoneform-1-DELETE": "on",
+            },
+        )
+        assert not ImageDropZone.objects.filter(pk=ddi_zones[1].pk).exists()
+        assert ImageDropZone.objects.filter(pk=ddi_zones[0].pk).exists()
+
+    def test_edit_ddimageortext_updates_alt_labels(
+        self, client, staff_user, category, ddi_question, ddi_zones
+    ):
+        ImageDropZoneLabel.objects.create(zone=ddi_zones[0], text="ancien")
+        client.force_login(staff_user)
+        client.post(
+            f"/admin-site/questions/{ddi_question.pk}/modifier/",
+            {
+                "text": ddi_question.text,
+                "category": category.pk,
+                "qtype": "ddimageortext",
+                "dragform-TOTAL_FORMS": "0",
+                "dragform-INITIAL_FORMS": "0",
+                "zoneform-TOTAL_FORMS": "2",
+                "zoneform-INITIAL_FORMS": "2",
+                "zoneform-0-id": ddi_zones[0].pk,
+                "zoneform-0-xleft": "100",
+                "zoneform-0-ytop": "50",
+                "zoneform-0-correct_label": "sclérotique",
+                "zoneform-0-alts": "nouveau1; nouveau2",
+                "zoneform-1-id": ddi_zones[1].pk,
+                "zoneform-1-xleft": "200",
+                "zoneform-1-ytop": "100",
+                "zoneform-1-correct_label": "rétine",
+                "zoneform-1-alts": "",
+            },
+        )
+        ddi_zones[0].refresh_from_db()
+        alt_texts = set(ddi_zones[0].accepted_labels.values_list("text", flat=True))
+        assert alt_texts == {"nouveau1", "nouveau2"}
+
+    def test_edit_ddimageortext_replaces_background_image(
+        self, client, staff_user, category, ddi_question, ddi_zones, bg_image_file
+    ):
+        QuestionImage.objects.create(
+            question=ddi_question, moodle_filename="background", file=bg_image_file
+        )
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        client.force_login(staff_user)
+        new_file = SimpleUploadedFile(
+            "nouveau.png", b"new-bytes", content_type="image/png"
+        )
+        client.post(
+            f"/admin-site/questions/{ddi_question.pk}/modifier/",
+            {
+                "text": ddi_question.text,
+                "category": category.pk,
+                "qtype": "ddimageortext",
+                "new_bg_image_file": new_file,
+                "dragform-TOTAL_FORMS": "0",
+                "dragform-INITIAL_FORMS": "0",
+                "zoneform-TOTAL_FORMS": "2",
+                "zoneform-INITIAL_FORMS": "2",
+                "zoneform-0-id": ddi_zones[0].pk,
+                "zoneform-0-xleft": "100",
+                "zoneform-0-ytop": "50",
+                "zoneform-0-correct_label": "sclérotique",
+                "zoneform-0-alts": "",
+                "zoneform-1-id": ddi_zones[1].pk,
+                "zoneform-1-xleft": "200",
+                "zoneform-1-ytop": "100",
+                "zoneform-1-correct_label": "rétine",
+                "zoneform-1-alts": "",
+            },
+        )
+        assert (
+            QuestionImage.objects.filter(
+                question=ddi_question, moodle_filename="background"
+            ).count()
+            == 1
+        )
+
+    def test_edit_page_shows_image_imported_from_moodle(
+        self, client, staff_user, ddi_question, bg_image_file
+    ):
+        """Une image importée de Moodle (nom de fichier arbitraire, pas 'background') doit s'afficher en édition."""
+        QuestionImage.objects.create(
+            question=ddi_question,
+            moodle_filename="oeil 150815.png",
+            file=bg_image_file,
+        )
+        client.force_login(staff_user)
+        response = client.get(f"/admin-site/questions/{ddi_question.pk}/modifier/")
+        assert response.context["existing_bg_image"] is not None
+
+    def test_replace_background_image_removes_old_moodle_named_image(
+        self, client, staff_user, category, ddi_question, ddi_zones, bg_image_file
+    ):
+        """Remplacer l'image de fond doit supprimer l'ancienne, même si elle vient de l'import Moodle."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        QuestionImage.objects.create(
+            question=ddi_question,
+            moodle_filename="oeil 150815.png",
+            file=bg_image_file,
+        )
+        client.force_login(staff_user)
+        new_file = SimpleUploadedFile(
+            "nouveau.png", b"new-bytes", content_type="image/png"
+        )
+        client.post(
+            f"/admin-site/questions/{ddi_question.pk}/modifier/",
+            {
+                "text": ddi_question.text,
+                "category": category.pk,
+                "qtype": "ddimageortext",
+                "new_bg_image_file": new_file,
+                "dragform-TOTAL_FORMS": "0",
+                "dragform-INITIAL_FORMS": "0",
+                "zoneform-TOTAL_FORMS": "2",
+                "zoneform-INITIAL_FORMS": "2",
+                "zoneform-0-id": ddi_zones[0].pk,
+                "zoneform-0-xleft": "100",
+                "zoneform-0-ytop": "50",
+                "zoneform-0-correct_label": "sclérotique",
+                "zoneform-0-alts": "",
+                "zoneform-1-id": ddi_zones[1].pk,
+                "zoneform-1-xleft": "200",
+                "zoneform-1-ytop": "100",
+                "zoneform-1-correct_label": "rétine",
+                "zoneform-1-alts": "",
+            },
+        )
+        images = QuestionImage.objects.filter(question=ddi_question)
+        assert images.count() == 1
+        assert images.first().moodle_filename == "background"
 
 
 # ── Gestion des cours ─────────────────────────────────────────────────────────

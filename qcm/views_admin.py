@@ -6,7 +6,9 @@ import string
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import User
 from django.core.mail import send_mail
+from django.db.models import Max
 from django.forms import BaseInlineFormSet, inlineformset_factory
+from django.http import HttpRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
@@ -15,6 +17,9 @@ from .models import (
     Category,
     Course,
     CoursePackage,
+    ImageDragItem,
+    ImageDropZone,
+    ImageDropZoneLabel,
     Question,
     QuestionImage,
     RegistrationRequest,
@@ -115,6 +120,97 @@ AnswerFormSet: type[BaseInlineFormSet] = inlineformset_factory(
     extra=2,
     can_delete=True,
 )
+
+
+# ── ddimageortext (légende interactive) : formsets et helpers ─────────────────
+
+
+ImageDragItemFormSet: type[BaseInlineFormSet] = inlineformset_factory(
+    Question,
+    ImageDragItem,
+    fields=["label"],
+    extra=2,
+    can_delete=True,
+)
+
+ImageDropZoneFormSet: type[BaseInlineFormSet] = inlineformset_factory(
+    Question,
+    ImageDropZone,
+    fields=["xleft", "ytop", "correct_label"],
+    extra=0,
+    can_delete=True,
+)
+
+
+def _save_ddi_background_image(question: Question, request: HttpRequest) -> None:
+    """Remplace l'image de fond unique d'une question ddimageortext.
+
+    Une question ddimageortext n'a qu'une seule image conceptuelle (le fond) ;
+    on supprime systématiquement les images existantes avant d'enregistrer la
+    nouvelle, qu'elles viennent de cet admin (nom 'background') ou de l'import
+    Moodle (nom de fichier d'origine, ex. 'oeil 150815.png').
+    """
+    image_file = request.FILES.get("new_bg_image_file")
+    if not image_file:
+        return
+    for old in question.images.all():
+        old.file.delete(save=False)
+        old.delete()
+    QuestionImage.objects.create(
+        question=question,
+        moodle_filename="background",
+        file=image_file,
+    )
+
+
+def _save_ddi_drag_items(question: Question, request: HttpRequest) -> BaseInlineFormSet:
+    """Sauvegarde les étiquettes (drag items), avec auto-assignation du champ `no`."""
+    formset = ImageDragItemFormSet(request.POST, instance=question, prefix="dragform")
+    if not formset.is_valid():
+        return formset
+    next_no = (question.drag_items.aggregate(Max("no"))["no__max"] or 0) + 1
+    for form in formset.forms:
+        if form in formset.deleted_forms:
+            if form.instance.pk is not None:
+                form.instance.delete()
+            continue
+        if not form.has_changed() and form.instance.pk is None:
+            continue
+        obj = form.save(commit=False)
+        if obj.pk is None:
+            obj.no = next_no
+            next_no += 1
+        obj.save()
+    return formset
+
+
+def _save_ddi_drop_zones(question: Question, request: HttpRequest) -> BaseInlineFormSet:
+    """Sauvegarde les zones, leur `no` auto-assigné et leurs réponses alternatives acceptées."""
+    formset = ImageDropZoneFormSet(request.POST, instance=question, prefix="zoneform")
+    if not formset.is_valid():
+        return formset
+    next_no = (question.drop_zones.aggregate(Max("no"))["no__max"] or 0) + 1
+    for form in formset.forms:
+        if form in formset.deleted_forms:
+            if form.instance.pk is not None:
+                form.instance.delete()
+            continue
+        if not form.has_changed() and form.instance.pk is None:
+            continue
+        obj = form.save(commit=False)
+        if obj.pk is None:
+            obj.no = next_no
+            next_no += 1
+            obj.correct_drag_no = 0
+        obj.save()
+        alt_raw = request.POST.get(f"{form.prefix}-alts", "")
+        alt_labels = [s.strip() for s in alt_raw.split(";") if s.strip()]
+        obj.accepted_labels.all().delete()
+        if alt_labels:
+            ImageDropZoneLabel.objects.bulk_create(
+                ImageDropZoneLabel(zone=obj, text=text) for text in alt_labels
+            )
+    return formset
 
 
 # ── Views ─────────────────────────────────────────────────────────────────────
@@ -284,6 +380,7 @@ class AdminQuestionsView(StaffRequiredMixin, View):
         raw_category = request.GET.get("category", "")
         course_id = raw_course if raw_course.isdigit() else None
         category_id = raw_category if raw_category.isdigit() else None
+        qtype = request.GET.get("qtype", "").strip()
         search = request.GET.get("q", "").strip()
 
         qs = Question.objects.select_related("category__course").order_by(
@@ -293,6 +390,8 @@ class AdminQuestionsView(StaffRequiredMixin, View):
             qs = qs.filter(category__course_id=course_id)
         if category_id:
             qs = qs.filter(category_id=category_id)
+        if qtype:
+            qs = qs.filter(qtype=qtype)
         if search:
             from django.db.models import Q
 
@@ -317,8 +416,10 @@ class AdminQuestionsView(StaffRequiredMixin, View):
                 "page_obj": page_obj,
                 "courses": courses,
                 "categories": categories,
+                "qtype_choices": Question.QTYPE_CHOICES,
                 "selected_course": course_id or "",
                 "selected_category": category_id or "",
+                "selected_qtype": qtype,
                 "search": search,
                 "total": qs.count(),
             },
@@ -340,11 +441,19 @@ class AdminQuestionAddView(StaffRequiredMixin, View):
                 "category__tag_type", "name"
             ),
             "action": "add",
+            "selected_qtype": Question.MULTICHOICE,
+            "drag_formset": ImageDragItemFormSet(prefix="dragform"),
+            "zone_formset": ImageDropZoneFormSet(prefix="zoneform"),
             **extra,
         }
 
     def get(self, request):
-        return render(request, self.template_name, self._ctx(formset=AnswerFormSet()))
+        selected_qtype = request.GET.get("qtype", Question.MULTICHOICE)
+        return render(
+            request,
+            self.template_name,
+            self._ctx(formset=AnswerFormSet(), selected_qtype=selected_qtype),
+        )
 
     def post(self, request):
         import re
@@ -366,6 +475,7 @@ class AdminQuestionAddView(StaffRequiredMixin, View):
                 self.template_name,
                 self._ctx(
                     formset=AnswerFormSet(request.POST),
+                    selected_qtype=qtype,
                     error="Le texte et la catégorie sont obligatoires.",
                 ),
             )
@@ -380,23 +490,28 @@ class AdminQuestionAddView(StaffRequiredMixin, View):
 
             question.tags.set(Tag.objects.filter(pk__in=tag_ids))
 
-        formset = AnswerFormSet(request.POST, instance=question)
-        if formset.is_valid():
-            answers = formset.save(commit=False)
-            for answer in answers:
-                answer.is_correct = answer.fraction > 0
-                answer.save()
-            for answer in formset.deleted_objects:
-                answer.delete()
+        if qtype == Question.DDIMAGEORTEXT:
+            _save_ddi_background_image(question, request)
+            _save_ddi_drag_items(question, request)
+            _save_ddi_drop_zones(question, request)
+        else:
+            formset = AnswerFormSet(request.POST, instance=question)
+            if formset.is_valid():
+                answers = formset.save(commit=False)
+                for answer in answers:
+                    answer.is_correct = answer.fraction > 0
+                    answer.save()
+                for answer in formset.deleted_objects:
+                    answer.delete()
 
-        image_file = request.FILES.get("new_image_file")
-        image_filename = request.POST.get("new_image_filename", "").strip()
-        if image_file and image_filename:
-            QuestionImage.objects.create(
-                question=question,
-                moodle_filename=image_filename,
-                file=image_file,
-            )
+            image_file = request.FILES.get("new_image_file")
+            image_filename = request.POST.get("new_image_filename", "").strip()
+            if image_file and image_filename:
+                QuestionImage.objects.create(
+                    question=question,
+                    moodle_filename=image_filename,
+                    file=image_file,
+                )
 
         return redirect("qcm:admin_questions")
 
@@ -465,7 +580,11 @@ class AdminQuestionEditView(StaffRequiredMixin, View):
             "direct_chapters": direct_chapters,
             "selected_tag_ids": selected_tag_ids,
             "action": "edit",
+            "selected_qtype": question.qtype,
             "existing_images": list(question.images.all()),
+            "existing_bg_image": question.images.first(),
+            "drag_formset": ImageDragItemFormSet(instance=question, prefix="dragform"),
+            "zone_formset": ImageDropZoneFormSet(instance=question, prefix="zoneform"),
             **extra,
         }
 
@@ -501,30 +620,35 @@ class AdminQuestionEditView(StaffRequiredMixin, View):
 
         question.tags.set(Tag.objects.filter(pk__in=tag_ids))
 
-        formset = AnswerFormSet(request.POST, instance=question)
-        if formset.is_valid():
-            answers = formset.save(commit=False)
-            for answer in answers:
-                answer.is_correct = answer.fraction > 0
-                answer.save()
-            for answer in formset.deleted_objects:
-                answer.delete()
+        if qtype == Question.DDIMAGEORTEXT:
+            _save_ddi_background_image(question, request)
+            _save_ddi_drag_items(question, request)
+            _save_ddi_drop_zones(question, request)
+        else:
+            formset = AnswerFormSet(request.POST, instance=question)
+            if formset.is_valid():
+                answers = formset.save(commit=False)
+                for answer in answers:
+                    answer.is_correct = answer.fraction > 0
+                    answer.save()
+                for answer in formset.deleted_objects:
+                    answer.delete()
 
-        # Handle image deletions
-        for img in question.images.all():
-            if request.POST.get(f"delete_image_{img.pk}"):
-                img.file.delete(save=False)
-                img.delete()
+            # Handle image deletions
+            for img in question.images.all():
+                if request.POST.get(f"delete_image_{img.pk}"):
+                    img.file.delete(save=False)
+                    img.delete()
 
-        # Handle new image upload
-        image_file = request.FILES.get("new_image_file")
-        image_filename = request.POST.get("new_image_filename", "").strip()
-        if image_file and image_filename:
-            QuestionImage.objects.update_or_create(
-                question=question,
-                moodle_filename=image_filename,
-                defaults={"file": image_file},
-            )
+            # Handle new image upload
+            image_file = request.FILES.get("new_image_file")
+            image_filename = request.POST.get("new_image_filename", "").strip()
+            if image_file and image_filename:
+                QuestionImage.objects.update_or_create(
+                    question=question,
+                    moodle_filename=image_filename,
+                    defaults={"file": image_file},
+                )
 
         return redirect(back_url)
 
@@ -532,8 +656,9 @@ class AdminQuestionEditView(StaffRequiredMixin, View):
 class AdminQuestionDeleteView(StaffRequiredMixin, View):
     def post(self, request, pk):
         question = get_object_or_404(Question, pk=pk)
+        back_url = request.POST.get("back_url", "/admin-site/questions/")
         question.delete()
-        return redirect("qcm:admin_questions")
+        return redirect(back_url)
 
 
 class AdminCoursesView(StaffRequiredMixin, View):
