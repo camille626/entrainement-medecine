@@ -21,7 +21,7 @@ Le NAS ne build jamais l'image : c'est la CI GitHub qui s'en charge et la publie
 
 Le workflow `.github/workflows/docker-publish.yml` build et push l'image sur ghcr.io à chaque push sur `main` touchant le code applicatif (`Dockerfile`, `config/`, `qcm/`, `pyproject.toml`, etc.).
 
-**Étape unique à faire à la main après le premier push** : le package créé par `GITHUB_TOKEN` est privé par défaut. Aller dans GitHub > onglet **Packages** du compte/repo > `entrainement-medecine` > **Package settings** > **Change visibility** > **Public**, pour que le NAS puisse pull sans authentification.
+Le package est public dès le premier push (il hérite de la visibilité publique du dépôt), donc le NAS peut le pull sans authentification. À vérifier si besoin sur la page du package (lien "Packages" dans la sidebar du repo) > **Package settings** > section **Danger Zone** > **Change package visibility**.
 
 ## 2. Structure sur le NAS
 
@@ -35,28 +35,20 @@ cd /docker/studymed
 
 Ces dossiers sont montés en bind-mount par `docker-compose.yml` :
 
-| Dossier NAS | Monté dans | Contenu |
-|---|---|---|
-| `data/postgres/` | conteneur `db` | données PostgreSQL |
-| `data/media/` | conteneurs `web` et `nginx` | fichiers uploadés (images, certificats) |
-| `data/static/` | conteneurs `web` et `nginx` | fichiers statiques collectés (`collectstatic`) |
+| Dossier NAS      | Monté dans                  | Contenu                                        |
+| ---------------- | --------------------------- | ---------------------------------------------- |
+| `data/postgres/` | conteneur `db`              | données PostgreSQL                             |
+| `data/media/`    | conteneurs `web` et `nginx` | fichiers uploadés (images, certificats)        |
+| `data/static/`   | conteneurs `web` et `nginx` | fichiers statiques collectés (`collectstatic`) |
 
 ## 3. Créer le stack dans Portainer
 
 **Stacks** > **Add stack** > **Repository** :
 
 - Repository URL : `https://github.com/camille626/entrainement-medecine`
+- Repository reference: `refs/heads/59-déploiement-docker-nas-privé-+-cloud-public-avec-sync-de-données`
 - Compose path : `docker-compose.yml`
-- **Environment variables** : saisir dans l'UI (équivalent du `.env`, voir `.env.example` pour la liste complète) :
-
-| Variable | Valeur pour ce déploiement |
-|---|---|
-| `DJANGO_SECRET_KEY` | une longue chaîne aléatoire générée |
-| `DJANGO_DEBUG` | `False` |
-| `DJANGO_ALLOWED_HOSTS` | `studymed.ascot63.synology.me` |
-| `DJANGO_CSRF_TRUSTED_ORIGINS` | `https://studymed.ascot63.synology.me` |
-| `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | identifiants de la base |
-| `NGINX_PORT` | port interne choisi, ex: `9666` |
+- **Environment variables** : Load variables from .env file (prendre celui de \\wsl.localhost\Ubuntu-26.04\home\cam\git\entrainement-medecine)
 
 Déployer le stack : Portainer clone le repo, lit `docker-compose.yml`, **pull** l'image `web` depuis ghcr.io (pas de build) et démarre les 3 services.
 
@@ -135,13 +127,13 @@ Au démarrage du conteneur `web`, `entrypoint.sh` exécute `migrate --noinput` p
 
 ## Référence : variables d'environnement
 
-| Variable | Rôle |
-|----------|------|
-| `DJANGO_SECRET_KEY` | Clé secrète Django (à générer, ne jamais committer) |
-| `DJANGO_DEBUG` | `False` en production |
-| `DJANGO_ALLOWED_HOSTS` | Liste des hôtes autorisés, séparés par des virgules |
-| `DJANGO_CSRF_TRUSTED_ORIGINS` | Origines autorisées pour les requêtes POST, avec le schéma (ex: `https://studymed.ascot63.synology.me`) |
-| `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Identifiants de la base PostgreSQL |
-| `NGINX_PORT` | Port interne sur lequel nginx écoute (mappé par docker-compose, défaut `8080`) |
+| Variable                                              | Rôle                                                                                                    |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `DJANGO_SECRET_KEY`                                   | Clé secrète Django (à générer, ne jamais committer)                                                     |
+| `DJANGO_DEBUG`                                        | `False` en production                                                                                   |
+| `DJANGO_ALLOWED_HOSTS`                                | Liste des hôtes autorisés, séparés par des virgules                                                     |
+| `DJANGO_CSRF_TRUSTED_ORIGINS`                         | Origines autorisées pour les requêtes POST, avec le schéma (ex: `https://studymed.ascot63.synology.me`) |
+| `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Identifiants de la base PostgreSQL                                                                      |
+| `NGINX_PORT`                                          | Port interne sur lequel nginx écoute (mappé par docker-compose, défaut `8080`)                          |
 
 Le `DATABASE_URL` utilisé par le service `web` est construit automatiquement dans `docker-compose.yml` à partir des variables `POSTGRES_*` (pas besoin de le dupliquer dans `.env`).
