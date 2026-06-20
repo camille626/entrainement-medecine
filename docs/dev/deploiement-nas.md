@@ -8,14 +8,14 @@ GitHub (push sur main)
 
 NAS Synology
   └── Portainer : stack Git pointant sur docker-compose.yml du repo
-        ├── pull l'image web depuis ghcr.io (pas de build sur le NAS)
+        ├── utilise l'image web ghcr.io (la build localement si absente du NAS)
         ├── variables d'env fournies via l'UI Portainer (pas de .env committé)
         └── données persistantes en bind-mount sous /docker/studymed/data/
 
 DSM (reverse-proxy) : termine le TLS, route vers le port nginx du stack
 ```
 
-Le NAS ne build jamais l'image : c'est la CI GitHub qui s'en charge et la publie publiquement sur `ghcr.io/camille626/entrainement-medecine:latest`. Portainer n'a qu'à la pull.
+La CI GitHub build et publie l'image sur `ghcr.io/camille626/entrainement-medecine:latest` à chaque push sur `main`. `docker-compose.yml` garde `build: .` en plus de `image:` (pour permettre un `docker compose up --build` en local) — en pratique, sur un déploiement Portainer "Repository", ça veut dire que le NAS build l'image lui-même au premier déploiement plutôt que de la pull (`docker compose up` privilégie un build local quand les deux clés sont présentes). C'est plus lent mais fonctionnel ; voir [Référence : architecture des conteneurs](#référence-architecture-des-conteneurs) pour le détail.
 
 ## 1. CI/CD — publication de l'image
 
@@ -25,32 +25,47 @@ Le package est public dès le premier push (il hérite de la visibilité publiqu
 
 ## 2. Structure sur le NAS
 
-Créer le dossier du projet et ses sous-dossiers de données persistantes :
+Via File Station (ou SSH si disponible), créer le dossier du projet, ses sous-dossiers de données persistantes, et y déposer une copie de `docker/nginx.conf` (récupéré depuis le repo GitHub) :
 
-```bash
-ssh admin@<ip-du-nas>
-mkdir -p /docker/studymed/data/{postgres,media,static}
-cd /docker/studymed
+```
+/docker/studymed/
+├── nginx.conf          # copie de docker/nginx.conf du repo
+└── data/
+    ├── postgres/
+    ├── media/
+    └── static/
 ```
 
-Ces dossiers sont montés en bind-mount par `docker-compose.yml` :
+Ces dossiers/fichier sont montés en bind-mount par `docker-compose.yml`, via des **chemins absolus** fournis en variables d'environnement (`DATA_DIR`, `NGINX_CONF_PATH` — voir étape 3). On évite ainsi de dépendre du dossier interne où Portainer clone le repo pour résoudre des chemins relatifs (`./data/...`), qui n'est pas garanti contenir tous les fichiers du repo selon la méthode de déploiement.
 
-| Dossier NAS      | Monté dans                  | Contenu                                        |
-| ---------------- | --------------------------- | ---------------------------------------------- |
-| `data/postgres/` | conteneur `db`              | données PostgreSQL                             |
-| `data/media/`    | conteneurs `web` et `nginx` | fichiers uploadés (images, certificats)        |
-| `data/static/`   | conteneurs `web` et `nginx` | fichiers statiques collectés (`collectstatic`) |
+| Dossier/fichier NAS | Monté dans | Contenu |
+|---|---|---|
+| `nginx.conf` | conteneur `nginx` | config nginx (copie de `docker/nginx.conf`) |
+| `data/postgres/` | conteneur `db` | données PostgreSQL |
+| `data/media/` | conteneurs `web` et `nginx` | fichiers uploadés (images, certificats) |
+| `data/static/` | conteneurs `web` et `nginx` | fichiers statiques collectés (`collectstatic`) |
 
 ## 3. Créer le stack dans Portainer
 
 **Stacks** > **Add stack** > **Repository** :
 
 - Repository URL : `https://github.com/camille626/entrainement-medecine`
-- Repository reference: `refs/heads/59-déploiement-docker-nas-privé-+-cloud-public-avec-sync-de-données`
+- Repository reference : `refs/heads/59-déploiement-docker-nas-privé-+-cloud-public-avec-sync-de-données`
 - Compose path : `docker-compose.yml`
-- **Environment variables** : Load variables from .env file (prendre celui de \\wsl.localhost\Ubuntu-26.04\home\cam\git\entrainement-medecine)
+- **Environment variables** : saisir dans l'UI (ou charger depuis un `.env` local au poste qui ouvre Portainer) :
 
-Déployer le stack : Portainer clone le repo, lit `docker-compose.yml`, **pull** l'image `web` depuis ghcr.io (pas de build) et démarre les 3 services.
+| Variable | Valeur pour ce déploiement |
+|---|---|
+| `DJANGO_SECRET_KEY` | une longue chaîne aléatoire générée |
+| `DJANGO_DEBUG` | `False` |
+| `DJANGO_ALLOWED_HOSTS` | `studymed.ascot63.synology.me` |
+| `DJANGO_CSRF_TRUSTED_ORIGINS` | `https://studymed.ascot63.synology.me` |
+| `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | identifiants de la base |
+| `NGINX_PORT` | port interne choisi, ex: `9666` |
+| `DATA_DIR` | `/docker/studymed/data` |
+| `NGINX_CONF_PATH` | `/docker/studymed/nginx.conf` |
+
+Déployer le stack : Portainer clone le repo, lit `docker-compose.yml`, construit (ou pull si déjà présente) l'image `web`, et démarre les 3 services en utilisant les chemins absolus ci-dessus pour les bind-mounts.
 
 Pour générer `DJANGO_SECRET_KEY` :
 
@@ -77,7 +92,7 @@ Le nom des conteneurs dépend du nom donné au stack dans Portainer (`<nom-du-st
 docker exec -it studymed-web-1 python manage.py createsuperuser
 ```
 
-Import des données Moodle (si pas déjà fait) — nécessite que le dump SQL soit accessible dans le conteneur, par exemple copié au préalable dans `data/media/` ou un volume dédié :
+Import des données Moodle (si pas déjà fait) — nécessite que le dump SQL soit accessible dans le conteneur, par exemple copié au préalable dans `/docker/studymed/data/media/` (vu par le conteneur comme `/app/media/`) :
 
 ```bash
 docker exec -it studymed-web-1 python manage.py import_moodle --dump <chemin-du-dump>.sql
@@ -100,7 +115,7 @@ Les migrations et le `collectstatic` sont rejoués automatiquement par `entrypoi
 docker exec studymed-db-1 pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > backup.sql
 ```
 
-`data/postgres/` étant un dossier normal sur le NAS, il peut aussi être sauvegardé directement (Hyper Backup, snapshot du volume...) en plus des dumps SQL réguliers.
+`/docker/studymed/data/postgres/` étant un dossier normal sur le NAS, il peut aussi être sauvegardé directement (Hyper Backup, snapshot du volume...) en plus des dumps SQL réguliers.
 
 ## Note de sécurité
 

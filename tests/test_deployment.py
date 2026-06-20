@@ -61,7 +61,7 @@ def test_compose_web_depends_on_healthy_db(compose_config):
 def test_compose_db_has_volume_and_healthcheck(compose_config):
     db = compose_config["services"]["db"]
     assert "healthcheck" in db
-    assert any("data/postgres" in v for v in db.get("volumes", []))
+    assert any("postgres" in v for v in db.get("volumes", []))
 
 
 def test_compose_web_shares_media_and_static_volumes(compose_config):
@@ -90,6 +90,8 @@ def test_env_example_documents_required_variables():
         "POSTGRES_USER",
         "POSTGRES_PASSWORD",
         "NGINX_PORT",
+        "DATA_DIR",
+        "NGINX_CONF_PATH",
     ]:
         assert var in content
 
