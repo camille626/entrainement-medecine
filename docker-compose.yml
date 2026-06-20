@@ -13,6 +13,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - studymed-network
 
   web:
     image: ghcr.io/camille626/entrainement-medecine:latest
@@ -30,6 +32,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - studymed-network
 
   nginx:
     image: nginx:alpine
@@ -42,3 +46,9 @@ services:
       - ${DATA_DIR:-./data}/static:/app/staticfiles:ro
     depends_on:
       - web
+    networks:
+      - studymed-network
+
+networks:
+  studymed-network:
+    driver: bridge
