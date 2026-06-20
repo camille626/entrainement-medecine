@@ -18,7 +18,6 @@ services:
 
   web:
     image: ghcr.io/camille626/entrainement-medecine:latest
-    build: .
     restart: unless-stopped
     environment:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}

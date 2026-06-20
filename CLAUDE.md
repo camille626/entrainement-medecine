@@ -98,14 +98,19 @@ pre-commit run --all-files
 
 Un push sur `main` déclenche `.github/workflows/docker-publish.yml`, qui build et publie l'image sur `ghcr.io/camille626/entrainement-medecine:latest`. Sur le NAS, un stack Portainer pointant sur le repo GitHub pull cette image (pas de build sur le NAS) et persiste les données en bind-mount sous `data/postgres`, `data/media`, `data/static`. Voir [docs/dev/deploiement-nas.md](docs/dev/deploiement-nas.md) pour le détail.
 
-En local pour tester sans dépendre de ghcr.io :
+En local pour tester (services db/web/nginx) :
 
 ```bash
 # Copier puis renseigner les variables d'environnement
 cp .env.example .env
 
-# Build + démarrage (services db/web/nginx)
-docker compose up -d --build
+# Pull l'image web depuis ghcr.io + démarrage
+docker compose pull
+docker compose up -d
+
+# Pour tester une modification de code locale avant qu'elle soit publiée sur ghcr.io,
+# builder et tagger manuellement l'image avant le `docker compose up` :
+# docker build -t ghcr.io/camille626/entrainement-medecine:latest .
 
 # Créer un superuser dans le conteneur
 docker compose exec web python manage.py createsuperuser

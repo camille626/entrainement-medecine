@@ -8,14 +8,14 @@ GitHub (push sur main)
 
 NAS Synology
   └── Portainer : stack Git pointant sur docker-compose.yml du repo
-        ├── utilise l'image web ghcr.io (la build localement si absente du NAS)
+        ├── pull l'image web depuis ghcr.io (pas de build sur le NAS)
         ├── variables d'env fournies via l'UI Portainer (pas de .env committé)
         └── données persistantes en bind-mount sous /docker/studymed/data/
 
 DSM (reverse-proxy) : termine le TLS, route vers le port nginx du stack
 ```
 
-La CI GitHub build et publie l'image sur `ghcr.io/camille626/entrainement-medecine:latest` à chaque push sur `main`. `docker-compose.yml` garde `build: .` en plus de `image:` (pour permettre un `docker compose up --build` en local) — en pratique, sur un déploiement Portainer "Repository", ça veut dire que le NAS build l'image lui-même au premier déploiement plutôt que de la pull (`docker compose up` privilégie un build local quand les deux clés sont présentes). C'est plus lent mais fonctionnel ; voir [Référence : architecture des conteneurs](#référence-architecture-des-conteneurs) pour le détail.
+Le NAS ne build jamais l'image : c'est la CI GitHub qui s'en charge et la publie sur `ghcr.io/camille626/entrainement-medecine:latest` à chaque push sur `main`. Portainer n'a qu'à la pull.
 
 ## 1. CI/CD — publication de l'image
 
@@ -138,7 +138,12 @@ Le `Dockerfile` est multi-stage :
 
 Au démarrage du conteneur `web`, `entrypoint.sh` exécute `migrate --noinput` puis `collectstatic --noinput` avant de lancer la commande passée (`gunicorn` par défaut).
 
-`docker-compose.yml` garde `build: .` en plus de `image:` sur le service `web` : `docker compose up` privilégie un build local quand les deux clés sont présentes, donc le NAS build l'image lui-même (en utilisant les couches de cache disponibles) plutôt que de toujours pull depuis ghcr.io. C'est sans incidence fonctionnelle, juste plus lent au premier déploiement.
+`docker-compose.yml` ne déclare que `image:` (pas de `build:`) sur le service `web` : `docker compose up`/Portainer pull systématiquement depuis ghcr.io, jamais de build sur le NAS. Pour tester une modification de code en local avant qu'elle soit publiée par la CI, builder et tagger l'image manuellement avant `docker compose up` :
+
+```bash
+docker build -t ghcr.io/camille626/entrainement-medecine:latest .
+docker compose up -d
+```
 
 ## Référence : variables d'environnement
 

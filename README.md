@@ -44,7 +44,8 @@ Un d√©ploiement Docker (gunicorn + PostgreSQL + nginx) est disponible pour un h√
 
 ```bash
 cp .env.example .env
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
 ## Lancer les tests

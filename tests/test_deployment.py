@@ -51,6 +51,7 @@ def test_compose_has_expected_services(compose_config):
 def test_compose_web_references_published_ghcr_image(compose_config):
     web = compose_config["services"]["web"]
     assert web["image"].startswith("ghcr.io/")
+    assert "build" not in web
 
 
 def test_compose_web_depends_on_healthy_db(compose_config):
