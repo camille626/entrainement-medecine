@@ -21,7 +21,9 @@ def test_dockerfile_exists_and_is_multistage():
 
 def test_dockerfile_uses_non_root_user():
     content = (BASE_DIR / "Dockerfile").read_text()
-    assert "USER " in content
+    assert "useradd" in content
+    entrypoint = (BASE_DIR / "entrypoint.sh").read_text()
+    assert "gosu app" in entrypoint
 
 
 def test_entrypoint_exists_and_is_executable():

@@ -16,7 +16,9 @@ RUN uv sync --frozen --no-dev
 
 FROM python:3.11-slim AS runtime
 
-RUN groupadd --system app && useradd --system --gid app --create-home app
+RUN apt-get update && apt-get install -y --no-install-recommends gosu \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system app && useradd --system --gid app --create-home app
 
 WORKDIR /app
 
@@ -24,8 +26,6 @@ COPY --from=builder --chown=app:app /app /app
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
-
-USER app
 
 EXPOSE 8000
 
