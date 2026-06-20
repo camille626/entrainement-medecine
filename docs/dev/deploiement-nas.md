@@ -125,10 +125,10 @@ docker exec studymed-db-1 pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > backup.sq
 
 ```
 nginx (reverse-proxy interne, port ${NGINX_PORT:-8080})
-  ├── sert /static/ et /media/ directement (bind-mounts data/static, data/media)
+  ├── sert /static/ et /media/ directement (bind-mounts ${DATA_DIR}/static, ${DATA_DIR}/media)
   └── proxy_pass tout le reste vers web:8000
 web (gunicorn + Django, image ghcr.io/camille626/entrainement-medecine:latest)
-db (postgres:17-alpine, bind-mount data/postgres)
+db (postgres:17-alpine, bind-mount ${DATA_DIR}/postgres)
 ```
 
 Le `Dockerfile` est multi-stage :
@@ -138,7 +138,7 @@ Le `Dockerfile` est multi-stage :
 
 Au démarrage du conteneur `web`, `entrypoint.sh` exécute `migrate --noinput` puis `collectstatic --noinput` avant de lancer la commande passée (`gunicorn` par défaut).
 
-`docker-compose.yml` garde aussi `build: .` sur le service `web`, ce qui permet à un développeur de faire `docker compose up --build` en local sans dépendre de ghcr.io ; seul un déploiement qui fait un simple `pull` (comme Portainer) utilise l'image publiée par la CI.
+`docker-compose.yml` garde `build: .` en plus de `image:` sur le service `web` : `docker compose up` privilégie un build local quand les deux clés sont présentes, donc le NAS build l'image lui-même (en utilisant les couches de cache disponibles) plutôt que de toujours pull depuis ghcr.io. C'est sans incidence fonctionnelle, juste plus lent au premier déploiement.
 
 ## Référence : variables d'environnement
 
@@ -150,5 +150,7 @@ Au démarrage du conteneur `web`, `entrypoint.sh` exécute `migrate --noinput` p
 | `DJANGO_CSRF_TRUSTED_ORIGINS`                         | Origines autorisées pour les requêtes POST, avec le schéma (ex: `https://studymed.ascot63.synology.me`) |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Identifiants de la base PostgreSQL                                                                      |
 | `NGINX_PORT`                                          | Port interne sur lequel nginx écoute (mappé par docker-compose, défaut `8080`)                          |
+| `DATA_DIR`                                            | Dossier hôte des données persistantes (défaut `./data`, relatif — à fixer en absolu type `/docker/studymed/data` pour Portainer) |
+| `NGINX_CONF_PATH`                                     | Fichier hôte de config nginx (défaut `./docker/nginx.conf`, relatif — à fixer en absolu pour Portainer) |
 
 Le `DATABASE_URL` utilisé par le service `web` est construit automatiquement dans `docker-compose.yml` à partir des variables `POSTGRES_*` (pas besoin de le dupliquer dans `.env`).
