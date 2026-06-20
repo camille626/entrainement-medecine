@@ -89,6 +89,9 @@
         "ghcr.io/devcontainers/features/github-cli:1": {},
         "ghcr.io/devcontainers/features/git:1": {
             "ppa": true
+        },
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {
+            "moby": false
         }
     },
     // Montages pour hériter de la config git du host et de la timezone
@@ -96,7 +99,8 @@
         "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,consistency=cached,readonly",
         "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,consistency=cached,readonly",
         "source=${localEnv:HOME}/.cache/uv,target=/home/vscode/.cache/uv,type=bind,consistency=cached",
-        "source=/etc/localtime,target=/etc/localtime,type=bind,consistency=cached,readonly"
+        "source=/etc/localtime,target=/etc/localtime,type=bind,consistency=cached,readonly",
+        "source=/var/run/docker.sock,target=/var/run/docker-host.sock,type=bind"
     ],
     // Configuration du shell et de l'environnement
     "postCreateCommand": "bash .devcontainer/postCreateCommand.sh",

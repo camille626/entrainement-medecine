@@ -10,7 +10,7 @@
       "python_version": "3.11",
       "github_username": "camille626",
       "use_node": "n",
-      "docker_in_docker": "n",
+      "docker_in_docker": "y",
       "_copy_without_render": [
         ".devcontainer/resources/.p10k.zsh"
       ],
