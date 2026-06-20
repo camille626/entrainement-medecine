@@ -142,6 +142,11 @@ data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 
+# Données persistantes des conteneurs Docker (bind-mounts docker-compose, déploiement NAS)
+data/postgres/
+data/media/
+data/static/
+
 # ML models
 *.model
 *.joblib

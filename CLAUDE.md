@@ -28,7 +28,8 @@ Plateforme web de QCMs interactifs pour l'apprentissage des cours de médecine (
 │   └── wsgi.py            # Point d'entrée WSGI
 ├── data/
 │   ├── raw/               # Données brutes (export Moodle, non versionnées)
-│   └── processed/         # Données traitées
+│   ├── processed/         # Données traitées
+│   └── postgres/ media/ static/  # Bind-mounts docker-compose (déploiement NAS, non versionnés)
 ├── docs/                   # Documentation MkDocs
 │   ├── index.md           # Page d'accueil de la documentation
 │   ├── user/              # Documentation utilisateur
@@ -45,8 +46,15 @@ Plateforme web de QCMs interactifs pour l'apprentissage des cours de médecine (
 ├── src/                   # Code source Python (utilitaires, scripts)
 ├── tests/                 # Tests unitaires et d'intégration
 │   ├── test_models.py     # Tests des modèles Django
-│   └── test_trophies.py   # Tests du système de trophées (27 tests)
+│   ├── test_trophies.py   # Tests du système de trophées (27 tests)
+│   └── test_deployment.py # Tests d'infrastructure Docker (Dockerfile, compose, env)
+├── docker/
+│   └── nginx.conf         # Config nginx (reverse-proxy + statics/media)
 ├── manage.py              # Point d'entrée Django
+├── Dockerfile             # Image multi-stage (uv + gunicorn)
+├── docker-compose.yml     # Services db/web/nginx pour déploiement NAS
+├── entrypoint.sh          # migrate + collectstatic au démarrage du conteneur web
+├── .env.example           # Variables d'environnement requises pour Docker
 ├── .gitignore
 ├── .pre-commit-config.yaml
 ├── CLAUDE.md              # Ce fichier - Documentation pour Claude Code
@@ -84,6 +92,23 @@ uv run --active mkdocs build --strict
 
 # Precommit
 pre-commit run --all-files
+```
+
+### Déploiement NAS (Docker)
+
+Un push sur `main` déclenche `.github/workflows/docker-publish.yml`, qui build et publie l'image sur `ghcr.io/camille626/entrainement-medecine:latest`. Sur le NAS, un stack Portainer pointant sur le repo GitHub pull cette image (pas de build sur le NAS) et persiste les données en bind-mount sous `data/postgres`, `data/media`, `data/static`. Voir [docs/dev/deploiement-nas.md](docs/dev/deploiement-nas.md) pour le détail.
+
+En local pour tester sans dépendre de ghcr.io :
+
+```bash
+# Copier puis renseigner les variables d'environnement
+cp .env.example .env
+
+# Build + démarrage (services db/web/nginx)
+docker compose up -d --build
+
+# Créer un superuser dans le conteneur
+docker compose exec web python manage.py createsuperuser
 ```
 
 ### Commandes Django

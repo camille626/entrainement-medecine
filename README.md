@@ -38,6 +38,15 @@ uv run --active python manage.py runserver
 
 L'interface d'administration est disponible sur http://127.0.0.1:8000/admin/
 
+## Déploiement
+
+Un déploiement Docker (gunicorn + PostgreSQL + nginx) est disponible pour un hébergement sur NAS privé, voir `docs/dev/deploiement-nas.md`.
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
 ## Lancer les tests
 
 ```bash
