@@ -2,8 +2,7 @@ name: 🐳 Build and Publish Docker Image
 
 on:
   push:
-    # TODO: retirer la branche de travail avant merge sur main
-    branches: [main, "59-déploiement-docker-nas-privé-+-cloud-public-avec-sync-de-données"]
+    branches: [main]
     paths:
       - 'Dockerfile'
       - 'entrypoint.sh'
