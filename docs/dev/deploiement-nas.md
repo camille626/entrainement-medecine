@@ -82,7 +82,12 @@ curl -I http://localhost:$NGINX_PORT/   # doit répondre 302 vers /login/
 ls $STORAGE_DIR/data/                   # postgres/ media/ static/
 ```
 
-Pour tester une modification de code locale avant qu'elle soit publiée par la CI, builder et tagger l'image manuellement avant le `docker compose up` (voir [Référence : architecture des conteneurs](#référence-architecture-des-conteneurs)).
+Pour tester une modification de code locale avant qu'elle soit publiée par la CI (`docker-compose.yml` ne déclare pas de `build:`, voir [Référence : architecture des conteneurs](#reference-architecture-des-conteneurs)), builder et tagger l'image manuellement avant le `docker compose up` :
+
+```bash
+docker build -t ghcr.io/camille626/entrainement-medecine:latest .
+docker compose --env-file .env.local_temp up -d
+```
 
 Nettoyage après test :
 
