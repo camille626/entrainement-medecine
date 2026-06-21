@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+fixture.json
+media.zip
+
 # C extensions
 *.so
 
@@ -103,6 +106,7 @@ celerybeat.pid
 
 # Environments
 .env
+.env.local_temp
 .venv/
 env/
 venv/
@@ -141,6 +145,11 @@ data/raw/*
 data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
+
+# Données persistantes des conteneurs Docker (bind-mounts docker-compose, déploiement NAS)
+data/postgres/
+data/media/
+data/static/
 
 # ML models
 *.model

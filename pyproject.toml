@@ -30,6 +30,7 @@ dependencies = [
     "psycopg2-binary",
     "whitenoise",
     "django-htmx",
+    "gunicorn",
 ]
 
 [project.optional-dependencies]

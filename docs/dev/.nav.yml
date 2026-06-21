@@ -1,3 +1,4 @@
 nav:
   - Contenu: README.md
+  - Déploiement NAS: deploiement-nas.md
   - Héritage PyFoundry: pyfoundry.md
