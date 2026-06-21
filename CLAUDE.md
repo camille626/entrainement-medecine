@@ -48,8 +48,8 @@ Plateforme web de QCMs interactifs pour l'apprentissage des cours de médecine (
 │   ├── test_models.py     # Tests des modèles Django
 │   ├── test_trophies.py   # Tests du système de trophées (27 tests)
 │   └── test_deployment.py # Tests d'infrastructure Docker (Dockerfile, compose, env)
-├── docker/
-│   └── nginx.conf         # Config nginx (reverse-proxy + statics/media)
+├── conf/
+│   └── nginx.conf         # Config nginx (reverse-proxy + statics/media) — déployée à part en NAS, voir docs/dev/deploiement-nas.md
 ├── manage.py              # Point d'entrée Django
 ├── Dockerfile             # Image multi-stage (uv + gunicorn)
 ├── docker-compose.yml     # Services db/web/nginx pour déploiement NAS

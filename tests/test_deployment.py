@@ -112,20 +112,20 @@ def test_gunicorn_is_a_project_dependency():
 
 
 def test_nginx_conf_proxies_to_web():
-    nginx_conf = (BASE_DIR / "docker" / "nginx.conf").read_text()
+    nginx_conf = (BASE_DIR / "conf" / "nginx.conf").read_text()
     assert "proxy_pass" in nginx_conf
     assert "web:8000" in nginx_conf
 
 
 def test_nginx_conf_relays_forwarded_proto_instead_of_hardcoding():
-    nginx_conf = (BASE_DIR / "docker" / "nginx.conf").read_text()
+    nginx_conf = (BASE_DIR / "conf" / "nginx.conf").read_text()
     assert "proxy_set_header X-Forwarded-Proto https;" not in nginx_conf
     assert "$http_x_forwarded_proto" in nginx_conf
     assert "$scheme" in nginx_conf
 
 
 def test_nginx_conf_preserves_port_in_host_header():
-    nginx_conf = (BASE_DIR / "docker" / "nginx.conf").read_text()
+    nginx_conf = (BASE_DIR / "conf" / "nginx.conf").read_text()
     assert "proxy_set_header Host $host;" not in nginx_conf
     assert "proxy_set_header Host $http_host;" in nginx_conf
 

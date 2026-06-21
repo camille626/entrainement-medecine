@@ -10,18 +10,22 @@ NAS Synology
   └── Portainer : stack Git pointant sur docker-compose.yml du repo
         ├── pull l'image web depuis ghcr.io (pas de build sur le NAS)
         ├── variables d'env fournies via l'UI Portainer (pas de .env committé)
-        └── données persistantes en bind-mount sous ${STORAGE_DIR}/data/
-            (ex: /volume1/docker/studymed/data/), indépendant du dossier
-            interne où Portainer clone le repo
+        └── tous les fichiers nécessaires (données + config nginx) montés en
+            bind-mount sous ${STORAGE_DIR}/ (ex: /volume1/docker/studymed/),
+            indépendant du dossier interne où Portainer clone le repo
 
 DSM (reverse-proxy) : termine le TLS, route vers le port nginx du stack
 ```
 
 Le NAS ne build jamais l'image : c'est la CI GitHub qui s'en charge et la publie sur `ghcr.io/camille626/entrainement-medecine:latest` à chaque push sur `main`. Portainer n'a qu'à la pull.
 
-`docker-compose.yml` distingue deux types de fichiers :
-- les **données persistantes** (`data/postgres`, `data/media`, `data/static`) sont montées via `${STORAGE_DIR}/data/...`, un chemin absolu fourni en variable d'environnement (voir étape 3) — indépendant du stack Portainer, donc les données survivent même si le stack est supprimé puis recréé.
-- la **config nginx** (`docker/nginx.conf`) reste en chemin relatif (`./docker/nginx.conf`) : elle vient du repo cloné par Portainer et doit donc rester synchronisée avec le code, pas figée dans un dossier à part.
+Comme plus aucun service de `docker-compose.yml` n'a besoin de code local pour fonctionner (`db` ne dépend de rien, `web` pull son image), Portainer n'est pas garanti de cloner le repo en entier — seul `docker-compose.yml` lui-même est garanti d'être présent. Tout fichier dont la stack a besoin sur disque (données persistantes **et** config nginx) est donc monté via un chemin **absolu**, fourni par `STORAGE_DIR` (voir étape 3), plutôt que relatif au clone du repo :
+
+| Sous-dossier | Origine | Recréé automatiquement par Docker ? |
+|---|---|---|
+| `${STORAGE_DIR}/data/` | données applicatives (Postgres, médias, statiques) | oui, au démarrage |
+| `${STORAGE_DIR}/conf/nginx.conf` | copie manuelle du fichier du repo (`conf/nginx.conf`) | non — à déposer soi-même, voir étape 2 |
+| `${STORAGE_DIR}/import_init/` | fixture + médias pour l'import initial (étape 5) | non — à créer soi-même, voir étape 2 |
 
 ## 1. CI/CD — publication de l'image
 
@@ -31,11 +35,29 @@ Le package est public dès le premier push (il hérite de la visibilité publiqu
 
 ## 2. Structure sur le NAS
 
-Choisir un dossier de stockage pour les données persistantes, ex: `/volume1/docker/studymed`, et le **créer soi-même** (via File Station, ou `mkdir -p` en SSH) **avant le premier déploiement du stack**.
+Choisir un dossier de stockage, ex: `/volume1/docker/studymed`, et **créer toute l'arborescence soi-même** (via File Station, ou `mkdir -p` en SSH) **avant le premier déploiement du stack** :
 
-Les sous-dossiers `data/postgres/`, `data/media/`, `data/static/` n'ont pas besoin d'être créés à l'avance — Docker s'en charge, et `entrypoint.sh` les re-`chown` à chaque démarrage du conteneur `web` (nécessaire pour qu'un utilisateur non-root puisse y écrire, voir [Référence : architecture des conteneurs](#reference-architecture-des-conteneurs)).
+```
+${STORAGE_DIR}/
+├── data/
+│   ├── postgres/
+│   ├── media/
+│   └── static/
+├── conf/
+│   └── nginx.conf          # copie manuelle de conf/nginx.conf du repo
+└── import_init/
+```
 
-`import_init/` est différent : **à créer impérativement soi-même avant le premier démarrage du stack** (via File Station). Ce dossier est monté en lecture seule et n'est jamais touché par `entrypoint.sh` — s'il n'existe pas encore au moment du premier `docker compose up`, Docker le crée automatiquement en root, et il le reste pour toujours (contrairement à `data/media`, qui lui est re-possédé par le conteneur à chaque démarrage). Une fois root-owned, plus aucun outil DSM (File Station compris) ne peut y écrire sans passer par un conteneur jetable — voir [Dépannage](#depannage-import_init-deja-cree-en-root) si c'est déjà arrivé.
+Deux raisons indépendantes imposent de tout créer à l'avance sur le NAS (alors que ce n'est pas nécessaire en local) :
+
+1. Le moteur Docker embarqué par Synology Container Manager est souvent plus ancien que celui du devcontainer/host de dev, et **refuse** de démarrer si un dossier de bind-mount n'existe pas (`Bind mount failed: ... does not exist`) plutôt que de le créer automatiquement — concerne `data/postgres/`, `data/media/`, `data/static/`.
+2. Comme plus aucun service de la stack n'a besoin du code applicatif (voir [Vue d'ensemble](#vue-densemble)), Portainer n'est pas garanti de cloner le repo en entier — `conf/nginx.conf` et `import_init/` doivent donc exister **en dehors** du clone Portainer, peu importe que celui-ci soit complet ou non.
+
+Pour `conf/nginx.conf`, copier le contenu du fichier du repo (`conf/nginx.conf`) tel quel via File Station — il évoluera peu, mais en cas de changement futur du fichier dans le repo, il faudra répéter cette copie manuellement (contrairement à `docker-compose.yml` lui-même, toujours lu depuis le clone Portainer).
+
+`data/postgres/`, `data/media/`, `data/static/` sont re-`chown`-és par `entrypoint.sh` à chaque démarrage du conteneur `web` (nécessaire pour qu'un utilisateur non-root puisse y écrire, voir [Référence : architecture des conteneurs](#reference-architecture-des-conteneurs)) — peu importe qui les a créés au départ.
+
+`conf/nginx.conf` et `import_init/` sont différents : montés en lecture seule, ils ne sont **jamais** touchés par `entrypoint.sh`. S'ils ont été créés par Docker plutôt que par toi (ex: en root, lors d'un déploiement précédent), ils restent root-owned pour toujours, et plus aucun outil DSM (File Station compris) ne peut y écrire sans passer par un conteneur jetable — voir [Dépannage](#depannage-import_init-deja-cree-en-root) si c'est déjà arrivé.
 
 | Dossier                                                | Monté dans                      | Contenu                                          |
 | ------------------------------------------------------ | ------------------------------- | ------------------------------------------------ |
@@ -43,14 +65,15 @@ Les sous-dossiers `data/postgres/`, `data/media/`, `data/static/` n'ont pas beso
 | `${STORAGE_DIR}/data/media/`                           | conteneurs `web` et `nginx`     | fichiers uploadés (images, certificats)          |
 | `${STORAGE_DIR}/data/static/`                          | conteneurs `web` et `nginx`     | fichiers statiques collectés (`collectstatic`)   |
 | `${STORAGE_DIR}/import_init/`                          | conteneur `web` (lecture seule) | fixture + médias pour l'import initial (étape 5) |
-| `docker/nginx.conf` (relatif, dans le clone Portainer) | conteneur `nginx`               | config nginx, vient du repo                      |
+| `${STORAGE_DIR}/conf/nginx.conf`                       | conteneur `nginx` (lecture seule) | config nginx, copiée à la main depuis le repo  |
 
 
-Pour des tests sur le host
+Pour des tests sur le host, créer la même arborescence avant le premier `docker compose up` (voir étape 3') :
 
 ```bash
 source .env.local_temp   # pour pouvoir réutiliser $NGINX_PORT / $STORAGE_DIR ci-dessous
-mkdir -p ${STORAGE_DIR}/import_init/
+mkdir -p "$STORAGE_DIR/import_init" "$STORAGE_DIR/conf"
+cp conf/nginx.conf "$STORAGE_DIR/conf/"
 ```
 
 
@@ -58,8 +81,10 @@ mkdir -p ${STORAGE_DIR}/import_init/
 
 **Stacks** > **Add stack** > **Repository** :
 
+- Name : `studymed`
+- Build method : Repository
 - Repository URL : `https://github.com/camille626/entrainement-medecine`
-- Repository reference : `refs/heads/59-déploiement-docker-nas-privé-+-cloud-public-avec-sync-de-données`
+- Repository reference : `refs/heads/main` et pendant la phase de mise au point : `refs/heads/59-déploiement-docker-nas-privé-+-cloud-public-avec-sync-de-données`
 - Compose path : `docker-compose.yml`
 - **Environment variables** : saisir dans l'UI (ou charger depuis un `.env` local au poste qui ouvre Portainer) :
 
@@ -227,13 +252,14 @@ docker compose exec db pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > backup.sql
 
 ```
 nginx (reverse-proxy interne, port ${NGINX_PORT:-8080})
+  ├── config : bind-mount ${STORAGE_DIR}/conf/nginx.conf
   ├── sert /static/ et /media/ directement (bind-mounts ${STORAGE_DIR}/data/static, ${STORAGE_DIR}/data/media)
   └── proxy_pass tout le reste vers web:8000
 web (gunicorn + Django, image ghcr.io/camille626/entrainement-medecine:latest)
 db (postgres:17-alpine, bind-mount ${STORAGE_DIR}/data/postgres)
 ```
 
-`STORAGE_DIR` vaut `.` par défaut (donc `./data/...`, relatif au repo — pratique en local) ; en valeur absolue (ex: `/volume1/docker/studymed`) pour un déploiement Portainer, où il faut que les données survivent à une éventuelle suppression/recréation du stack.
+`STORAGE_DIR` vaut `.` par défaut (donc `./data/...` et `./conf/nginx.conf`, relatifs au repo — pratique en local) ; en valeur absolue (ex: `/volume1/docker/studymed`) pour un déploiement Portainer, où il faut que les données **et** la config nginx survivent à une éventuelle suppression/recréation du stack (voir [Vue d'ensemble](#vue-densemble) pour le détail).
 
 Le `Dockerfile` est multi-stage :
 
@@ -259,6 +285,6 @@ docker compose up -d
 | `DJANGO_CSRF_TRUSTED_ORIGINS`                         | Origines autorisées pour les requêtes POST, avec le schéma (ex: `https://studymed.ascot63.synology.me`)                           |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Identifiants de la base PostgreSQL                                                                                                |
 | `NGINX_PORT`                                          | Port interne sur lequel nginx écoute (mappé par docker-compose, défaut `8080`)                                                    |
-| `STORAGE_DIR`                                         | Dossier de base des données persistantes (défaut `.`, relatif — à fixer en absolu pour Portainer, ex: `/volume1/docker/studymed`) |
+| `STORAGE_DIR`                                         | Dossier de base des données persistantes et de la config nginx (défaut `.`, relatif — à fixer en absolu pour Portainer, ex: `/volume1/docker/studymed`) |
 
 Le `DATABASE_URL` utilisé par le service `web` est construit automatiquement dans `docker-compose.yml` à partir des variables `POSTGRES_*` (pas besoin de le dupliquer dans `.env`).

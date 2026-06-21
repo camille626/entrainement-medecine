@@ -41,7 +41,7 @@ services:
     ports:
       - "${NGINX_PORT:-8080}:80"
     volumes:
-      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ${STORAGE_DIR:-.}/conf/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ${STORAGE_DIR:-.}/data/media:/app/media:ro
       - ${STORAGE_DIR:-.}/data/static:/app/staticfiles:ro
     depends_on:
