@@ -86,6 +86,7 @@ Pour tester une modification de code locale avant qu'elle soit publiée par la C
 
 ```bash
 docker build -t ghcr.io/camille626/entrainement-medecine:latest .
+docker compose --env-file .env.local_temp down
 docker compose --env-file .env.local_temp up -d
 ```
 
@@ -150,6 +151,15 @@ Vérifier aussi dans **Panneau de configuration** > **Sécurité** > **Certifica
    ```
 
 À ne lancer qu'une fois sur une base Postgres vierge (juste après `migrate`, avant toute utilisation) — `loaddata` ne gère pas les conflits si des données existent déjà avec les mêmes clés primaires.
+
+`dumpdata`/`loaddata` ne transfèrent que les lignes de la base de données, pas les fichiers physiques (images des questions "légende interactive", certificats, etc.). Copier aussi le dossier `media/` du dev local :
+
+```bash
+docker run --rm \
+  -v "$STORAGE_DIR/data/media":/target \
+  -v "$(pwd)/media":/src:ro \
+  alpine sh -c "cp -r /src/. /target/"
+```
 
 ## 6. Tester
 

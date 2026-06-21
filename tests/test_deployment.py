@@ -119,6 +119,12 @@ def test_nginx_conf_relays_forwarded_proto_instead_of_hardcoding():
     assert "$scheme" in nginx_conf
 
 
+def test_nginx_conf_preserves_port_in_host_header():
+    nginx_conf = (BASE_DIR / "docker" / "nginx.conf").read_text()
+    assert "proxy_set_header Host $host;" not in nginx_conf
+    assert "proxy_set_header Host $http_host;" in nginx_conf
+
+
 def test_ci_publishes_image_to_ghcr():
     workflow = BASE_DIR / ".github" / "workflows" / "docker-publish.yml"
     assert workflow.exists()
