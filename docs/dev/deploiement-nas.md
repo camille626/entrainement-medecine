@@ -53,9 +53,11 @@ Deux raisons indépendantes imposent de tout créer à l'avance sur le NAS (alor
 1. Le moteur Docker embarqué par Synology Container Manager est souvent plus ancien que celui du devcontainer/host de dev, et **refuse** de démarrer si un dossier de bind-mount n'existe pas (`Bind mount failed: ... does not exist`) plutôt que de le créer automatiquement — concerne `data/postgres/`, `data/media/`, `data/static/`.
 2. Comme plus aucun service de la stack n'a besoin du code applicatif (voir [Vue d'ensemble](#vue-densemble)), Portainer n'est pas garanti de cloner le repo en entier — `conf/nginx.conf` et `import_init/` doivent donc exister **en dehors** du clone Portainer, peu importe que celui-ci soit complet ou non.
 
+**Sur `data/media/` et `data/static/`**, donner tout de suite le droit Lecture/Écriture au groupe **"Tout le monde"** (File Station > Propriétés > Permission) : les ACL Synology empêchent souvent le `chown` que fait le conteneur `web` au démarrage de prendre effet, ce qui fait échouer `collectstatic` avec une `PermissionError` (voir [Dépannage](#depannage-permissionerror-sur-staticfiles-ou-media) si ça arrive malgré tout).
+
 Pour `conf/nginx.conf`, copier le contenu du fichier du repo (`conf/nginx.conf`) tel quel via File Station — il évoluera peu, mais en cas de changement futur du fichier dans le repo, il faudra répéter cette copie manuellement (contrairement à `docker-compose.yml` lui-même, toujours lu depuis le clone Portainer).
 
-`data/postgres/`, `data/media/`, `data/static/` sont re-`chown`-és par `entrypoint.sh` à chaque démarrage du conteneur `web` (nécessaire pour qu'un utilisateur non-root puisse y écrire, voir [Référence : architecture des conteneurs](#reference-architecture-des-conteneurs)) — peu importe qui les a créés au départ.
+`data/postgres/`, `data/media/`, `data/static/` sont normalement re-`chown`-és par `entrypoint.sh` à chaque démarrage du conteneur `web` (nécessaire pour qu'un utilisateur non-root puisse y écrire, voir [Référence : architecture des conteneurs](#reference-architecture-des-conteneurs)) — d'où la recommandation ci-dessus de donner directement les droits "Tout le monde" sur le NAS, où ce `chown` n'a pas toujours d'effet réel (voir [Dépannage](#depannage-permissionerror-sur-staticfiles-ou-media) si l'erreur apparaît malgré tout).
 
 `conf/nginx.conf` et `import_init/` sont différents : montés en lecture seule, ils ne sont **jamais** touchés par `entrypoint.sh`. S'ils ont été créés par Docker plutôt que par toi (ex: en root, lors d'un déploiement précédent), ils restent root-owned pour toujours, et plus aucun outil DSM (File Station compris) ne peut y écrire sans passer par un conteneur jetable — voir [Dépannage](#depannage-import_init-deja-cree-en-root) si c'est déjà arrivé.
 
@@ -224,6 +226,18 @@ docker run --rm \
 ```
 
 Pour éviter de refaire ce rattrapage à chaque fois, supprimer le dossier root-owned et le recréer soi-même avant le prochain démarrage du stack (même conteneur jetable pour la suppression, voir [Nettoyage après test](#3-creer-le-stack-sous-lhote-dans-tmp-pour-tester) plus haut pour le pattern).
+
+### Dépannage : `PermissionError` sur `staticfiles` ou `media`
+
+Logs du conteneur `web` du type :
+
+```
+PermissionError: [Errno 13] Permission denied: '/app/staticfiles/admin'
+```
+
+`entrypoint.sh` fait un `chown -R app:app` sur `data/media`/`data/static` avant de lancer `collectstatic`, mais sur un NAS Synology ce `chown` peut réussir (pas d'erreur) sans avoir d'effet réel : les ACL Windows/NFSv4 que DSM applique par défaut aux dossiers partagés prévalent sur le `chown` Unix classique fait depuis un conteneur. Vérifiable via File Station > `data/static` (ou `media`) > Propriétés > onglet **General** : si le **Propriétaire** affiché est ton compte DSM (ex: `administrateur`) plutôt qu'un utilisateur système, c'est confirmé.
+
+Correctif : File Station > `data/media/` et `data/static/` > **Propriétés** > **Permission** > ajouter le groupe **"Tout le monde"** avec accès **Lecture/Écriture**, puis redémarrer le conteneur `web`.
 
 ## 6. Tester
 
