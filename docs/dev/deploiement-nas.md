@@ -31,14 +31,28 @@ Le package est public dès le premier push (il hérite de la visibilité publiqu
 
 ## 2. Structure sur le NAS
 
-Choisir un dossier de stockage pour les données persistantes, ex: `/volume1/docker/studymed`. Pas besoin de créer les sous-dossiers à l'avance : Docker les crée automatiquement au premier démarrage (`data/postgres/`, `data/media/`, `data/static/` sous ce dossier).
+Choisir un dossier de stockage pour les données persistantes, ex: `/volume1/docker/studymed`, et le **créer soi-même** (via File Station, ou `mkdir -p` en SSH) **avant le premier déploiement du stack**.
 
-| Dossier                                                | Monté dans                  | Contenu                                        |
-| ------------------------------------------------------ | --------------------------- | ---------------------------------------------- |
-| `${STORAGE_DIR}/data/postgres/`                        | conteneur `db`              | données PostgreSQL                             |
-| `${STORAGE_DIR}/data/media/`                           | conteneurs `web` et `nginx` | fichiers uploadés (images, certificats)        |
-| `${STORAGE_DIR}/data/static/`                          | conteneurs `web` et `nginx` | fichiers statiques collectés (`collectstatic`) |
-| `docker/nginx.conf` (relatif, dans le clone Portainer) | conteneur `nginx`           | config nginx, vient du repo                    |
+Les sous-dossiers `data/postgres/`, `data/media/`, `data/static/` n'ont pas besoin d'être créés à l'avance — Docker s'en charge, et `entrypoint.sh` les re-`chown` à chaque démarrage du conteneur `web` (nécessaire pour qu'un utilisateur non-root puisse y écrire, voir [Référence : architecture des conteneurs](#reference-architecture-des-conteneurs)).
+
+`import_init/` est différent : **à créer impérativement soi-même avant le premier démarrage du stack** (via File Station). Ce dossier est monté en lecture seule et n'est jamais touché par `entrypoint.sh` — s'il n'existe pas encore au moment du premier `docker compose up`, Docker le crée automatiquement en root, et il le reste pour toujours (contrairement à `data/media`, qui lui est re-possédé par le conteneur à chaque démarrage). Une fois root-owned, plus aucun outil DSM (File Station compris) ne peut y écrire sans passer par un conteneur jetable — voir [Dépannage](#depannage-import_init-deja-cree-en-root) si c'est déjà arrivé.
+
+| Dossier                                                | Monté dans                      | Contenu                                          |
+| ------------------------------------------------------ | ------------------------------- | ------------------------------------------------ |
+| `${STORAGE_DIR}/data/postgres/`                        | conteneur `db`                  | données PostgreSQL                               |
+| `${STORAGE_DIR}/data/media/`                           | conteneurs `web` et `nginx`     | fichiers uploadés (images, certificats)          |
+| `${STORAGE_DIR}/data/static/`                          | conteneurs `web` et `nginx`     | fichiers statiques collectés (`collectstatic`)   |
+| `${STORAGE_DIR}/import_init/`                          | conteneur `web` (lecture seule) | fixture + médias pour l'import initial (étape 5) |
+| `docker/nginx.conf` (relatif, dans le clone Portainer) | conteneur `nginx`               | config nginx, vient du repo                      |
+
+
+Pour des tests sur le host
+
+```bash
+source .env.local_temp   # pour pouvoir réutiliser $NGINX_PORT / $STORAGE_DIR ci-dessous
+mkdir -p ${STORAGE_DIR}/import_init/
+```
+
 
 ## 3. Créer le stack dans Portainer
 
@@ -127,39 +141,64 @@ Vérifier aussi dans **Panneau de configuration** > **Sécurité** > **Certifica
 
 ## 5. Initialiser l'application
 
-`docker compose exec <service>` résout automatiquement le bon conteneur du stack courant — pas besoin de connaître son nom exact (qui dépend du nom donné au stack dans Portainer). Depuis le dossier où vit `docker-compose.yml` (en SSH, ou via la Console d'un conteneur dans Portainer), peupler la base Postgres avec les données existantes — via l'ORM Django (`dumpdata`/`loaddata`) depuis le SQLite source (`db.sqlite3` du dev local), pas de copie binaire du fichier SQLite (les formats sont incompatibles avec Postgres) :
+Peupler la base Postgres vierge avec les données existantes (cas du dev local sur SQLite, `db.sqlite3`), via une commande dédiée (`import_fixture`) qui charge un fixture JSON Django et extrait une archive zip de fichiers médias — pas de copie binaire du fichier SQLite (les formats sont incompatibles avec Postgres), et pas besoin de SSH pour transférer les fichiers (juste **File Station**).
 
-1. **Exporter** depuis la base SQLite source :
+1. **Localement**, exporter les données et zipper les médias :
 
    ```bash
    uv run --active python manage.py dumpdata qcm auth --output=fixture.json
+   zip -r media.zip media/
    ```
 
-2. **Copier** le fichier JSON dans `${STORAGE_DIR}/data/media/` (vu par le conteneur `web` comme `/app/media/`). Un `cp` direct échoue (`Permission denied`) : ce dossier appartient à l'UID du conteneur (`app`), pas à l'utilisateur de l'hôte — on passe par un conteneur jetable (root) :
+2. **Via File Station**, glisser-déposer `fixture.json` et `media.zip` dans `${STORAGE_DIR}/import_init/` — déjà créé à l'étape 2, donc pas de souci de permissions pour l'upload.
+
+3. **Entrer dans le conteneur `web`** via Portainer (sans SSH) : Containers > conteneur `web` > **Console** (choisir `/bin/bash`, **Connect**).
+
+   Puis, dans le shell du conteneur :
 
    ```bash
-   docker run --rm \
-     -v "$STORAGE_DIR/data/media":/target \
-     -v "$(pwd)/fixture.json":/src/fixture.json:ro \
-     alpine cp /src/fixture.json /target/
+   python manage.py import_fixture \
+     --fixture /app/import_init/fixture.json \
+     --media-zip /app/import_init/media.zip
    ```
 
-3. **Importer** depuis le conteneur `web`, qui est connecté au Postgres de la stack via `DATABASE_URL` :
-
-   ```bash
-   docker compose exec web python manage.py loaddata /app/media/fixture.json
-   ```
+   C'est la seule action liée à Docker nécessaire pour cette étape côté NAS.
 
 À ne lancer qu'une fois sur une base Postgres vierge (juste après `migrate`, avant toute utilisation) — `loaddata` ne gère pas les conflits si des données existent déjà avec les mêmes clés primaires.
 
-`dumpdata`/`loaddata` ne transfèrent que les lignes de la base de données, pas les fichiers physiques (images des questions "légende interactive", certificats, etc.). Copier aussi le dossier `media/` du dev local :
+4. **Nettoyer** `import_init/` après coup via File Station (pas indispensable : la commande n'est jamais relancée automatiquement, mais évite de laisser un export de données sensibles trainer sur le NAS).
+
+### Tester cette procédure en local avant le NAS
+
+Créer `/tmp/studymed/import_init` **avant** le premier `docker compose up` de l'étape 3' (sinon Docker le crée en root, voir [Dépannage](#depannage-import_init-deja-cree-en-root)) :
+
+```bash
+source .env.local_temp
+cp fixture.json media.zip /tmp/studymed/import_init/
+docker compose --env-file .env.local_temp exec web /bin/bash
+```
+
+Puis, dans le shell du conteneur (même commande qu'en étape 3 ci-dessus) :
+
+```bash
+python manage.py import_fixture \
+  --fixture /app/import_init/fixture.json \
+  --media-zip /app/import_init/media.zip
+```
+
+### Dépannage : `import_init` déjà créé en root
+
+Si le stack a déjà tourné avant que `import_init/` n'existe (cas vécu pendant les tests de cette session), Docker l'a créé en root — ni File Station ni un `cp` côté host ne peuvent plus y écrire. Rattrapage ponctuel via un conteneur jetable (root), en remplaçant les chemins source par ceux de `fixture.json`/`media.zip` :
 
 ```bash
 docker run --rm \
-  -v "$STORAGE_DIR/data/media":/target \
-  -v "$(pwd)/media":/src:ro \
-  alpine sh -c "cp -r /src/. /target/"
+  -v "$(pwd)/fixture.json":/src/fixture.json:ro \
+  -v "$(pwd)/media.zip":/src/media.zip:ro \
+  -v "$STORAGE_DIR/import_init":/target \
+  alpine sh -c "cp /src/fixture.json /src/media.zip /target/"
 ```
+
+Pour éviter de refaire ce rattrapage à chaque fois, supprimer le dossier root-owned et le recréer soi-même avant le prochain démarrage du stack (même conteneur jetable pour la suppression, voir [Nettoyage après test](#3-creer-le-stack-sous-lhote-dans-tmp-pour-tester) plus haut pour le pattern).
 
 ## 6. Tester
 

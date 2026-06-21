@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 
 fixture.json
+media.zip
 
 # C extensions
 *.so

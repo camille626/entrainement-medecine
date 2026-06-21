@@ -76,6 +76,11 @@ def test_compose_web_shares_media_and_static_volumes(compose_config):
     assert any("static" in v for v in nginx_volumes)
 
 
+def test_compose_web_has_import_init_mount(compose_config):
+    web_volumes = compose_config["services"]["web"].get("volumes", [])
+    assert any("import_init:/app/import_init" in v for v in web_volumes)
+
+
 def test_dockerignore_excludes_dev_artifacts():
     dockerignore = (BASE_DIR / ".dockerignore").read_text()
     for entry in [".venv", ".git", "tests", "notebooks", "docs", "db.sqlite3"]:

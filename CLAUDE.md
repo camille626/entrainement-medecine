@@ -149,6 +149,10 @@ uv run --active python manage.py seed_image_erratas [--dry-run] [--reporter <use
 # Initialiser ou mettre à jour les trophées (idempotent via get_or_create sur le nom)
 uv run --active python manage.py seed_trophies
 
+# Importer un fixture dumpdata + une archive zip de médias (migration vers un nouveau
+# déploiement, ex: NAS) — à lancer une seule fois sur une base vierge
+uv run --active python manage.py import_fixture --fixture fixture.json [--media-zip media.zip]
+
 # URLs de l'application
 # /                          → accueil (cours par semestre)
 # /entrainement/             → configuration d'une session

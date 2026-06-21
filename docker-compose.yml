@@ -28,6 +28,7 @@ services:
     volumes:
       - ${STORAGE_DIR:-.}/data/media:/app/media
       - ${STORAGE_DIR:-.}/data/static:/app/staticfiles
+      - ${STORAGE_DIR:-.}/import_init:/app/import_init:ro
     depends_on:
       db:
         condition: service_healthy
