@@ -93,7 +93,18 @@ Nettoyage après test :
 
 ```bash
 docker compose --env-file .env.local_temp down
-rm -rf $STORAGE_DIR
+
+# Garde-fou : refuse si STORAGE_DIR est vide ou hors /tmp.
+if [[ -n "$STORAGE_DIR" && "$STORAGE_DIR" == /tmp/* ]]; then
+  # rm/rmdir directs côté host échouent souvent : fichiers possédés par l'UID
+  # du conteneur (ex: postgres), et le dossier $STORAGE_DIR lui-même a été créé
+  # par Docker (root) — le sticky bit de /tmp empêche un user non-root de le
+  # supprimer même vide. On monte le parent (/tmp) dans un conteneur jetable
+  # et on supprime tout depuis là, en root.
+  docker run --rm -v /tmp:/host_tmp alpine rm -rf "/host_tmp/$(basename "$STORAGE_DIR")"
+else
+  echo "STORAGE_DIR non défini ou hors /tmp ($STORAGE_DIR) — suppression annulée." >&2
+fi
 ```
 
 ### Note sur les tests en devcontainer
