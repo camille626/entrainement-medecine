@@ -112,6 +112,13 @@ def test_nginx_conf_proxies_to_web():
     assert "web:8000" in nginx_conf
 
 
+def test_nginx_conf_relays_forwarded_proto_instead_of_hardcoding():
+    nginx_conf = (BASE_DIR / "docker" / "nginx.conf").read_text()
+    assert "proxy_set_header X-Forwarded-Proto https;" not in nginx_conf
+    assert "$http_x_forwarded_proto" in nginx_conf
+    assert "$scheme" in nginx_conf
+
+
 def test_ci_publishes_image_to_ghcr():
     workflow = BASE_DIR / ".github" / "workflows" / "docker-publish.yml"
     assert workflow.exists()

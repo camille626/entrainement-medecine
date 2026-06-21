@@ -118,23 +118,38 @@ Si ce repo est ouvert dans son propre devcontainer (`docker-in-docker`), le daem
 - Source : `studymed.ascot63.synology.me`, HTTPS, port 443
 - Destination : `localhost`, HTTP, port `9666` (le `NGINX_PORT` choisi à l'étape 3)
 
-Aucun en-tête personnalisé à ajouter : le conteneur `nginx` du stack force déjà `X-Forwarded-Proto: https` vers Django (voir [Note de sécurité](#note-de-securite)).
+**Ajouter un en-tête personnalisé** (onglet "En-tête personnalisé" de la règle) : `X-Forwarded-Proto: https`. Le conteneur `nginx` du stack relaie cet en-tête vers Django (au lieu de le forcer en dur, ce qui casserait les tests en HTTP direct — voir [Note de sécurité](#note-de-securite)) ; sans cet en-tête envoyé par DSM, Django croira que la connexion est en HTTP même derrière le HTTPS de DSM.
+
+![alt text](img/custom-header.png)
 
 Vérifier aussi dans **Panneau de configuration** > **Sécurité** > **Certificat** que `studymed.ascot63.synology.me` a un certificat HTTPS valide associé.
 
 ## 5. Initialiser l'application
 
-Le nom des conteneurs dépend du nom donné au stack dans Portainer (`<nom-du-stack>-web-1`, etc.) — `studymed-web-1` ci-dessous suppose un stack nommé `studymed`. Depuis Portainer (Container > `studymed-web-1` > Console) ou en SSH :
+`docker compose exec <service>` résout automatiquement le bon conteneur du stack courant — pas besoin de connaître son nom exact (qui dépend du nom donné au stack dans Portainer). Depuis le dossier où vit `docker-compose.yml` (en SSH, ou via la Console d'un conteneur dans Portainer), peupler la base Postgres avec les données existantes — via l'ORM Django (`dumpdata`/`loaddata`) depuis le SQLite source (`db.sqlite3` du dev local), pas de copie binaire du fichier SQLite (les formats sont incompatibles avec Postgres) :
 
-```bash
-docker exec -it studymed-web-1 python manage.py createsuperuser
-```
+1. **Exporter** depuis la base SQLite source :
 
-Import des données Moodle (si pas déjà fait) — nécessite que le dump SQL soit accessible dans le conteneur, par exemple copié au préalable dans `${STORAGE_DIR}/data/media/` (vu par le conteneur comme `/app/media/`) :
+   ```bash
+   uv run --active python manage.py dumpdata qcm auth --output=fixture.json
+   ```
 
-```bash
-docker exec -it studymed-web-1 python manage.py import_moodle --dump <chemin-du-dump>.sql
-```
+2. **Copier** le fichier JSON dans `${STORAGE_DIR}/data/media/` (vu par le conteneur `web` comme `/app/media/`). Un `cp` direct échoue (`Permission denied`) : ce dossier appartient à l'UID du conteneur (`app`), pas à l'utilisateur de l'hôte — on passe par un conteneur jetable (root) :
+
+   ```bash
+   docker run --rm \
+     -v "$STORAGE_DIR/data/media":/target \
+     -v "$(pwd)/fixture.json":/src/fixture.json:ro \
+     alpine cp /src/fixture.json /target/
+   ```
+
+3. **Importer** depuis le conteneur `web`, qui est connecté au Postgres de la stack via `DATABASE_URL` :
+
+   ```bash
+   docker compose exec web python manage.py loaddata /app/media/fixture.json
+   ```
+
+À ne lancer qu'une fois sur une base Postgres vierge (juste après `migrate`, avant toute utilisation) — `loaddata` ne gère pas les conflits si des données existent déjà avec les mêmes clés primaires.
 
 ## 6. Tester
 
@@ -150,14 +165,14 @@ Les migrations et le `collectstatic` sont rejoués automatiquement par `entrypoi
 ## Sauvegarde de la base de données
 
 ```bash
-docker exec studymed-db-1 pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > backup.sql
+docker compose exec db pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > backup.sql
 ```
 
 `${STORAGE_DIR}/data/postgres/` étant un dossier normal sur le NAS, il peut aussi être sauvegardé directement (Hyper Backup, snapshot du volume...) en plus des dumps SQL réguliers.
 
 ## Note de sécurité
 
-`NGINX_PORT` (ex: `9666`) **ne doit jamais être exposé directement sur Internet** (pas de redirection de port sur la box/routeur vers ce port) — seul le port 443 du reverse-proxy DSM doit être accessible depuis l'extérieur. Le conteneur `nginx` fait confiance à son unique appelant pour la terminaison TLS et force `X-Forwarded-Proto: https` vers Django sans vérification : si ce port était exposé directement, n'importe qui pourrait usurper une connexion "sécurisée" auprès de Django.
+`NGINX_PORT` (ex: `9666`) **ne doit jamais être exposé directement sur Internet** (pas de redirection de port sur la box/routeur vers ce port) — seul le port 443 du reverse-proxy DSM doit être accessible depuis l'extérieur. Le conteneur `nginx` relaie tel quel le `X-Forwarded-Proto` reçu de son appelant (DSM en prod) sans le forcer en dur, pour ne pas casser les tests en HTTP direct (sinon Django croit la connexion HTTPS alors que le `Referer` du navigateur est en `http://`, et rejette le CSRF). Si ce port était exposé directement, n'importe qui pourrait usurper une connexion "sécurisée" auprès de Django en envoyant lui-même cet en-tête.
 
 ## Référence : architecture des conteneurs
 
