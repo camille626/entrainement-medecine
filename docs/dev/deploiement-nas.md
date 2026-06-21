@@ -10,12 +10,18 @@ NAS Synology
   └── Portainer : stack Git pointant sur docker-compose.yml du repo
         ├── pull l'image web depuis ghcr.io (pas de build sur le NAS)
         ├── variables d'env fournies via l'UI Portainer (pas de .env committé)
-        └── données persistantes en bind-mount sous /docker/studymed/data/
+        └── données persistantes en bind-mount sous ${STORAGE_DIR}/data/
+            (ex: /volume1/docker/studymed/data/), indépendant du dossier
+            interne où Portainer clone le repo
 
 DSM (reverse-proxy) : termine le TLS, route vers le port nginx du stack
 ```
 
 Le NAS ne build jamais l'image : c'est la CI GitHub qui s'en charge et la publie sur `ghcr.io/camille626/entrainement-medecine:latest` à chaque push sur `main`. Portainer n'a qu'à la pull.
+
+`docker-compose.yml` distingue deux types de fichiers :
+- les **données persistantes** (`data/postgres`, `data/media`, `data/static`) sont montées via `${STORAGE_DIR}/data/...`, un chemin absolu fourni en variable d'environnement (voir étape 3) — indépendant du stack Portainer, donc les données survivent même si le stack est supprimé puis recréé.
+- la **config nginx** (`docker/nginx.conf`) reste en chemin relatif (`./docker/nginx.conf`) : elle vient du repo cloné par Portainer et doit donc rester synchronisée avec le code, pas figée dans un dossier à part.
 
 ## 1. CI/CD — publication de l'image
 
@@ -25,25 +31,14 @@ Le package est public dès le premier push (il hérite de la visibilité publiqu
 
 ## 2. Structure sur le NAS
 
-Via File Station (ou SSH si disponible), créer le dossier du projet, ses sous-dossiers de données persistantes, et y déposer une copie de `docker/nginx.conf` (récupéré depuis le repo GitHub) :
+Choisir un dossier de stockage pour les données persistantes, ex: `/volume1/docker/studymed`. Pas besoin de créer les sous-dossiers à l'avance : Docker les crée automatiquement au premier démarrage (`data/postgres/`, `data/media/`, `data/static/` sous ce dossier).
 
-```
-/docker/studymed/
-├── nginx.conf          # copie de docker/nginx.conf du repo
-└── data/
-    ├── postgres/
-    ├── media/
-    └── static/
-```
-
-Ces dossiers/fichier sont montés en bind-mount par `docker-compose.yml`, via des **chemins absolus** fournis en variables d'environnement (`DATA_DIR`, `NGINX_CONF_PATH` — voir étape 3). On évite ainsi de dépendre du dossier interne où Portainer clone le repo pour résoudre des chemins relatifs (`./data/...`), qui n'est pas garanti contenir tous les fichiers du repo selon la méthode de déploiement.
-
-| Dossier/fichier NAS | Monté dans | Contenu |
-|---|---|---|
-| `nginx.conf` | conteneur `nginx` | config nginx (copie de `docker/nginx.conf`) |
-| `data/postgres/` | conteneur `db` | données PostgreSQL |
-| `data/media/` | conteneurs `web` et `nginx` | fichiers uploadés (images, certificats) |
-| `data/static/` | conteneurs `web` et `nginx` | fichiers statiques collectés (`collectstatic`) |
+| Dossier                                                | Monté dans                  | Contenu                                        |
+| ------------------------------------------------------ | --------------------------- | ---------------------------------------------- |
+| `${STORAGE_DIR}/data/postgres/`                        | conteneur `db`              | données PostgreSQL                             |
+| `${STORAGE_DIR}/data/media/`                           | conteneurs `web` et `nginx` | fichiers uploadés (images, certificats)        |
+| `${STORAGE_DIR}/data/static/`                          | conteneurs `web` et `nginx` | fichiers statiques collectés (`collectstatic`) |
+| `docker/nginx.conf` (relatif, dans le clone Portainer) | conteneur `nginx`           | config nginx, vient du repo                    |
 
 ## 3. Créer le stack dans Portainer
 
@@ -54,24 +49,51 @@ Ces dossiers/fichier sont montés en bind-mount par `docker-compose.yml`, via de
 - Compose path : `docker-compose.yml`
 - **Environment variables** : saisir dans l'UI (ou charger depuis un `.env` local au poste qui ouvre Portainer) :
 
-| Variable | Valeur pour ce déploiement |
-|---|---|
-| `DJANGO_SECRET_KEY` | une longue chaîne aléatoire générée |
-| `DJANGO_DEBUG` | `False` |
-| `DJANGO_ALLOWED_HOSTS` | `studymed.ascot63.synology.me` |
-| `DJANGO_CSRF_TRUSTED_ORIGINS` | `https://studymed.ascot63.synology.me` |
-| `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | identifiants de la base |
-| `NGINX_PORT` | port interne choisi, ex: `9666` |
-| `DATA_DIR` | `/docker/studymed/data` |
-| `NGINX_CONF_PATH` | `/docker/studymed/nginx.conf` |
+| Variable                                              | Valeur pour ce déploiement                              |
+| ----------------------------------------------------- | ------------------------------------------------------- |
+| `DJANGO_SECRET_KEY`                                   | une longue chaîne aléatoire générée                     |
+| `DJANGO_DEBUG`                                        | `False`                                                 |
+| `DJANGO_ALLOWED_HOSTS`                                | `studymed.ascot63.synology.me`                          |
+| `DJANGO_CSRF_TRUSTED_ORIGINS`                         | `https://studymed.ascot63.synology.me`                  |
+| `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | identifiants de la base                                 |
+| `NGINX_PORT`                                          | port interne choisi, ex: `9666`                         |
+| `STORAGE_DIR`                                         | `/volume1/docker/studymed` (dossier choisi à l'étape 2) |
 
-Déployer le stack : Portainer clone le repo, lit `docker-compose.yml`, construit (ou pull si déjà présente) l'image `web`, et démarre les 3 services en utilisant les chemins absolus ci-dessus pour les bind-mounts.
+Déployer le stack : Portainer clone le repo, lit `docker-compose.yml`, pull l'image `web` depuis ghcr.io, et démarre les 3 services.
 
 Pour générer `DJANGO_SECRET_KEY` :
 
 ```bash
 python3 -c "import secrets; print(secrets.token_urlsafe(50))"
 ```
+
+## 3'. Créer le stack sous l'hôte dans `/tmp` pour tester
+
+Équivalent de l'étape 3, mais en local (sans Portainer ni NAS) pour valider la stack avant un vrai déploiement. Depuis une checkout du repo sur un host avec Docker (pas dans le devcontainer — voir [Note sur les tests en devcontainer](#note-sur-les-tests-en-devcontainer)). Utiliser un fichier d'env séparé (`.env.local_temp`, ignoré par git) plutôt que `.env`, pour ne pas écraser la config de prod déjà en place :
+
+`.env.local_temp` doit contenir au moins `DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1`, `STORAGE_DIR=/tmp/studymed`, `NGINX_PORT=8081` (ou un port libre), plus les autres secrets habituels. Repartir de `.env.example` si nécessaire
+
+```bash
+source .env.local_temp   # pour pouvoir réutiliser $NGINX_PORT / $STORAGE_DIR ci-dessous
+
+docker compose --env-file .env.local_temp up -d
+docker compose ps
+curl -I http://localhost:$NGINX_PORT/   # doit répondre 302 vers /login/
+ls $STORAGE_DIR/data/                   # postgres/ media/ static/
+```
+
+Pour tester une modification de code locale avant qu'elle soit publiée par la CI, builder et tagger l'image manuellement avant le `docker compose up` (voir [Référence : architecture des conteneurs](#référence-architecture-des-conteneurs)).
+
+Nettoyage après test :
+
+```bash
+docker compose --env-file .env.local_temp down
+rm -rf $STORAGE_DIR
+```
+
+### Note sur les tests en devcontainer
+
+Si ce repo est ouvert dans son propre devcontainer (`docker-in-docker`), le daemon Docker imbriqué peut se dégrader après une session longue (plusieurs heures, beaucoup de créations/suppressions de réseaux et conteneurs) et casser la connectivité réseau entre conteneurs (`connection timed out` entre `web` et `db` alors que tout démarre normalement). Dans ce cas, tester directement sur la machine hôte (hors devcontainer) plutôt que de chercher un bug dans `docker-compose.yml` — un redémarrage du daemon Docker du devcontainer (ou un rebuild du devcontainer) résout généralement le problème.
 
 ## 4. Configurer le reverse-proxy DSM
 
@@ -92,7 +114,7 @@ Le nom des conteneurs dépend du nom donné au stack dans Portainer (`<nom-du-st
 docker exec -it studymed-web-1 python manage.py createsuperuser
 ```
 
-Import des données Moodle (si pas déjà fait) — nécessite que le dump SQL soit accessible dans le conteneur, par exemple copié au préalable dans `/docker/studymed/data/media/` (vu par le conteneur comme `/app/media/`) :
+Import des données Moodle (si pas déjà fait) — nécessite que le dump SQL soit accessible dans le conteneur, par exemple copié au préalable dans `${STORAGE_DIR}/data/media/` (vu par le conteneur comme `/app/media/`) :
 
 ```bash
 docker exec -it studymed-web-1 python manage.py import_moodle --dump <chemin-du-dump>.sql
@@ -115,7 +137,7 @@ Les migrations et le `collectstatic` sont rejoués automatiquement par `entrypoi
 docker exec studymed-db-1 pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > backup.sql
 ```
 
-`/docker/studymed/data/postgres/` étant un dossier normal sur le NAS, il peut aussi être sauvegardé directement (Hyper Backup, snapshot du volume...) en plus des dumps SQL réguliers.
+`${STORAGE_DIR}/data/postgres/` étant un dossier normal sur le NAS, il peut aussi être sauvegardé directement (Hyper Backup, snapshot du volume...) en plus des dumps SQL réguliers.
 
 ## Note de sécurité
 
@@ -125,11 +147,13 @@ docker exec studymed-db-1 pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > backup.sq
 
 ```
 nginx (reverse-proxy interne, port ${NGINX_PORT:-8080})
-  ├── sert /static/ et /media/ directement (bind-mounts ${DATA_DIR}/static, ${DATA_DIR}/media)
+  ├── sert /static/ et /media/ directement (bind-mounts ${STORAGE_DIR}/data/static, ${STORAGE_DIR}/data/media)
   └── proxy_pass tout le reste vers web:8000
 web (gunicorn + Django, image ghcr.io/camille626/entrainement-medecine:latest)
-db (postgres:17-alpine, bind-mount ${DATA_DIR}/postgres)
+db (postgres:17-alpine, bind-mount ${STORAGE_DIR}/data/postgres)
 ```
+
+`STORAGE_DIR` vaut `.` par défaut (donc `./data/...`, relatif au repo — pratique en local) ; en valeur absolue (ex: `/volume1/docker/studymed`) pour un déploiement Portainer, où il faut que les données survivent à une éventuelle suppression/recréation du stack.
 
 Le `Dockerfile` est multi-stage :
 
@@ -147,15 +171,14 @@ docker compose up -d
 
 ## Référence : variables d'environnement
 
-| Variable                                              | Rôle                                                                                                    |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `DJANGO_SECRET_KEY`                                   | Clé secrète Django (à générer, ne jamais committer)                                                     |
-| `DJANGO_DEBUG`                                        | `False` en production                                                                                   |
-| `DJANGO_ALLOWED_HOSTS`                                | Liste des hôtes autorisés, séparés par des virgules                                                     |
-| `DJANGO_CSRF_TRUSTED_ORIGINS`                         | Origines autorisées pour les requêtes POST, avec le schéma (ex: `https://studymed.ascot63.synology.me`) |
-| `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Identifiants de la base PostgreSQL                                                                      |
-| `NGINX_PORT`                                          | Port interne sur lequel nginx écoute (mappé par docker-compose, défaut `8080`)                          |
-| `DATA_DIR`                                            | Dossier hôte des données persistantes (défaut `./data`, relatif — à fixer en absolu type `/docker/studymed/data` pour Portainer) |
-| `NGINX_CONF_PATH`                                     | Fichier hôte de config nginx (défaut `./docker/nginx.conf`, relatif — à fixer en absolu pour Portainer) |
+| Variable                                              | Rôle                                                                                                                              |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `DJANGO_SECRET_KEY`                                   | Clé secrète Django (à générer, ne jamais committer)                                                                               |
+| `DJANGO_DEBUG`                                        | `False` en production                                                                                                             |
+| `DJANGO_ALLOWED_HOSTS`                                | Liste des hôtes autorisés, séparés par des virgules                                                                               |
+| `DJANGO_CSRF_TRUSTED_ORIGINS`                         | Origines autorisées pour les requêtes POST, avec le schéma (ex: `https://studymed.ascot63.synology.me`)                           |
+| `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Identifiants de la base PostgreSQL                                                                                                |
+| `NGINX_PORT`                                          | Port interne sur lequel nginx écoute (mappé par docker-compose, défaut `8080`)                                                    |
+| `STORAGE_DIR`                                         | Dossier de base des données persistantes (défaut `.`, relatif — à fixer en absolu pour Portainer, ex: `/volume1/docker/studymed`) |
 
 Le `DATABASE_URL` utilisé par le service `web` est construit automatiquement dans `docker-compose.yml` à partir des variables `POSTGRES_*` (pas besoin de le dupliquer dans `.env`).
