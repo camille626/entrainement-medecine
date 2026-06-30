@@ -108,50 +108,79 @@ Pour générer `DJANGO_SECRET_KEY` :
 python3 -c "import secrets; print(secrets.token_urlsafe(50))"
 ```
 
-## 3'. Créer le stack sous l'hôte dans `/tmp` pour tester
+## 3'. Tester la stack en local
 
-Équivalent de l'étape 3, mais en local (sans Portainer ni NAS) pour valider la stack avant un vrai déploiement. Depuis une checkout du repo sur un host avec Docker (pas dans le devcontainer — voir [Note sur les tests en devcontainer](#note-sur-les-tests-en-devcontainer)). Utiliser un fichier d'env séparé (`.env.local_temp`, ignoré par git) plutôt que `.env`, pour ne pas écraser la config de prod déjà en place :
+Équivalent de l'étape 3, mais en local (sans Portainer ni NAS) pour valider la stack — et notamment tester une modification de code avant qu'elle soit publiée sur ghcr.io par la CI.
 
-`.env.local_temp` doit contenir au moins `DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1`, `STORAGE_DIR=/tmp/studymed`, `NGINX_PORT=8081` (ou un port libre), plus les autres secrets habituels. Repartir de `.env.example` si nécessaire
+> **Ne pas tester depuis le devcontainer.** Le devcontainer utilise docker-in-docker : son daemon Docker imbriqué crée un réseau bridge isolé pour la stack, mais la connectivité TCP entre conteneurs est instable dans cet environnement (timeout entre `web` et `db` même quand les deux sont démarrés). Deux alternatives fiables : tester **depuis la machine hôte** (ci-dessous) ou directement **sur le NAS** après déploiement.
 
-```bash
-source .env.local_temp   # pour pouvoir réutiliser $NGINX_PORT / $STORAGE_DIR ci-dessous
+Utiliser un fichier d'env séparé (`.env.local_temp`, ignoré par git) plutôt que `.env`, pour ne pas écraser la config de prod :
 
-docker compose --env-file .env.local_temp up -d
-docker compose ps
-curl -I http://localhost:$NGINX_PORT/   # doit répondre 302 vers /login/
-ls $STORAGE_DIR/data/                   # postgres/ media/ static/
+```
+DJANGO_SECRET_KEY=une-cle-quelconque-pour-les-tests
+DJANGO_DEBUG=True
+DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
+DJANGO_CSRF_TRUSTED_ORIGINS=http://localhost:8081
+POSTGRES_DB=studymed
+POSTGRES_USER=studymed
+POSTGRES_PASSWORD=studymed
+NGINX_PORT=8081
+STORAGE_DIR=/tmp/studymed
 ```
 
-Pour tester une modification de code locale avant qu'elle soit publiée par la CI (`docker-compose.yml` ne déclare pas de `build:`, voir [Référence : architecture des conteneurs](#reference-architecture-des-conteneurs)), builder et tagger l'image manuellement avant le `docker compose up` :
+Repartir de `.env.example` si nécessaire.
+
+Depuis un terminal sur la machine hôte (WSL2 ou macOS/Linux avec Docker installé, **hors devcontainer**), dans le dossier du repo :
+
+**1. Créer l'arborescence :**
+
+```bash
+source .env.local_temp
+
+mkdir -p "$STORAGE_DIR"/{data/{postgres,media,static},conf,import_init}
+cp conf/nginx.conf "$STORAGE_DIR/conf/"
+```
+
+**2. Builder l'image depuis le code local :**
 
 ```bash
 docker build -t ghcr.io/camille626/entrainement-medecine:latest .
-docker compose --env-file .env.local_temp down
-docker compose --env-file .env.local_temp up -d
 ```
 
-Nettoyage après test :
+**3. Démarrer la stack :**
+
+```bash
+docker compose --env-file .env.local_temp up -d
+docker compose --env-file .env.local_temp ps
+curl -I http://localhost:$NGINX_PORT/   # doit répondre 302 vers /login/
+```
+
+**4. Tester `import_fixture` :**
+
+```bash
+cp fixture.json media.zip "$STORAGE_DIR/import_init/"
+
+docker compose --env-file .env.local_temp exec web python manage.py import_fixture \
+  --fixture /app/import_init/fixture.json \
+  --media-zip /app/import_init/media.zip
+
+# Vérifier l'arborescence : question_images/ doit être direct sous media/
+ls "$STORAGE_DIR/data/media/"
+# Attendu : certificates/  profile_photos/  question_images/
+# Pas de sous-dossier media/ intermédiaire
+```
+
+**5. Nettoyage :**
 
 ```bash
 docker compose --env-file .env.local_temp down
 
-# Garde-fou : refuse si STORAGE_DIR est vide ou hors /tmp.
 if [[ -n "$STORAGE_DIR" && "$STORAGE_DIR" == /tmp/* ]]; then
-  # rm/rmdir directs côté host échouent souvent : fichiers possédés par l'UID
-  # du conteneur (ex: postgres), et le dossier $STORAGE_DIR lui-même a été créé
-  # par Docker (root) — le sticky bit de /tmp empêche un user non-root de le
-  # supprimer même vide. On monte le parent (/tmp) dans un conteneur jetable
-  # et on supprime tout depuis là, en root.
   docker run --rm -v /tmp:/host_tmp alpine rm -rf "/host_tmp/$(basename "$STORAGE_DIR")"
 else
   echo "STORAGE_DIR non défini ou hors /tmp ($STORAGE_DIR) — suppression annulée." >&2
 fi
 ```
-
-### Note sur les tests en devcontainer
-
-Si ce repo est ouvert dans son propre devcontainer (`docker-in-docker`), le daemon Docker imbriqué peut se dégrader après une session longue (plusieurs heures, beaucoup de créations/suppressions de réseaux et conteneurs) et casser la connectivité réseau entre conteneurs (`connection timed out` entre `web` et `db` alors que tout démarre normalement). Dans ce cas, tester directement sur la machine hôte (hors devcontainer) plutôt que de chercher un bug dans `docker-compose.yml` — un redémarrage du daemon Docker du devcontainer (ou un rebuild du devcontainer) résout généralement le problème.
 
 ## 4. Configurer le reverse-proxy DSM
 
@@ -174,8 +203,15 @@ Peupler la base Postgres vierge avec les données existantes (cas du dev local s
 
    ```bash
    uv run --active python manage.py dumpdata qcm auth --output=fixture.json
-   zip -r media.zip media/
+   (cd media && zip -r ../media.zip .)
    ```
+
+   > **Important** : ne pas utiliser `zip -r media.zip media/` (depuis la racine du
+   > projet) — cette forme inclut `media/` dans les chemins de l'archive
+   > (`media/question_images/foo.jpg`), ce qui provoque une double arborescence
+   > `media/media/question_images/` sur le NAS après extraction. La commande
+   > `(cd media && zip -r ../media.zip .)` produit des chemins directs
+   > (`question_images/foo.jpg`) correctement extraits dans `MEDIA_ROOT`.
 
 2. **Via File Station**, glisser-déposer `fixture.json` et `media.zip` dans `${STORAGE_DIR}/import_init/` — déjà créé à l'étape 2, donc pas de souci de permissions pour l'upload.
 
@@ -195,24 +231,6 @@ Peupler la base Postgres vierge avec les données existantes (cas du dev local s
 
 4. **Nettoyer** `import_init/` après coup via File Station (pas indispensable : la commande n'est jamais relancée automatiquement, mais évite de laisser un export de données sensibles trainer sur le NAS).
 
-### Tester cette procédure en local avant le NAS
-
-Créer `/tmp/studymed/import_init` **avant** le premier `docker compose up` de l'étape 3' (sinon Docker le crée en root, voir [Dépannage](#depannage-import_init-deja-cree-en-root)) :
-
-```bash
-source .env.local_temp
-cp fixture.json media.zip /tmp/studymed/import_init/
-docker compose --env-file .env.local_temp exec web /bin/bash
-```
-
-Puis, dans le shell du conteneur (même commande qu'en étape 3 ci-dessus) :
-
-```bash
-python manage.py import_fixture \
-  --fixture /app/import_init/fixture.json \
-  --media-zip /app/import_init/media.zip
-```
-
 ### Dépannage : `import_init` déjà créé en root
 
 Si le stack a déjà tourné avant que `import_init/` n'existe (cas vécu pendant les tests de cette session), Docker l'a créé en root — ni File Station ni un `cp` côté host ne peuvent plus y écrire. Rattrapage ponctuel via un conteneur jetable (root), en remplaçant les chemins source par ceux de `fixture.json`/`media.zip` :
@@ -225,7 +243,7 @@ docker run --rm \
   alpine sh -c "cp /src/fixture.json /src/media.zip /target/"
 ```
 
-Pour éviter de refaire ce rattrapage à chaque fois, supprimer le dossier root-owned et le recréer soi-même avant le prochain démarrage du stack (même conteneur jetable pour la suppression, voir [Nettoyage après test](#3-creer-le-stack-sous-lhote-dans-tmp-pour-tester) plus haut pour le pattern).
+Pour éviter de refaire ce rattrapage à chaque fois, supprimer le dossier root-owned et le recréer soi-même avant le prochain démarrage du stack (même conteneur jetable pour la suppression, voir [Nettoyage après test](#3-tester-la-stack-en-local) plus haut pour le pattern).
 
 ### Dépannage : `PermissionError` sur `staticfiles` ou `media`
 
