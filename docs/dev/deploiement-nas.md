@@ -243,7 +243,7 @@ docker run --rm \
   alpine sh -c "cp /src/fixture.json /src/media.zip /target/"
 ```
 
-Pour éviter de refaire ce rattrapage à chaque fois, supprimer le dossier root-owned et le recréer soi-même avant le prochain démarrage du stack (même conteneur jetable pour la suppression, voir [Nettoyage après test](#3-creer-le-stack-sous-lhote-dans-tmp-pour-tester) plus haut pour le pattern).
+Pour éviter de refaire ce rattrapage à chaque fois, supprimer le dossier root-owned et le recréer soi-même avant le prochain démarrage du stack (même conteneur jetable pour la suppression, voir [Nettoyage après test](#3-tester-la-stack-en-local) plus haut pour le pattern).
 
 ### Dépannage : `PermissionError` sur `staticfiles` ou `media`
 
