@@ -1,7 +1,7 @@
 import pytest
 from django.core.management import call_command
 
-from qcm.models import Answer, Category, Course, Question, Tag
+from qcm.models import Answer, Course, Question, Tag
 
 
 MINI_DUMP = """\
@@ -97,23 +97,6 @@ class TestImportMoodleCommand:
         assert course.name == "P2 - La cellule"
         assert course.short_name == "cell"
 
-    def test_excludes_top_categories(self, mini_dump):
-        call_command("import_moodle", dump=mini_dump)
-        assert not Category.objects.filter(name="top").exists()
-
-    def test_imports_real_categories(self, mini_dump):
-        call_command("import_moodle", dump=mini_dump)
-        assert Category.objects.count() == 2
-        assert Category.objects.filter(
-            name="Default for P2 - La cellule course question bank"
-        ).exists()
-        assert Category.objects.filter(name="Entrainement cytosquelette").exists()
-
-    def test_categories_linked_to_course(self, mini_dump):
-        call_command("import_moodle", dump=mini_dump)
-        course = Course.objects.get(moodle_id=11)
-        assert Category.objects.filter(course=course).count() == 2
-
     def test_imports_multichoice_and_shortanswer_questions(self, mini_dump):
         call_command("import_moodle", dump=mini_dump)
         # Q200: multichoice → imported
@@ -123,9 +106,10 @@ class TestImportMoodleCommand:
         assert Question.objects.filter(qtype="multichoice").count() == 1
         assert Question.objects.filter(qtype="shortanswer").count() == 1
 
-    def test_questions_linked_to_category(self, mini_dump):
+    def test_questions_linked_to_course(self, mini_dump):
         call_command("import_moodle", dump=mini_dump)
-        assert Question.objects.filter(moodle_id=200).exists()
+        course = Course.objects.get(moodle_id=11)
+        assert Question.objects.filter(moodle_id=200, course=course).exists()
         # Q201 excluded (le chat without annale)
         assert not Question.objects.filter(moodle_id=201).exists()
 
@@ -153,7 +137,6 @@ class TestImportMoodleCommand:
         call_command("import_moodle", dump=mini_dump)
         call_command("import_moodle", dump=mini_dump)
         assert Course.objects.count() == 1
-        assert Category.objects.count() == 2
         assert Question.objects.count() == 2  # Q200 (multichoice) + Q202 (shortanswer)
         assert Answer.objects.count() == 3  # Only answers for Q200
 

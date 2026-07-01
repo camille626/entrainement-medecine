@@ -7,7 +7,6 @@ from django.contrib.auth.models import User
 
 from qcm.models import (
     Answer,
-    Category,
     Course,
     ImageDragItem,
     ImageDropZone,
@@ -29,15 +28,10 @@ def course(db):
 
 
 @pytest.fixture
-def category(course):
-    return Category.objects.create(name="Oeil", course=course, moodle_id=7000)
-
-
-@pytest.fixture
-def ddi_question(category):
+def ddi_question(course):
     return Question.objects.create(
         text="<p>Légender l'oeil :</p>",
-        category=category,
+        course=course,
         qtype=Question.DDIMAGEORTEXT,
         moodle_id=5600,
     )
@@ -364,9 +358,9 @@ class TestUserAnswerFractionOverride:
         )
         assert ua.effective_fraction == 1.0
 
-    def test_no_override_falls_back_to_answer_fraction(self, user, course, category):
+    def test_no_override_falls_back_to_answer_fraction(self, user, course):
         q = Question.objects.create(
-            text="QCM", category=category, qtype="multichoice", moodle_id=9900
+            text="QCM", course=course, qtype="multichoice", moodle_id=9900
         )
         a = Answer.objects.create(text="A", question=q, fraction=0.5, is_correct=True)
         sess = QuizSession.objects.create(user=user, course=course, mode="training")

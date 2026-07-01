@@ -5,7 +5,6 @@ from django.contrib.auth.models import User
 
 from qcm.models import (
     Answer,
-    Category,
     Course,
     Question,
     QuizSession,
@@ -41,15 +40,10 @@ def course(semester):
 
 
 @pytest.fixture
-def category(course):
-    return Category.objects.create(name="Membrane", course=course, moodle_id=100)
-
-
-@pytest.fixture
-def question(category):
+def question(course):
     q = Question.objects.create(
         text="<p>Question test</p>",
-        category=category,
+        course=course,
         qtype="multichoice",
         moodle_id=500,
     )

@@ -5,7 +5,6 @@ from django.contrib.auth.models import User
 
 from qcm.models import (
     Answer,
-    Category,
     Course,
     CoursePackage,
     ImageDragItem,
@@ -61,17 +60,10 @@ def course(semester):
 
 
 @pytest.fixture
-def category(course):
-    return Category.objects.create(
-        name="Membrane plasmique", course=course, moodle_id=100
-    )
-
-
-@pytest.fixture
-def question(category):
+def question(course):
     q = Question.objects.create(
         text="<p>Question test admin</p>",
-        category=category,
+        course=course,
         qtype="multichoice",
     )
     Answer.objects.create(text="Bonne", question=q, fraction=1.0, is_correct=True)
@@ -296,14 +288,14 @@ class TestAdminQuestions:
         response = client.get("/admin-site/questions/ajouter/")
         assert response.status_code == 200
 
-    def test_add_question_creates_question(self, client, staff_user, category):
+    def test_add_question_creates_question(self, client, staff_user, course):
         """Soumettre le formulaire crée une question avec ses réponses."""
         client.force_login(staff_user)
         response = client.post(
             "/admin-site/questions/ajouter/",
             {
                 "text": "<p>Nouvelle question</p>",
-                "category": category.pk,
+                "course": course.pk,
                 "qtype": "multichoice",
                 "form-TOTAL_FORMS": "2",
                 "form-INITIAL_FORMS": "0",
@@ -322,14 +314,14 @@ class TestAdminQuestions:
         response = client.get(f"/admin-site/questions/{question.pk}/modifier/")
         assert response.status_code == 200
 
-    def test_edit_question_updates_text(self, client, staff_user, question, category):
+    def test_edit_question_updates_text(self, client, staff_user, question, course):
         """Soumettre le formulaire de modification met à jour le texte."""
         client.force_login(staff_user)
         client.post(
             f"/admin-site/questions/{question.pk}/modifier/",
             {
                 "text": "<p>Texte modifié</p>",
-                "category": category.pk,
+                "course": course.pk,
                 "qtype": "multichoice",
                 "form-TOTAL_FORMS": "2",
                 "form-INITIAL_FORMS": "2",
@@ -424,10 +416,10 @@ def bg_image_file():
 
 
 @pytest.fixture
-def ddi_question(category):
+def ddi_question(course):
     return Question.objects.create(
         text="<p>Légender l'oeil</p>",
-        category=category,
+        course=course,
         qtype=Question.DDIMAGEORTEXT,
     )
 
@@ -471,14 +463,14 @@ class TestAdminQuestionsDDImageOrText:
         assert "selected" in content[idx : idx + 60]
 
     def test_create_ddimageortext_question_with_image_zones_and_drag_items(
-        self, client, staff_user, category, bg_image_file
+        self, client, staff_user, course, bg_image_file
     ):
         client.force_login(staff_user)
         response = client.post(
             "/admin-site/questions/ajouter/",
             {
                 "text": "<p>Légender l'oeil</p>",
-                "category": category.pk,
+                "course": course.pk,
                 "qtype": "ddimageortext",
                 "new_bg_image_file": bg_image_file,
                 "dragform-TOTAL_FORMS": "2",
@@ -513,14 +505,14 @@ class TestAdminQuestionsDDImageOrText:
         assert zone2.accepted_labels.count() == 0
 
     def test_edit_ddimageortext_adds_zone_assigns_next_no(
-        self, client, staff_user, category, ddi_question, ddi_zones
+        self, client, staff_user, course, ddi_question, ddi_zones
     ):
         client.force_login(staff_user)
         client.post(
             f"/admin-site/questions/{ddi_question.pk}/modifier/",
             {
                 "text": ddi_question.text,
-                "category": category.pk,
+                "course": course.pk,
                 "qtype": "ddimageortext",
                 "dragform-TOTAL_FORMS": "0",
                 "dragform-INITIAL_FORMS": "0",
@@ -547,14 +539,14 @@ class TestAdminQuestionsDDImageOrText:
         assert zones.get(no=3).correct_label == "choroide"
 
     def test_edit_ddimageortext_deletes_zone(
-        self, client, staff_user, category, ddi_question, ddi_zones
+        self, client, staff_user, course, ddi_question, ddi_zones
     ):
         client.force_login(staff_user)
         client.post(
             f"/admin-site/questions/{ddi_question.pk}/modifier/",
             {
                 "text": ddi_question.text,
-                "category": category.pk,
+                "course": course.pk,
                 "qtype": "ddimageortext",
                 "dragform-TOTAL_FORMS": "0",
                 "dragform-INITIAL_FORMS": "0",
@@ -577,7 +569,7 @@ class TestAdminQuestionsDDImageOrText:
         assert ImageDropZone.objects.filter(pk=ddi_zones[0].pk).exists()
 
     def test_edit_ddimageortext_updates_alt_labels(
-        self, client, staff_user, category, ddi_question, ddi_zones
+        self, client, staff_user, course, ddi_question, ddi_zones
     ):
         ImageDropZoneLabel.objects.create(zone=ddi_zones[0], text="ancien")
         client.force_login(staff_user)
@@ -585,7 +577,7 @@ class TestAdminQuestionsDDImageOrText:
             f"/admin-site/questions/{ddi_question.pk}/modifier/",
             {
                 "text": ddi_question.text,
-                "category": category.pk,
+                "course": course.pk,
                 "qtype": "ddimageortext",
                 "dragform-TOTAL_FORMS": "0",
                 "dragform-INITIAL_FORMS": "0",
@@ -608,7 +600,7 @@ class TestAdminQuestionsDDImageOrText:
         assert alt_texts == {"nouveau1", "nouveau2"}
 
     def test_edit_ddimageortext_replaces_background_image(
-        self, client, staff_user, category, ddi_question, ddi_zones, bg_image_file
+        self, client, staff_user, course, ddi_question, ddi_zones, bg_image_file
     ):
         QuestionImage.objects.create(
             question=ddi_question, moodle_filename="background", file=bg_image_file
@@ -623,7 +615,7 @@ class TestAdminQuestionsDDImageOrText:
             f"/admin-site/questions/{ddi_question.pk}/modifier/",
             {
                 "text": ddi_question.text,
-                "category": category.pk,
+                "course": course.pk,
                 "qtype": "ddimageortext",
                 "new_bg_image_file": new_file,
                 "dragform-TOTAL_FORMS": "0",
@@ -663,7 +655,7 @@ class TestAdminQuestionsDDImageOrText:
         assert response.context["existing_bg_image"] is not None
 
     def test_replace_background_image_removes_old_moodle_named_image(
-        self, client, staff_user, category, ddi_question, ddi_zones, bg_image_file
+        self, client, staff_user, course, ddi_question, ddi_zones, bg_image_file
     ):
         """Remplacer l'image de fond doit supprimer l'ancienne, même si elle vient de l'import Moodle."""
         from django.core.files.uploadedfile import SimpleUploadedFile
@@ -681,7 +673,7 @@ class TestAdminQuestionsDDImageOrText:
             f"/admin-site/questions/{ddi_question.pk}/modifier/",
             {
                 "text": ddi_question.text,
-                "category": category.pk,
+                "course": course.pk,
                 "qtype": "ddimageortext",
                 "new_bg_image_file": new_file,
                 "dragform-TOTAL_FORMS": "0",

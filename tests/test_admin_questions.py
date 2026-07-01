@@ -3,7 +3,7 @@
 import pytest
 from django.contrib.auth.models import User
 
-from qcm.models import Category, Course, Question, Semester, StudyYear
+from qcm.models import Course, Question, Semester, StudyYear
 
 
 SAMPLE_XML = (
@@ -53,12 +53,12 @@ def regular_user(db):
 
 
 @pytest.fixture
-def category(db):
+def course(db):
     year = StudyYear.objects.create(name="P2", order=1)
     semester = Semester.objects.create(name="S1", study_year=year, order=1)
-    course = Course.objects.create(name="Cours test", moodle_id=9999)
-    semester.courses.add(course)
-    return Category.objects.create(name="Cat test", course=course, moodle_id=8888)
+    c = Course.objects.create(name="Cours test", moodle_id=9999)
+    semester.courses.add(c)
+    return c
 
 
 # ── Parser ────────────────────────────────────────────────────────────────────
@@ -223,10 +223,10 @@ class TestAdminQuestionsPreviewView:
 
 @pytest.mark.django_db
 class TestAdminQuestionsConfirmView:
-    def test_confirm_creates_questions(self, client, staff_user, category):
+    def test_confirm_creates_questions(self, client, staff_user, course):
         client.force_login(staff_user)
         data = {
-            "category_id": str(category.pk),
+            "course_id": str(course.pk),
             "q_count": "1",
             "q_0_text": "<p>Nouvelle question</p>",
             "q_0_feedback": "<p>Feedback</p>",
@@ -238,12 +238,12 @@ class TestAdminQuestionsConfirmView:
         }
         response = client.post("/questions/confirmer/", data)
         assert response.status_code == 302
-        assert Question.objects.filter(category=category).count() == 1
+        assert Question.objects.filter(course=course).count() == 1
 
-    def test_confirm_creates_answers(self, client, staff_user, category):
+    def test_confirm_creates_answers(self, client, staff_user, course):
         client.force_login(staff_user)
         data = {
-            "category_id": str(category.pk),
+            "course_id": str(course.pk),
             "q_count": "1",
             "q_0_text": "<p>Question</p>",
             "q_0_feedback": "",
@@ -254,15 +254,15 @@ class TestAdminQuestionsConfirmView:
             "q_0_a_1_fraction": "-1.0",
         }
         client.post("/questions/confirmer/", data)
-        q = Question.objects.get(category=category)
+        q = Question.objects.get(course=course)
         assert q.answers.count() == 2
         assert q.answers.get(text="Correcte").fraction == pytest.approx(1.0)
         assert q.answers.get(text="Fausse").fraction == pytest.approx(-1.0)
 
-    def test_confirm_moodle_id_is_none(self, client, staff_user, category):
+    def test_confirm_moodle_id_is_none(self, client, staff_user, course):
         client.force_login(staff_user)
         data = {
-            "category_id": str(category.pk),
+            "course_id": str(course.pk),
             "q_count": "1",
             "q_0_text": "<p>Q</p>",
             "q_0_feedback": "",
@@ -273,16 +273,16 @@ class TestAdminQuestionsConfirmView:
             "q_0_a_1_fraction": "0.0",
         }
         client.post("/questions/confirmer/", data)
-        q = Question.objects.get(category=category)
+        q = Question.objects.get(course=course)
         assert q.moodle_id is None
 
-    def test_confirm_clears_session(self, client, staff_user, category):
+    def test_confirm_clears_session(self, client, staff_user, course):
         client.force_login(staff_user)
         session = client.session
         session["upload_questions"] = [{"text": "x", "feedback": "", "answers": []}]
         session.save()
         data = {
-            "category_id": str(category.pk),
+            "course_id": str(course.pk),
             "q_count": "1",
             "q_0_text": "<p>Q</p>",
             "q_0_feedback": "",

@@ -7,7 +7,6 @@ from django.contrib.auth.models import User
 
 from qcm.models import (
     Answer,
-    Category,
     Course,
     Errata,
     Question,
@@ -41,8 +40,7 @@ def question(db, staff_user):
     semester = Semester.objects.create(name="S1", study_year=year, order=1)
     course = Course.objects.create(name="Cours test", moodle_id=9999)
     semester.courses.add(course)
-    category = Category.objects.create(name="Cat test", course=course, moodle_id=8888)
-    q = Question.objects.create(text="Question test", category=category, moodle_id=7777)
+    q = Question.objects.create(text="Question test", course=course, moodle_id=7777)
     Answer.objects.create(text="A", question=q, fraction=1.0, is_correct=True)
     return q
 

@@ -55,21 +55,6 @@ class Course(models.Model):
         return self.name
 
 
-class Category(models.Model):
-    name = models.CharField(max_length=255)
-    course = models.ForeignKey(
-        Course, on_delete=models.CASCADE, related_name="categories"
-    )
-    moodle_id = models.IntegerField(unique=True)
-
-    class Meta:
-        ordering = ["name"]
-        verbose_name_plural = "categories"
-
-    def __str__(self) -> str:
-        return self.name
-
-
 class TagCategory(models.Model):
     ANNEE = "annee"
     SOUSCATEGORIE = "souscategorie"
@@ -149,8 +134,10 @@ class Question(models.Model):
 
     text = models.TextField()
     feedback = models.TextField(blank=True)
-    category = models.ForeignKey(
-        Category, on_delete=models.CASCADE, related_name="questions"
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.CASCADE,
+        related_name="questions",
     )
     qtype = models.CharField(max_length=50, choices=QTYPE_CHOICES, default=MULTICHOICE)
     moodle_id = models.IntegerField(unique=True, null=True, blank=True)
@@ -161,7 +148,7 @@ class Question(models.Model):
         ordering = ["moodle_id"]
 
     def __str__(self) -> str:
-        return f"Question #{self.moodle_id or 'N/A'} ({self.category})"
+        return f"Question #{self.moodle_id or 'N/A'} ({self.course})"
 
     def render_text(self) -> str:
         """Return question text with @@PLUGINFILE@@ refs resolved to media URLs."""

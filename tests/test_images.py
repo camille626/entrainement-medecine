@@ -6,7 +6,6 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError
 
 from qcm.models import (
-    Category,
     Course,
     Errata,
     Question,
@@ -32,15 +31,10 @@ def course(db):
 
 
 @pytest.fixture
-def category(course):
-    return Category.objects.create(name="Radiologie", course=course, moodle_id=200)
-
-
-@pytest.fixture
-def question(category):
+def question(course):
     return Question.objects.create(
         text='<p>Observez ce schéma :</p><img src="@@PLUGINFILE@@/schema.png" alt="schema">',
-        category=category,
+        course=course,
         qtype="multichoice",
         moodle_id=300,
     )
@@ -118,10 +112,10 @@ class TestQuestionImageModel:
                 file=make_image_file("schema.png"),
             )
 
-    def test_same_filename_different_questions_allowed(self, question, category):
+    def test_same_filename_different_questions_allowed(self, question, course):
         other_q = Question.objects.create(
             text="<p>Autre question</p>",
-            category=category,
+            course=course,
             qtype="multichoice",
             moodle_id=301,
         )
@@ -144,10 +138,10 @@ class TestQuestionImageModel:
 
 @pytest.mark.django_db
 class TestQuestionRenderText:
-    def test_text_without_pluginfile_unchanged(self, category):
+    def test_text_without_pluginfile_unchanged(self, course):
         q = Question.objects.create(
             text="<p>Question sans image</p>",
-            category=category,
+            course=course,
             qtype="multichoice",
             moodle_id=400,
         )
@@ -168,14 +162,14 @@ class TestQuestionRenderText:
         assert "@@PLUGINFILE@@" not in rendered
         assert "Image non disponible" in rendered
 
-    def test_multiple_images_in_text(self, category):
+    def test_multiple_images_in_text(self, course):
         q = Question.objects.create(
             text=(
                 "<p>Voici deux images :</p>"
                 '<img src="@@PLUGINFILE@@/img1.png" alt="img1">'
                 '<img src="@@PLUGINFILE@@/img2.jpg" alt="img2">'
             ),
-            category=category,
+            course=course,
             qtype="multichoice",
             moodle_id=401,
         )

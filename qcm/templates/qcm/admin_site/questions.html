@@ -22,18 +22,6 @@
       {% endfor %}
     </select>
   </div>
-  {% if categories %}
-  <div class="col-auto">
-    <select name="category" class="form-select form-select-sm" onchange="this.form.submit()">
-      <option value="">— Toutes les catégories —</option>
-      {% for cat in categories %}
-      <option value="{{ cat.pk }}" {% if selected_category == cat.pk|stringformat:"s" %}selected{% endif %}>
-        {{ cat.name }}
-      </option>
-      {% endfor %}
-    </select>
-  </div>
-  {% endif %}
   <div class="col-auto">
     <select name="qtype" class="form-select form-select-sm" onchange="this.form.submit()">
       <option value="">— Tous les types —</option>
@@ -51,7 +39,7 @@
       <button type="submit" class="btn btn-outline-secondary">🔍</button>
     </div>
   </div>
-  {% if search or selected_course or selected_category or selected_qtype %}
+  {% if search or selected_course or selected_qtype %}
   <div class="col-auto">
     <a href="/admin-site/questions/" class="btn btn-sm btn-outline-secondary">✕ Réinitialiser</a>
   </div>
@@ -64,7 +52,7 @@
     <thead class="table-light">
       <tr>
         <th>#</th>
-        <th>Cours / Catégorie</th>
+        <th>Cours</th>
         <th>Type</th>
         <th>Énoncé</th>
         <th></th>
@@ -75,8 +63,7 @@
       <tr>
         <td class="text-muted small">{{ q.moodle_id|default:"—" }}</td>
         <td class="small">
-          <div class="fw-semibold">{{ q.category.course.name }}</div>
-          <div class="text-muted">{{ q.category.name }}</div>
+          <div class="fw-semibold">{{ q.course.name }}</div>
         </td>
         <td>
           <span class="badge {% if q.qtype == 'multichoice' %}bg-primary{% else %}bg-info text-dark{% endif %}">
@@ -112,7 +99,7 @@
   <ul class="pagination pagination-sm">
     {% if page_obj.has_previous %}
     <li class="page-item">
-      <a class="page-link" href="?course={{ selected_course }}&category={{ selected_category }}&qtype={{ selected_qtype }}&q={{ search }}&page={{ page_obj.previous_page_number }}">←</a>
+      <a class="page-link" href="?course={{ selected_course }}&qtype={{ selected_qtype }}&q={{ search }}&page={{ page_obj.previous_page_number }}">←</a>
     </li>
     {% endif %}
     <li class="page-item disabled">
@@ -120,7 +107,7 @@
     </li>
     {% if page_obj.has_next %}
     <li class="page-item">
-      <a class="page-link" href="?course={{ selected_course }}&category={{ selected_category }}&qtype={{ selected_qtype }}&q={{ search }}&page={{ page_obj.next_page_number }}">→</a>
+      <a class="page-link" href="?course={{ selected_course }}&qtype={{ selected_qtype }}&q={{ search }}&page={{ page_obj.next_page_number }}">→</a>
     </li>
     {% endif %}
   </ul>

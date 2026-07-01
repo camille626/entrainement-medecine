@@ -6,7 +6,6 @@ from django.core import mail
 
 from qcm.models import (
     Answer,
-    Category,
     Course,
     Errata,
     Question,
@@ -32,10 +31,9 @@ def question(db):
     course = Course.objects.create(
         name="P2 - La cellule", short_name="cell", moodle_id=11, semester=sem
     )
-    cat = Category.objects.create(name="Cat", course=course, moodle_id=100)
     q = Question.objects.create(
         text="<p>Question test</p>",
-        category=cat,
+        course=course,
         qtype="multichoice",
         moodle_id=500,
     )

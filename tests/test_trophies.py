@@ -9,7 +9,6 @@ from django.test import RequestFactory
 
 from qcm.models import (
     Answer,
-    Category,
     Course,
     Errata,
     LoginEvent,
@@ -34,15 +33,10 @@ def course(db):
 
 
 @pytest.fixture
-def category(course):
-    return Category.objects.create(name="Cat immuno", course=course, moodle_id=999)
-
-
-@pytest.fixture
-def question(category):
+def question(course):
     return Question.objects.create(
         text="Question test",
-        category=category,
+        course=course,
         qtype="multichoice",
         moodle_id=9001,
     )
@@ -92,7 +86,7 @@ def _add_answers(session, question, answer, count: int) -> None:
         )
         q = Question.objects.create(
             text=f"Q{i}",
-            category=question.category,
+            course=question.course,
             qtype="multichoice",
             moodle_id=90000 + i,
         )
@@ -263,7 +257,7 @@ class TestCheckAndAwardTrophies:
         for i in range(10):
             q = Question.objects.create(
                 text=f"Q session {i}",
-                category=question.category,
+                course=question.course,
                 qtype="multichoice",
                 moodle_id=70000 + i,
             )
@@ -290,7 +284,7 @@ class TestCheckAndAwardTrophies:
         for i in range(5):
             q = Question.objects.create(
                 text=f"Q courte {i}",
-                category=question.category,
+                course=question.course,
                 qtype="multichoice",
                 moodle_id=71000 + i,
             )
@@ -491,7 +485,7 @@ class TestCheckAndAwardTrophies:
             )
             q = Question.objects.create(
                 text=f"Q zero {i}",
-                category=question.category,
+                course=question.course,
                 qtype="multichoice",
                 moodle_id=80000 + i,
             )
@@ -535,7 +529,7 @@ class TestCheckAndAwardTrophies:
             )
             q = Question.objects.create(
                 text=f"Q ECG {i}",
-                category=question.category,
+                course=question.course,
                 qtype="multichoice",
                 moodle_id=60000 + i,
             )
@@ -581,7 +575,7 @@ class TestCheckAndAwardTrophies:
         )
         q = Question.objects.create(
             text="Q sans tag ECG",
-            category=question.category,
+            course=question.course,
             qtype="multichoice",
             moodle_id=60099,
         )
@@ -615,7 +609,7 @@ class TestCheckAndAwardTrophies:
         )
         q = Question.objects.create(
             text="Q partielle",
-            category=question.category,
+            course=question.course,
             qtype="multichoice",
             moodle_id=80099,
         )

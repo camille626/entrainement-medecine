@@ -46,26 +46,12 @@
           <label class="form-label fw-semibold small">
             Cours <span class="text-danger">*</span>
           </label>
-          <select id="course-select" class="form-select form-select-sm" required
-                  onchange="filterCategories(this.value)">
+          <select name="course" id="course-select" class="form-select form-select-sm" required>
             <option value="">— Sélectionner un cours —</option>
             {% for c in courses %}
             <option value="{{ c.pk }}"
-                    {% if question and question.category.course_id == c.pk %}selected{% endif %}>
+                    {% if question and question.course_id == c.pk %}selected{% endif %}>
               {{ c.name }}
-            </option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-6">
-          <label for="id_category" class="form-label fw-semibold small">Catégorie</label>
-          <select name="category" id="id_category" class="form-select form-select-sm" required>
-            <option value="">— Sélectionner une catégorie —</option>
-            {% for cat in categories %}
-            <option value="{{ cat.pk }}"
-                    data-course="{{ cat.course_id }}"
-                    {% if question and question.category_id == cat.pk %}selected{% endif %}>
-              {{ cat.name }} — {{ cat.course.name }}
             </option>
             {% endfor %}
           </select>
@@ -452,17 +438,6 @@ function updateTotalForms() {
     document.querySelectorAll('.answer-row').length;
 }
 
-function filterCategories(courseId) {
-  const select = document.getElementById('id_category');
-  Array.from(select.options).forEach(opt => {
-    if (!opt.value) return;
-    opt.style.display = (!courseId || opt.dataset.course === courseId) ? '' : 'none';
-  });
-  // Reset category selection when course changes
-  if (!courseId) select.value = '';
-}
-const courseSelect = document.getElementById('course-select');
-if (courseSelect.value) filterCategories(courseSelect.value);
 
 function previewImage(input) {
   const zone = document.getElementById('image-preview-zone');

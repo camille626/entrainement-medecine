@@ -5,7 +5,6 @@ from django.contrib.auth.models import User
 
 from qcm.models import (
     Answer,
-    Category,
     Course,
     Question,
     Semester,
@@ -46,20 +45,6 @@ def course_cellule(semester):
 
 
 @pytest.fixture
-def category_tissu(course_tissu):
-    return Category.objects.create(
-        name="Tissu sanguin", course=course_tissu, moodle_id=200
-    )
-
-
-@pytest.fixture
-def category_cellule(course_cellule):
-    return Category.objects.create(
-        name="La cellule", course=course_cellule, moodle_id=201
-    )
-
-
-@pytest.fixture
 def cat_annee(db):
     return TagCategory.objects.create(name="Annales", tag_type="annee", order=0)
 
@@ -96,10 +81,10 @@ def tag_cellule(course_cellule, db):
 
 
 @pytest.fixture
-def question_tissu(category_tissu, tag_annale_2024, tag_immuno):
+def question_tissu(course_tissu, tag_annale_2024, tag_immuno):
     q = Question.objects.create(
         text="<p>Question tissu</p>",
-        category=category_tissu,
+        course=course_tissu,
         qtype="multichoice",
         moodle_id=600,
     )
@@ -111,10 +96,10 @@ def question_tissu(category_tissu, tag_annale_2024, tag_immuno):
 
 
 @pytest.fixture
-def question_cellule(category_cellule, tag_cellule):
+def question_cellule(course_cellule, tag_cellule):
     q = Question.objects.create(
         text="<p>Question cellule</p>",
-        category=category_cellule,
+        course=course_cellule,
         qtype="multichoice",
         moodle_id=601,
     )

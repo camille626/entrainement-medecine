@@ -81,7 +81,7 @@ class Command(BaseCommand):
         )
 
         candidates = Question.objects.filter(text__icontains="<img").select_related(
-            "category__course"
+            "course"
         )
 
         created = 0
@@ -100,7 +100,7 @@ class Command(BaseCommand):
             if dry_run:
                 self.stdout.write(
                     f"  [dry-run] Q#{q.moodle_id or q.pk} "
-                    f"({q.category.course.short_name}) — {reason}"
+                    f"({q.course.short_name}) — {reason}"
                 )
             else:
                 Errata.objects.create(
