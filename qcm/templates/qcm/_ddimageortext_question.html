@@ -29,6 +29,21 @@
   .ddi-input { width: 2.5rem; }
   .ddi-input:focus, .ddi-input.filled { width: 7rem; }
 }
+.ddi-compact-label {
+  display: inline-block;
+  max-width: 5rem;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.65rem;
+  background: rgba(13,110,253,0.85);
+  color: white;
+  border-radius: 1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  vertical-align: middle;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.28);
+}
 </style>
 
 <p class="text-muted small mb-2">Saisissez le nom de chaque structure anatomique :</p>
@@ -101,10 +116,30 @@ window.addEventListener('resize', function() {
   var img = document.getElementById('ddi-img');
   if (img && img.complete) ddiScaleZones(img);
 });
-// Marque les inputs remplis pour les garder expansés
 document.querySelectorAll('.ddi-input').forEach(function(inp) {
+  // Crée une étiquette compacte positionnée avant l'input
+  var label = document.createElement('span');
+  label.className = 'ddi-compact-label';
+  label.style.display = 'none';
+  inp.parentNode.insertBefore(label, inp);
+
   inp.addEventListener('input', function() {
     this.classList.toggle('filled', this.value.trim().length > 0);
+  });
+
+  inp.addEventListener('blur', function() {
+    if (this.value.trim()) {
+      label.textContent = this.value.trim();
+      label.style.display = 'inline-block';
+      this.style.display = 'none';
+    }
+  });
+
+  label.addEventListener('click', function() {
+    this.style.display = 'none';
+    inp.style.display = '';
+    inp.focus();
+    inp.select();
   });
 });
 </script>

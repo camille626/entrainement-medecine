@@ -7,7 +7,8 @@ Les questions de type **légende interactive** présentent une image anatomique 
 1. Créez ou rejoignez une session en cochant **"Inclure les légendes interactives"** dans la page de configuration.
 2. Sur la question, une image s'affiche avec de petits repères positionnés sur chaque zone à légender.
 3. Cliquez sur un repère : un champ de saisie s'ouvre. Tapez le nom de la structure.
-4. Remplissez toutes les zones puis cliquez **Vérifier**.
+4. En passant au champ suivant (Tab ou clic ailleurs), le champ rempli se rétracte en **petite étiquette bleue** affichant votre réponse — il ne masque plus les zones voisines du schéma. Cliquez sur l'étiquette pour la rouvrir et modifier votre réponse avant la soumission.
+5. Remplissez toutes les zones puis cliquez **Vérifier**.
 
 ## Saisie libre (style QROC)
 
@@ -15,16 +16,14 @@ La saisie est libre et **insensible à la casse et aux accents** : "Sclerotique"
 
 ## Correction
 
-Après soumission, chaque zone affiche :
+Après soumission, **l'image reste affichée** avec les réponses positionnées sur le schéma :
 
-- ✓ en vert si le nom saisi correspond à la réponse attendue
-- ✗ en rouge avec le nom correct si la réponse était incorrecte
+- Étiquette **verte** : réponse correcte
+- Étiquette **rouge** : réponse incorrecte — survolez l'étiquette pour afficher la bonne réponse attendue et les alternatives acceptées
+
+En dessous de l'image, la liste détaillée récapitule chaque zone avec ✓/✗ et le nom attendu si la réponse était fausse.
 
 Le score est proportionnel au nombre de zones correctement légendées (ex: 8/10 → 0,80 point).
-
-## Sur mobile
-
-Les repères sont adaptés aux écrans tactiles : un toucher ouvre le champ de saisie, qui se rétracte automatiquement une fois rempli pour ne pas masquer l'image.
 
 ## Pour les administrateurs : créer ou modifier une question légende
 
