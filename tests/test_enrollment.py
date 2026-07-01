@@ -5,7 +5,6 @@ from django.contrib.auth.models import User
 
 from qcm.models import (
     Answer,
-    Category,
     Course,
     Question,
     Semester,
@@ -65,9 +64,8 @@ def admin_user(db):
 
 @pytest.fixture
 def question(course_cellule):
-    cat = Category.objects.create(name="Cat", course=course_cellule, moodle_id=999)
     q = Question.objects.create(
-        text="Q", category=cat, qtype="multichoice", moodle_id=9999
+        text="Q", course=course_cellule, qtype="multichoice", moodle_id=9999
     )
     Answer.objects.create(text="A", question=q, fraction=1.0, is_correct=True)
     return q

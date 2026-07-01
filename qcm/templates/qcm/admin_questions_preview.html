@@ -22,22 +22,17 @@
       {% csrf_token %}
       <input type="hidden" name="q_count" value="{{ questions|length }}">
 
-      <!-- Catégorie -->
+      <!-- Cours -->
       <div class="card mb-4">
         <div class="card-body">
-          <label class="form-label fw-semibold">Catégorie de destination <span class="text-danger">*</span></label>
-          <select name="category_id" class="form-select" required>
-            <option value="">— Choisir une catégorie —</option>
-            {% regroup categories by course.name as course_groups %}
-            {% for group in course_groups %}
-            <optgroup label="{{ group.grouper }}">
-              {% for cat in group.list %}
-              <option value="{{ cat.pk }}">{{ cat.name }}</option>
-              {% endfor %}
-            </optgroup>
+          <label class="form-label fw-semibold">Cours de destination <span class="text-danger">*</span></label>
+          <select name="course_id" class="form-select" required>
+            <option value="">— Choisir un cours —</option>
+            {% for c in courses %}
+            <option value="{{ c.pk }}">{{ c.name }}</option>
             {% endfor %}
           </select>
-          <div class="form-text">Toutes les questions seront placées dans cette catégorie.</div>
+          <div class="form-text">Toutes les questions seront placées dans ce cours.</div>
         </div>
       </div>
 

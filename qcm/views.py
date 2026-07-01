@@ -347,7 +347,7 @@ class ConfigurationView(LoginRequiredMixin, View):
             qtypes.append(Question.DDIMAGEORTEXT)
 
         qs = Question.objects.filter(
-            category__course__in=courses,
+            course__in=courses,
             qtype__in=qtypes,
         )
 
@@ -998,7 +998,7 @@ class TagsView(LoginRequiredMixin, View):
             if cat.course is None and cat.tag_type == TagCategory.SOUSCATEGORIE:
                 # Global EC category: filter tags to those with questions in selected courses
                 tags = list(
-                    cat.tags.filter(questions__category__course__in=courses)
+                    cat.tags.filter(questions__course__in=courses)
                     .distinct()
                     .order_by("name")
                 )
@@ -1127,9 +1127,9 @@ def _compute_course_block(course, all_answers):
 
     from .models import Question
 
-    answers = all_answers.filter(question__category__course=course)
+    answers = all_answers.filter(question__course=course)
     nb_available = Question.objects.filter(
-        category__course=course, qtype__in=["multichoice", "shortanswer"]
+        course=course, qtype__in=["multichoice", "shortanswer"]
     ).count()
     nb_done = answers.values("question_id").distinct().count()
 
@@ -1233,7 +1233,7 @@ class StatsView(LoginRequiredMixin, View):
         else:
             # No enrollment records: fall back to courses with at least 1 answer
             answered_course_ids = all_answers.values_list(
-                "question__category__course_id", flat=True
+                "question__course_id", flat=True
             ).distinct()
             enrolled_courses = list(
                 Course.objects.filter(pk__in=answered_course_ids).select_related(
@@ -1261,7 +1261,7 @@ class StatsView(LoginRequiredMixin, View):
         from .models import Question
 
         total_available = Question.objects.filter(
-            category__course__in=[c.pk for c in enrolled_courses],
+            course__in=[c.pk for c in enrolled_courses],
             qtype__in=["multichoice", "shortanswer"],
         ).count()
         total_done = all_answers.values("question_id").distinct().count()
@@ -1420,7 +1420,7 @@ class HistoryView(LoginRequiredMixin, View):
             from .models import Course
 
             course_ids = s.session_questions.values_list(
-                "question__category__course_id", flat=True
+                "question__course_id", flat=True
             ).distinct()
             session_courses = list(
                 Course.objects.filter(pk__in=course_ids).order_by("name")
@@ -1634,7 +1634,7 @@ class ErrataListView(LoginRequiredMixin, View):
 
     def get(self, request):
         qs = (
-            Errata.objects.select_related("question__category__course", "reported_by")
+            Errata.objects.select_related("question__course", "reported_by")
             .prefetch_related(
                 "concerned_answers",
                 "suggested_tags__category",
@@ -1648,7 +1648,7 @@ class ErrataListView(LoginRequiredMixin, View):
         status_filter = request.GET.get("status", "pending")  # default: pending
         type_filter = request.GET.get("error_type")
         if course_filter:
-            qs = qs.filter(question__category__course_id=course_filter)
+            qs = qs.filter(question__course_id=course_filter)
         if status_filter:
             qs = qs.filter(status=status_filter)
         if type_filter:
@@ -1739,7 +1739,7 @@ class ErrataSubmitView(LoginRequiredMixin, View):
         ec_tags = (
             Tag.objects.filter(
                 category__tag_type="souscategorie",
-                questions__category__course=question.category.course,
+                questions__course=question.course,
             )
             .distinct()
             .order_by("name")
@@ -1747,7 +1747,7 @@ class ErrataSubmitView(LoginRequiredMixin, View):
         chapter_tags = (
             Tag.objects.filter(
                 category__tag_type="chapitre",
-                questions__category__course=question.category.course,
+                questions__course=question.course,
             )
             .distinct()
             .order_by("name")
@@ -1870,7 +1870,7 @@ class CourseStatsView(LoginRequiredMixin, View):
         course = get_object_or_404(Course, pk=course_id)
         user = request.user
         all_answers = UserAnswer.objects.filter(
-            session__user=user, question__category__course=course
+            session__user=user, question__course=course
         )
 
         # Global course stats
@@ -1882,7 +1882,7 @@ class CourseStatsView(LoginRequiredMixin, View):
         ec_tag_ids = (
             Tag.objects.filter(
                 category__tag_type="souscategorie",
-                questions__category__course=course,
+                questions__course=course,
             )
             .distinct()
             .order_by("name")
@@ -1894,7 +1894,7 @@ class CourseStatsView(LoginRequiredMixin, View):
         for tag in ec_tag_ids:
             ec_answers = all_answers.filter(question__tags=tag)
             nb_available = Question.objects.filter(
-                category__course=course,
+                course=course,
                 qtype__in=["multichoice", "shortanswer"],
                 tags=tag,
             ).count()
@@ -2013,13 +2013,10 @@ class AdminQuestionsUploadView(LoginRequiredMixin, View):
 
             raise Http404
 
-    def _categories(self):
-        from .models import Category
-
-        return Category.objects.select_related("course__semester__study_year").order_by(
-            "course__semester__study_year__order",
-            "course__semester__order",
-            "course__name",
+    def _courses(self):
+        return Course.objects.select_related("semester__study_year").order_by(
+            "semester__study_year__order",
+            "semester__order",
             "name",
         )
 
@@ -2030,7 +2027,7 @@ class AdminQuestionsUploadView(LoginRequiredMixin, View):
             request,
             self.template_name,
             {
-                "categories": self._categories(),
+                "courses": self._courses(),
                 "success": int(success) if success and success.isdigit() else None,
             },
         )
@@ -2043,7 +2040,7 @@ class AdminQuestionsUploadView(LoginRequiredMixin, View):
                 request,
                 self.template_name,
                 {
-                    "categories": self._categories(),
+                    "courses": self._courses(),
                     "error": "Veuillez sélectionner un fichier XML.",
                 },
             )
@@ -2057,7 +2054,7 @@ class AdminQuestionsUploadView(LoginRequiredMixin, View):
                 request,
                 self.template_name,
                 {
-                    "categories": self._categories(),
+                    "courses": self._courses(),
                     "error": f"Fichier invalide : {exc}",
                 },
             )
@@ -2067,7 +2064,7 @@ class AdminQuestionsUploadView(LoginRequiredMixin, View):
                 request,
                 self.template_name,
                 {
-                    "categories": self._categories(),
+                    "courses": self._courses(),
                     "error": "Aucune question multichoix trouvée dans ce fichier.",
                 },
             )
@@ -2090,14 +2087,11 @@ class AdminQuestionsPreviewView(LoginRequiredMixin, View):
         if not questions:
             return redirect("qcm:questions_upload")
 
-        from .models import Category, TagCategory
+        from .models import TagCategory
 
-        categories = Category.objects.select_related(
-            "course__semester__study_year"
-        ).order_by(
-            "course__semester__study_year__order",
-            "course__semester__order",
-            "course__name",
+        courses = Course.objects.select_related("semester__study_year").order_by(
+            "semester__study_year__order",
+            "semester__order",
             "name",
         )
         tag_groups = [
@@ -2123,7 +2117,7 @@ class AdminQuestionsPreviewView(LoginRequiredMixin, View):
             self.template_name,
             {
                 "questions": questions,
-                "categories": categories,
+                "courses": courses,
                 "tag_groups": tag_groups,
                 "fraction_choices": FRACTION_CHOICES,
                 "fraction_choices_json": FRACTION_CHOICES_JSON,
@@ -2140,10 +2134,8 @@ class AdminQuestionsConfirmView(LoginRequiredMixin, View):
 
             raise Http404
 
-        from .models import Category
-
-        category_id = request.POST.get("category_id")
-        category = get_object_or_404(Category, pk=category_id)
+        course_id = request.POST.get("course_id")
+        course = get_object_or_404(Course, pk=course_id)
 
         q_count = int(request.POST.get("q_count", 0))
         created = 0
@@ -2159,7 +2151,7 @@ class AdminQuestionsConfirmView(LoginRequiredMixin, View):
             question = Question.objects.create(
                 text=text,
                 feedback=feedback,
-                category=category,
+                course=course,
                 qtype=Question.MULTICHOICE,
                 moodle_id=None,
             )

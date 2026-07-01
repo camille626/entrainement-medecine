@@ -3,7 +3,6 @@ from django.contrib.auth.models import User as DjangoUser
 
 from .models import (
     Answer,
-    Category,
     Course,
     CoursePackage,
     Errata,
@@ -30,13 +29,6 @@ class CourseAdmin(admin.ModelAdmin):
     search_fields = ["name", "short_name"]
 
 
-@admin.register(Category)
-class CategoryAdmin(admin.ModelAdmin):
-    list_display = ["name", "course", "moodle_id"]
-    list_filter = ["course"]
-    search_fields = ["name"]
-
-
 @admin.register(TagCategory)
 class TagCategoryAdmin(admin.ModelAdmin):
     list_display = ["name", "tag_type", "course", "order"]
@@ -61,10 +53,10 @@ class QuestionImageInline(admin.TabularInline):
 
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):
-    list_display = ["moodle_id", "category", "qtype"]
-    list_filter = ["qtype", "category__course", "tags"]
+    list_display = ["moodle_id", "course", "qtype"]
+    list_filter = ["qtype", "course", "tags"]
     search_fields = ["text", "moodle_id"]
-    raw_id_fields = ["category"]
+    raw_id_fields = ["course"]
     filter_horizontal = ["tags"]
     inlines = [QuestionImageInline]
 
@@ -272,7 +264,7 @@ class ErrataAdmin(admin.ModelAdmin):
         "status",
         "created_at",
     ]
-    list_filter = ["status", "error_type", "question__category__course"]
+    list_filter = ["status", "error_type", "question__course"]
     search_fields = ["description", "reported_by__username", "question__text"]
     ordering = ["-created_at"]
     filter_horizontal = ["concerned_answers", "suggested_tags"]

@@ -4,7 +4,6 @@ import pytest
 
 from qcm.models import (
     Answer,
-    Category,
     Course,
     Question,
     QuizSession,
@@ -41,16 +40,11 @@ def course(semester_s1):
 
 
 @pytest.fixture
-def category(course):
-    return Category.objects.create(name="Membrane", course=course, moodle_id=100)
-
-
-@pytest.fixture
-def question(category):
+def question(course):
     return Question.objects.create(
         text="<p>À propos de la membrane :</p>",
         feedback="<p>A. VRAI — B. FAUX</p>",
-        category=category,
+        course=course,
         qtype="multichoice",
         moodle_id=500,
     )

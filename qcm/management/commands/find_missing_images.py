@@ -14,9 +14,11 @@ class Command(BaseCommand):
     help = "List questions with unresolved @@PLUGINFILE@@ image references"
 
     def handle(self, *args, **options):
-        questions = Question.objects.filter(
-            text__contains="@@PLUGINFILE@@"
-        ).prefetch_related("images", "category__course")
+        questions = (
+            Question.objects.filter(text__contains="@@PLUGINFILE@@")
+            .select_related("course")
+            .prefetch_related("images")
+        )
         if not questions.exists():
             self.stdout.write(
                 self.style.SUCCESS("Aucune référence @@PLUGINFILE@@ trouvée.")
@@ -32,7 +34,7 @@ class Command(BaseCommand):
                 missing_count += 1
                 self.stdout.write(
                     f"Q#{q.moodle_id or q.pk} "
-                    f"({q.category.course.short_name}): "
+                    f"({q.course.short_name}): "
                     f"manquant [{', '.join(missing)}]"
                 )
 

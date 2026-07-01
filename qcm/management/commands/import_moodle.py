@@ -7,7 +7,6 @@ from django.core.management.base import BaseCommand
 
 from qcm.models import (
     Answer,
-    Category,
     Course,
     ImageDragItem,
     ImageDropZone,
@@ -59,8 +58,9 @@ class Command(BaseCommand):
         excluded_q_ids = self._compute_ai_only_question_ids(data)
         courses_created = self._import_courses(data)
         context_to_course = build_context_to_course(data)
-        cats_created = self._import_categories(data, context_to_course)
-        questions_created = self._import_questions(data, excluded_q_ids)
+        questions_created = self._import_questions(
+            data, context_to_course, excluded_q_ids
+        )
         answers_created = self._import_answers(data)
         tags_created, links_created = self._import_tags(data)
         drags_created, zones_created = self._import_ddimageortext_data(data)
@@ -79,7 +79,6 @@ class Command(BaseCommand):
             self.style.SUCCESS(
                 f"\nImport terminé :\n"
                 f"  Cours       : {courses_created} créés\n"
-                f"  Catégories  : {cats_created} créées\n"
                 f"  Questions   : {questions_created} créées\n"
                 f"  Réponses    : {answers_created} créées\n"
                 f"  Tags        : {tags_created} créés, {links_created} liaisons\n"
@@ -115,27 +114,6 @@ class Command(BaseCommand):
                 created += 1
         return created
 
-    def _import_categories(self, data: dict, context_to_course: dict[int, int]) -> int:
-        created = 0
-        for row in data.get("m_question_categories", []):
-            if row["name"] == "top":
-                continue
-            context_id = int(row["contextid"])
-            if context_id not in context_to_course:
-                continue
-            course_moodle_id = context_to_course[context_id]
-            try:
-                course = Course.objects.get(moodle_id=course_moodle_id)
-            except Course.DoesNotExist:
-                continue
-            _, is_new = Category.objects.get_or_create(
-                moodle_id=int(row["id"]),
-                defaults={"name": row["name"], "course": course},
-            )
-            if is_new:
-                created += 1
-        return created
-
     def _compute_ai_only_question_ids(self, data: dict) -> set[int]:
         """Return moodle_ids of questions tagged 'le chat' but not 'annale'."""
         tag_by_id = {row["id"]: row.get("rawname", "") for row in data.get("m_tag", [])}
@@ -155,13 +133,27 @@ class Command(BaseCommand):
         }
 
     def _import_questions(
-        self, data: dict, excluded_ids: set[int] | None = None
+        self,
+        data: dict,
+        context_to_course: dict[int, int],
+        excluded_ids: set[int] | None = None,
     ) -> int:
         created = 0
         excluded_ids = excluded_ids or set()
-        cat_by_moodle: dict[int, Category] = {
-            c.moodle_id: c for c in Category.objects.all()
-        }
+
+        # Build moodle_cat_id → Course mapping directly (no Category DB records)
+        course_by_moodle_id = {c.moodle_id: c for c in Course.objects.all()}
+        cat_to_course: dict[int, Course] = {}
+        for row in data.get("m_question_categories", []):
+            if row["name"] == "top":
+                continue
+            context_id = int(row["contextid"])
+            course_moodle_id = context_to_course.get(context_id)
+            if course_moodle_id is None:
+                continue
+            course = course_by_moodle_id.get(course_moodle_id)
+            if course:
+                cat_to_course[int(row["id"])] = course
 
         supported_qtypes = {"multichoice", "shortanswer", "ddimageortext"}
         for row in data.get("m_question", []):
@@ -170,9 +162,8 @@ class Command(BaseCommand):
                 continue
             if int(row["id"]) in excluded_ids:
                 continue
-            # Find which category this question belongs to via m_question_bank_entries
-            category = self._find_category_for_question(row, data, cat_by_moodle)
-            if category is None:
+            course = self._find_course_for_question(row, data, cat_to_course)
+            if course is None:
                 continue
             raw_feedback = row.get("generalfeedback") or ""
             raw_text = row.get("questiontext") or ""
@@ -183,7 +174,7 @@ class Command(BaseCommand):
                 defaults={
                     "text": question_text,
                     "feedback": feedback,
-                    "category": category,
+                    "course": course,
                     "qtype": qtype,
                 },
             )
@@ -191,20 +182,17 @@ class Command(BaseCommand):
                 created += 1
         return created
 
-    def _find_category_for_question(
+    def _find_course_for_question(
         self,
         question_row: dict,
         data: dict,
-        cat_by_moodle: dict[int, Category],
-    ) -> Category | None:
-        """Link question to category via m_question_bank_entries."""
+        cat_to_course: dict[int, Course],
+    ) -> Course | None:
+        """Resolve course for a question via m_question_bank_entries."""
         q_id = str(question_row["id"])
 
-        # m_question_bank_entries: id, questioncategoryid, ...
-        # m_question_versions: questionbankentryid, questionid, ...
         versions = data.get("m_question_versions", [])
         entries = data.get("m_question_bank_entries", [])
-
         entry_by_id = {row["id"]: row for row in entries}
 
         for version in versions:
@@ -213,7 +201,7 @@ class Command(BaseCommand):
                 entry = entry_by_id.get(entry_id)
                 if entry:
                     cat_moodle_id = int(entry["questioncategoryid"])
-                    return cat_by_moodle.get(cat_moodle_id)
+                    return cat_to_course.get(cat_moodle_id)
         return None
 
     def _import_answers(self, data: dict) -> int:

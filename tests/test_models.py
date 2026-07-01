@@ -3,7 +3,7 @@ from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 
-from qcm.models import Answer, Category, Course, Question, QuizSession, UserAnswer
+from qcm.models import Answer, Course, Question, QuizSession, UserAnswer
 
 
 @pytest.fixture
@@ -12,17 +12,10 @@ def course(db):
 
 
 @pytest.fixture
-def category(course):
-    return Category.objects.create(
-        name="La membrane plasmique", course=course, moodle_id=100
-    )
-
-
-@pytest.fixture
-def question(category):
+def question(course):
     return Question.objects.create(
         text="<p>À propos de la membrane plasmique :</p>",
-        category=category,
+        course=course,
         qtype="multichoice",
         moodle_id=200,
     )
@@ -63,29 +56,10 @@ class TestCourse:
 
 
 @pytest.mark.django_db
-class TestCategory:
-    def test_create_category(self, category, course):
-        assert category.pk is not None
-        assert category.name == "La membrane plasmique"
-        assert category.course == course
-
-    def test_moodle_id_unique(self, category):
-        with pytest.raises(IntegrityError):
-            Category.objects.create(
-                name="Autre catégorie",
-                course=category.course,
-                moodle_id=100,
-            )
-
-    def test_str_representation(self, category):
-        assert str(category) == "La membrane plasmique"
-
-
-@pytest.mark.django_db
 class TestQuestion:
-    def test_create_question(self, question, category):
+    def test_create_question(self, question, course):
         assert question.pk is not None
-        assert question.category == category
+        assert question.course == course
         assert question.qtype == "multichoice"
         assert question.moodle_id == 200
 
@@ -93,17 +67,13 @@ class TestQuestion:
         with pytest.raises(IntegrityError):
             Question.objects.create(
                 text="<p>Autre question</p>",
-                category=question.category,
+                course=question.course,
                 qtype="multichoice",
                 moodle_id=200,
             )
 
     def test_str_representation(self, question):
         assert "200" in str(question)
-
-    def test_cascade_delete_with_category(self, question, category):
-        category.delete()
-        assert not Question.objects.filter(pk=question.pk).exists()
 
 
 @pytest.mark.django_db
@@ -144,6 +114,28 @@ class TestQuizSession:
         session = QuizSession(user=user, course=course, mode="invalid_mode")
         with pytest.raises(ValidationError):
             session.full_clean()
+
+
+@pytest.mark.django_db
+class TestQuestionCourseDirectFK:
+    """RED : vérifient que Question pointe directement vers Course (sans Category)."""
+
+    def test_question_has_course_fk(self):
+        from django.core.exceptions import FieldDoesNotExist  # noqa: F401
+
+        field = Question._meta.get_field("course")
+        assert field.related_model.__name__ == "Course"
+
+    def test_question_no_category_field(self):
+        from django.core.exceptions import FieldDoesNotExist
+
+        with pytest.raises(FieldDoesNotExist):
+            Question._meta.get_field("category")
+
+    def test_category_model_removed(self):
+        import qcm.models as m
+
+        assert not hasattr(m, "Category")
 
 
 @pytest.mark.django_db

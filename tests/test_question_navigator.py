@@ -5,7 +5,6 @@ from django.contrib.auth.models import User
 
 from qcm.models import (
     Answer,
-    Category,
     Course,
     Question,
     QuizSession,
@@ -34,7 +33,6 @@ def session_with_questions(db, user):
     semester = Semester.objects.create(name="S1", study_year=year, order=1)
     course = Course.objects.create(name="Cours test", moodle_id=1001)
     semester.courses.add(course)
-    category = Category.objects.create(name="Cat", course=course, moodle_id=2001)
 
     # Tags
     tc_ec = TagCategory.objects.create(name="EC", tag_type="souscategorie")
@@ -46,7 +44,7 @@ def session_with_questions(db, user):
     for i in range(3):
         q = Question.objects.create(
             text=f"<p>Question {i + 1}</p>",
-            category=category,
+            course=course,
             moodle_id=3000 + i,
         )
         Answer.objects.create(text="A", question=q, fraction=1.0, is_correct=True)

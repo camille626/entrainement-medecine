@@ -1,6 +1,6 @@
 import pytest
 
-from qcm.models import Category, Course, Question, Tag
+from qcm.models import Course, Question, Tag
 
 
 @pytest.fixture
@@ -11,15 +11,10 @@ def course(db):
 
 
 @pytest.fixture
-def category(course):
-    return Category.objects.create(name="Membrane", course=course, moodle_id=100)
-
-
-@pytest.fixture
-def question(category):
+def question(course):
     return Question.objects.create(
         text="<p>Question test</p>",
-        category=category,
+        course=course,
         qtype="multichoice",
         moodle_id=500,
     )

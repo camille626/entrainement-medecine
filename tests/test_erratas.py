@@ -3,7 +3,7 @@
 import pytest
 from django.contrib.auth.models import User
 
-from qcm.models import Category, Course, Errata, Question, Semester, StudyYear
+from qcm.models import Course, Errata, Question, Semester, StudyYear
 
 
 @pytest.fixture
@@ -33,15 +33,10 @@ def course(semester):
 
 
 @pytest.fixture
-def category(course):
-    return Category.objects.create(name="Os", course=course, moodle_id=99)
-
-
-@pytest.fixture
-def question_with_pluginfile(category):
+def question_with_pluginfile(course):
     return Question.objects.create(
         text='<p>Légendez ce schéma <img src="@@PLUGINFILE@@/schema_os.png"></p>',
-        category=category,
+        course=course,
         qtype="multichoice",
         moodle_id=1001,
     )
@@ -124,10 +119,10 @@ class TestErrataImageTemplate:
 
 
 @pytest.fixture
-def question_simple(category):
+def question_simple(course):
     return Question.objects.create(
         text="<p>Quelle est la capitale de la France ?</p>",
-        category=category,
+        course=course,
         qtype="multichoice",
         moodle_id=1002,
     )

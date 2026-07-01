@@ -3,7 +3,7 @@
 import pytest
 from django.contrib.auth.models import User
 
-from qcm.models import Category, Course, Question, Semester, StudyYear
+from qcm.models import Course, Question, Semester, StudyYear
 
 
 @pytest.fixture
@@ -33,16 +33,11 @@ def course(semester):
 
 
 @pytest.fixture
-def category(course):
-    return Category.objects.create(name="Os", course=course, moodle_id=99)
-
-
-@pytest.fixture
-def question_with_html(category):
+def question_with_html(course):
     return Question.objects.create(
         text="<p>Quel est le <strong>rôle</strong> du fémur ?</p>",
         feedback="<p>Le fémur est l'os le plus long du corps.<br>Il supporte le poids.</p>",
-        category=category,
+        course=course,
         qtype="multichoice",
         moodle_id=2001,
     )

@@ -5,7 +5,6 @@ from django.contrib.auth.models import User
 
 from qcm.models import (
     Answer,
-    Category,
     Course,
     QuizSession,
     QuizSessionQuestion,
@@ -35,14 +34,13 @@ def study_data(user):
     )
     UserEnrollment.objects.create(user=user, course=course)
 
-    cat = Category.objects.create(name="Cat", course=course, moodle_id=100)
     from qcm.models import Question
 
     q1 = Question.objects.create(
-        text="Q1", category=cat, qtype="multichoice", moodle_id=500
+        text="Q1", course=course, qtype="multichoice", moodle_id=500
     )
     q2 = Question.objects.create(
-        text="Q2", category=cat, qtype="multichoice", moodle_id=501
+        text="Q2", course=course, qtype="multichoice", moodle_id=501
     )
     a1_correct = Answer.objects.create(
         text="A correct", question=q1, fraction=1.0, is_correct=True

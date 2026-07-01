@@ -53,7 +53,7 @@
               <div>
                 <span class="fw-bold">{{ e.question.text|safe|striptags|truncatewords:10 }}</span>
                 <div class="small text-muted mt-1">
-                  {{ e.question.category.course.name }} — signalé par <em>{{ e.reported_by.username }}</em> le {{ e.created_at|date:"d/m/Y" }}
+                  {{ e.question.course.name }} — signalé par <em>{{ e.reported_by.username }}</em> le {{ e.created_at|date:"d/m/Y" }}
                 </div>
               </div>
               <span class="badge ms-3 flex-shrink-0 {% if e.status == 'accepted' %}bg-success{% elif e.status == 'rejected' %}bg-danger{% else %}bg-warning text-dark{% endif %}">

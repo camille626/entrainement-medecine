@@ -5,7 +5,6 @@ from django.contrib.auth.models import User
 
 from qcm.models import (
     Answer,
-    Category,
     Course,
     Errata,
     Question,
@@ -25,17 +24,10 @@ def course(db):
 
 
 @pytest.fixture
-def category(course):
-    return Category.objects.create(
-        name="Colonne vertébrale", course=course, moodle_id=8000
-    )
-
-
-@pytest.fixture
-def qroc_question(category):
+def qroc_question(course):
     q = Question.objects.create(
         text="<p>Combien y a-t-il de vertèbres cervicales ?</p>",
-        category=category,
+        course=course,
         qtype="shortanswer",
         moodle_id=9001,
         feedback="<p>Il y a 7 vertèbres cervicales (C1-C7).</p>",
@@ -136,11 +128,11 @@ class TestMatchQrocAnswer:
         assert answer.fraction == 1.0
         assert answer.is_correct is True
 
-    def test_wildcard_match(self, category):
+    def test_wildcard_match(self, course):
         """Le joker * correspond à zéro ou plusieurs caractères."""
         q = Question.objects.create(
             text="<p>Donnez le diagnostic</p>",
-            category=category,
+            course=course,
             qtype="shortanswer",
             moodle_id=9002,
         )
@@ -154,10 +146,10 @@ class TestMatchQrocAnswer:
         found3, _ = match_qroc_answer(q, "lymphome")
         assert found3 is False
 
-    def test_wildcard_prefix_match(self, category):
+    def test_wildcard_prefix_match(self, course):
         """* en préfixe (*ome) correspond à n'importe quel suffixe."""
         q = Question.objects.create(
-            text="<p>Test</p>", category=category, qtype="shortanswer", moodle_id=9003
+            text="<p>Test</p>", course=course, qtype="shortanswer", moodle_id=9003
         )
         Answer.objects.create(text="*ome", question=q, fraction=1.0, is_correct=True)
         found, _ = match_qroc_answer(q, "lymphome")
@@ -241,10 +233,10 @@ class TestUserAnswerQROC:
         )
         assert ua.effective_fraction == 0.0
 
-    def test_multichoice_answer_still_works(self, category, session):
+    def test_multichoice_answer_still_works(self, course, session):
         """Les réponses multichoix existantes fonctionnent toujours."""
         q = Question.objects.create(
-            text="<p>Question test</p>", category=category, qtype="multichoice"
+            text="<p>Question test</p>", course=course, qtype="multichoice"
         )
         a = Answer.objects.create(
             text="Bonne réponse", question=q, fraction=1.0, is_correct=True
@@ -442,7 +434,7 @@ class TestSessionConfigFormQROC:
 @pytest.mark.django_db
 class TestConfigurationViewQROC:
     def test_session_includes_qroc_when_checked(
-        self, client, user, course, category, qroc_question
+        self, client, user, course, qroc_question
     ):
         """Avec include_qroc=True, la session contient des questions shortanswer."""
         from qcm.models import UserEnrollment
@@ -469,12 +461,12 @@ class TestConfigurationViewQROC:
         assert "shortanswer" in qtypes
 
     def test_session_excludes_qroc_by_default(
-        self, client, user, course, category, qroc_question
+        self, client, user, course, qroc_question
     ):
         """Sans include_qroc, les questions shortanswer sont exclues."""
         # Ajouter aussi une question multichoice pour que la session soit valide
         q_mc = Question.objects.create(
-            text="<p>Question multichoix</p>", category=category, qtype="multichoice"
+            text="<p>Question multichoix</p>", course=course, qtype="multichoice"
         )
         Answer.objects.create(
             text="Bonne", question=q_mc, fraction=1.0, is_correct=True

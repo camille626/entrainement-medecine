@@ -14,7 +14,6 @@ from django.views import View
 
 from .models import (
     Answer,
-    Category,
     Course,
     CoursePackage,
     ImageDragItem,
@@ -377,19 +376,15 @@ class AdminQuestionsView(StaffRequiredMixin, View):
 
         # Guard against non-numeric values (e.g. "None" string from duplicate params)
         raw_course = request.GET.get("course", "")
-        raw_category = request.GET.get("category", "")
         course_id = raw_course if raw_course.isdigit() else None
-        category_id = raw_category if raw_category.isdigit() else None
         qtype = request.GET.get("qtype", "").strip()
         search = request.GET.get("q", "").strip()
 
-        qs = Question.objects.select_related("category__course").order_by(
-            "category__course__name", "category__name", "moodle_id"
+        qs = Question.objects.select_related("course").order_by(
+            "course__name", "moodle_id"
         )
         if course_id:
-            qs = qs.filter(category__course_id=course_id)
-        if category_id:
-            qs = qs.filter(category_id=category_id)
+            qs = qs.filter(course_id=course_id)
         if qtype:
             qs = qs.filter(qtype=qtype)
         if search:
@@ -398,11 +393,6 @@ class AdminQuestionsView(StaffRequiredMixin, View):
             qs = qs.filter(Q(text__icontains=search))
 
         courses = Course.objects.order_by("name")
-        categories = (
-            Category.objects.filter(course_id=course_id).order_by("name")
-            if course_id
-            else Category.objects.none()
-        )
 
         paginator = Paginator(qs, 50)
         page_number = request.GET.get("page", 1)
@@ -415,10 +405,8 @@ class AdminQuestionsView(StaffRequiredMixin, View):
                 "questions": page_obj,
                 "page_obj": page_obj,
                 "courses": courses,
-                "categories": categories,
                 "qtype_choices": Question.QTYPE_CHOICES,
                 "selected_course": course_id or "",
-                "selected_category": category_id or "",
                 "selected_qtype": qtype,
                 "search": search,
                 "total": qs.count(),
@@ -433,9 +421,6 @@ class AdminQuestionAddView(StaffRequiredMixin, View):
         from .models import Tag
 
         return {
-            "categories": Category.objects.select_related("course").order_by(
-                "course__name", "name"
-            ),
             "courses": Course.objects.order_by("name"),
             "all_tags": Tag.objects.select_related("category").order_by(
                 "category__tag_type", "name"
@@ -463,25 +448,25 @@ class AdminQuestionAddView(StaffRequiredMixin, View):
             return re.sub(r"<[^>]+>", "", unescape(s)).strip()
 
         text = request.POST.get("text", "").strip()
-        category_id = request.POST.get("category")
+        course_id = request.POST.get("course")
         qtype = request.POST.get("qtype", Question.MULTICHOICE)
         feedback = request.POST.get("feedback", "").strip()
 
-        category = get_object_or_404(Category, pk=category_id) if category_id else None
+        course = get_object_or_404(Course, pk=course_id) if course_id else None
 
-        if not text or not category:
+        if not text or not course:
             return render(
                 request,
                 self.template_name,
                 self._ctx(
                     formset=AnswerFormSet(request.POST),
                     selected_qtype=qtype,
-                    error="Le texte et la catégorie sont obligatoires.",
+                    error="Le texte et le cours sont obligatoires.",
                 ),
             )
 
         question = Question.objects.create(
-            text=text, feedback=feedback, category=category, qtype=qtype
+            text=text, feedback=feedback, course=course, qtype=qtype
         )
 
         tag_ids = request.POST.getlist("tags")
@@ -524,11 +509,11 @@ class AdminQuestionEditView(StaffRequiredMixin, View):
 
         from .models import Tag, TagCategory
 
-        course = question.category.course
+        course = question.course
         selected_tag_ids = set(question.tags.values_list("id", flat=True))
 
         base_qs = (
-            Tag.objects.filter(Q(questions__category__course=course) | Q(course=course))
+            Tag.objects.filter(Q(questions__course=course) | Q(course=course))
             .select_related("category", "parent_ec")
             .exclude(category=None)
             .distinct()
@@ -570,9 +555,6 @@ class AdminQuestionEditView(StaffRequiredMixin, View):
 
         return {
             "question": question,
-            "categories": Category.objects.select_related("course").order_by(
-                "course__name", "name"
-            ),
             "courses": Course.objects.order_by("name"),
             "annale_tags": annale_tags,
             "ec_tags": ec_tags,
@@ -603,14 +585,14 @@ class AdminQuestionEditView(StaffRequiredMixin, View):
         question = get_object_or_404(Question, pk=pk)
         back_url = request.POST.get("back_url", "/admin-site/questions/")
         text = request.POST.get("text", "").strip()
-        category_id = request.POST.get("category")
+        course_id = request.POST.get("course")
         qtype = request.POST.get("qtype", question.qtype)
         feedback = request.POST.get("feedback", "").strip()
 
         if text:
             question.text = text
-        if category_id:
-            question.category_id = category_id
+        if course_id:
+            question.course_id = course_id
         question.qtype = qtype
         question.feedback = feedback
         question.save()
