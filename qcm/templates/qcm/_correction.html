@@ -23,6 +23,67 @@
 
 {% if question.qtype == "ddimageortext" %}
 <!-- ── Correction légende interactive ── -->
+
+{% with bg_image=question.images.first %}
+{% if bg_image %}
+<style>
+.ddi-result-container { position: relative; display: inline-block; max-width: 100%; }
+.ddi-result-zone { position: absolute; transform: translate(-50%, -50%); }
+.ddi-result-label {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.7rem;
+  border-radius: 1rem;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.28);
+  font-weight: 500;
+}
+.ddi-result-label.correct { background: rgba(25,135,84,0.85); color: white; }
+.ddi-result-label.incorrect { background: rgba(220,53,69,0.85); color: white; cursor: help; }
+</style>
+
+<div class="ddi-result-container mb-3 overflow-auto">
+  <img id="ddi-result-img" src="{{ bg_image.file.url }}"
+       alt="Image anatomique"
+       style="max-width:100%; display:block; border-radius:4px; border:1px solid #dee2e6;"
+       onload="ddiResultScale(this)">
+  {% for zr in zone_results %}
+  <div class="ddi-result-zone"
+       style="left:{{ zr.zone.xleft }}px; top:{{ zr.zone.ytop }}px;"
+       data-xleft="{{ zr.zone.xleft }}" data-ytop="{{ zr.zone.ytop }}">
+    <span class="ddi-result-label {% if zr.is_correct %}correct{% else %}incorrect{% endif %}"
+          {% if not zr.is_correct %}
+          data-bs-toggle="tooltip"
+          title="Attendu : {{ zr.zone.correct_label }}{% if zr.zone.accepted_labels_text %} — Alternatives : {{ zr.zone.accepted_labels_text }}{% endif %}"
+          {% endif %}>
+      {{ zr.selected_label|default:"(vide)" }}
+    </span>
+  </div>
+  {% endfor %}
+</div>
+<script>
+function ddiResultScale(img) {
+  var container = img.parentElement;
+  var scaleX = img.clientWidth / img.naturalWidth;
+  var scaleY = img.clientHeight / img.naturalHeight;
+  container.querySelectorAll('.ddi-result-zone').forEach(function(zone) {
+    zone.style.left = (parseInt(zone.dataset.xleft) * scaleX) + 'px';
+    zone.style.top  = (parseInt(zone.dataset.ytop)  * scaleY) + 'px';
+  });
+  container.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
+    new bootstrap.Tooltip(el);
+  });
+}
+var _rImg = document.getElementById('ddi-result-img');
+if (_rImg && _rImg.complete) ddiResultScale(_rImg);
+window.addEventListener('resize', function() {
+  var img = document.getElementById('ddi-result-img');
+  if (img && img.complete) ddiResultScale(img);
+});
+</script>
+{% endif %}
+{% endwith %}
+
 {% if zone_results %}
 <div class="mb-2">
   {% for zr in zone_results %}

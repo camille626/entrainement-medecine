@@ -13,6 +13,7 @@ from qcm.models import (
     ImageDropZone,
     ImageDropZoneLabel,
     Question,
+    QuestionImage,
     QuizSession,
     QuizSessionQuestion,
     UserAnswer,
@@ -708,3 +709,159 @@ class TestQuestionViewDDIContext:
         assert response.status_code == 200
         assert "drop_zones" in response.context
         assert len(response.context["drop_zones"]) == 3
+
+
+# ── Fixture image de fond ──────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def bg_image(ddi_question):
+    """Crée une QuestionImage factice pour simuler l'image de fond ddimageortext."""
+    from django.core.files.base import ContentFile
+
+    img = QuestionImage(question=ddi_question, moodle_filename="background")
+    img.file.save("test_bg.png", ContentFile(b"\x89PNG\r\n\x1a\n"), save=True)
+    return img
+
+
+# ── Tests overlay image dans la correction ────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestCorrectionDDIImageOverlay:
+    """Tests pour l'affichage de l'image avec labels colorés dans la correction."""
+
+    def _post_check(
+        self,
+        client,
+        session,
+        ddi_question,
+        zone_1: str = "sclérotique",
+        zone_2: str = "FAUX",
+        zone_3: str = "rétine",
+    ):
+        QuizSessionQuestion.objects.create(
+            session=session, question=ddi_question, order=1
+        )
+        return client.post(
+            f"/entrainement/session/{session.pk}/check/",
+            {
+                "question_id": str(ddi_question.pk),
+                "zone_1": zone_1,
+                "zone_2": zone_2,
+                "zone_3": zone_3,
+            },
+        )
+
+    def test_correction_shows_image_overlay(
+        self, client, user, session, ddi_question, drop_zones, drag_items, bg_image
+    ):
+        """Avec une image de fond, la correction affiche le conteneur overlay."""
+        client.force_login(user)
+        response = self._post_check(client, session, ddi_question)
+        assert response.status_code == 200
+        assert b"ddi-result-container" in response.content
+
+    def test_correction_correct_label_class(
+        self, client, user, session, ddi_question, drop_zones, drag_items, bg_image
+    ):
+        """Une réponse juste apparaît avec la classe CSS 'correct'."""
+        client.force_login(user)
+        response = self._post_check(
+            client,
+            session,
+            ddi_question,
+            zone_1="sclérotique",
+            zone_2="FAUX",
+            zone_3="rétine",
+        )
+        assert b"ddi-result-label correct" in response.content
+
+    def test_correction_incorrect_label_class(
+        self, client, user, session, ddi_question, drop_zones, drag_items, bg_image
+    ):
+        """Une réponse fausse apparaît avec la classe CSS 'incorrect'."""
+        client.force_login(user)
+        response = self._post_check(
+            client,
+            session,
+            ddi_question,
+            zone_1="sclérotique",
+            zone_2="FAUX",
+            zone_3="rétine",
+        )
+        assert b"ddi-result-label incorrect" in response.content
+
+    def test_correction_incorrect_has_tooltip(
+        self, client, user, session, ddi_question, drop_zones, drag_items, bg_image
+    ):
+        """Une réponse fausse porte l'attribut Bootstrap tooltip."""
+        client.force_login(user)
+        response = self._post_check(
+            client,
+            session,
+            ddi_question,
+            zone_1="sclérotique",
+            zone_2="FAUX",
+            zone_3="rétine",
+        )
+        assert b'data-bs-toggle="tooltip"' in response.content
+
+    def test_correction_tooltip_contains_correct_answer(
+        self, client, user, session, ddi_question, drop_zones, drag_items, bg_image
+    ):
+        """Le tooltip d'une réponse fausse mentionne la bonne réponse attendue."""
+        client.force_login(user)
+        response = self._post_check(
+            client,
+            session,
+            ddi_question,
+            zone_1="sclérotique",
+            zone_2="FAUX",
+            zone_3="rétine",
+        )
+        # Zone 2 est fausse, correct_label = "choroide"
+        assert b"Attendu" in response.content
+        assert b"choroide" in response.content
+
+    def test_correction_tooltip_with_alternatives(
+        self, client, user, session, ddi_question, drop_zones, drag_items, bg_image
+    ):
+        """Le tooltip d'une réponse fausse mentionne les alternatives acceptées."""
+        ImageDropZoneLabel.objects.create(zone=drop_zones[1], text="choroïde")
+        client.force_login(user)
+        response = self._post_check(
+            client,
+            session,
+            ddi_question,
+            zone_1="sclérotique",
+            zone_2="FAUX",
+            zone_3="rétine",
+        )
+        # L'alternative "choroïde" doit apparaître dans le tooltip de zone 2
+        assert "choroïde".encode() in response.content
+
+    def test_correction_correct_no_tooltip(
+        self, client, user, session, ddi_question, drop_zones, drag_items, bg_image
+    ):
+        """Quand toutes les réponses sont correctes, aucun label 'Attendu :' n'est présent."""
+        client.force_login(user)
+        response = self._post_check(
+            client,
+            session,
+            ddi_question,
+            zone_1="sclérotique",
+            zone_2="choroide",
+            zone_3="rétine",
+        )
+        # "Attendu :" n'apparaît que dans les tooltips des mauvaises réponses
+        assert b"Attendu" not in response.content
+
+    def test_correction_no_overlay_without_image(
+        self, client, user, session, ddi_question, drop_zones, drag_items
+    ):
+        """Sans image de fond, le conteneur overlay n'est pas rendu."""
+        client.force_login(user)
+        response = self._post_check(client, session, ddi_question)
+        assert response.status_code == 200
+        assert b"ddi-result-container" not in response.content
