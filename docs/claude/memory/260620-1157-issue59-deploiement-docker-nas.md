@@ -63,3 +63,41 @@ Déjà prêt pour la prod (`DATABASE_URL`, `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_
 - `ruff check .` + `pre-commit run --all-files` → propre
 - `mkdocs build --strict` → sans erreur
 - Si Docker dispo : `docker compose up -d --build` réel + test manuel de l'app
+
+---
+
+## Watchtower — mise à jour automatique (issue #86, 2026-07-01)
+
+### Contexte
+
+Watchtower est un daemon Docker qui surveille les containers en cours d'exécution et les
+redémarre automatiquement quand une nouvelle image est disponible sur le registry. Sur le
+NAS (Portainer), il faut opter **explicitement** les containers à surveiller via un label.
+
+### Changement
+
+Label ajouté dans `docker-compose.yml` sur le service `web` uniquement :
+
+```yaml
+web:
+  labels:
+    - "com.centurylinklabs.watchtower.enable=true"
+```
+
+**Pourquoi uniquement `web`** :
+- `web` utilise `ghcr.io/camille626/entrainement-medecine:latest` — c'est l'image publiée
+  par la CI à chaque merge sur `main`, donc la mise à jour automatique est le comportement
+  voulu
+- `db` (`postgres:17-alpine`) — pas de label : une montée de version majeure de Postgres
+  nécessite une migration manuelle des données
+- `nginx` (`nginx:alpine`) — pas de label : image stable, changements gérés manuellement
+
+### Test
+
+`test_compose_web_has_watchtower_label` ajouté dans `tests/test_deployment.py` :
+vérifie que le label est présent dans la liste `labels` du service `web`.
+
+### Piège ruff
+
+La variable de boucle `l` déclenche `E741` (ambiguous variable name). Toujours nommer
+`label` dans les list/generator comprehensions sur des labels Docker.
