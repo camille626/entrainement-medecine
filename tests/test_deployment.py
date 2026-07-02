@@ -136,3 +136,11 @@ def test_ci_publishes_image_to_ghcr():
     with workflow.open() as f:
         config = yaml.safe_load(f)
     assert "ghcr.io" in str(config)
+
+
+def test_compose_web_has_watchtower_label(compose_config):
+    web = compose_config["services"]["web"]
+    labels = web.get("labels", [])
+    assert any(
+        "com.centurylinklabs.watchtower.enable=true" in str(label) for label in labels
+    )

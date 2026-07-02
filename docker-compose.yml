@@ -19,6 +19,8 @@ services:
   web:
     image: ghcr.io/camille626/entrainement-medecine:latest
     restart: unless-stopped
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     environment:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
       DJANGO_DEBUG: ${DJANGO_DEBUG}
