@@ -112,10 +112,12 @@ function ddiScaleZones(img) {
     zone.style.top  = (parseInt(zone.dataset.ytop)  * scaleY) + 'px';
   });
 }
-window.addEventListener('resize', function() {
-  var img = document.getElementById('ddi-img');
-  if (img && img.complete) ddiScaleZones(img);
-});
+var _ddiImg = document.getElementById('ddi-img');
+if (_ddiImg) {
+  new ResizeObserver(function() {
+    if (_ddiImg.complete) ddiScaleZones(_ddiImg);
+  }).observe(_ddiImg);
+}
 document.querySelectorAll('.ddi-input').forEach(function(inp) {
   // Crée une étiquette compacte positionnée avant l'input
   var label = document.createElement('span');

@@ -76,10 +76,11 @@ function ddiResultScale(img) {
 }
 var _rImg = document.getElementById('ddi-result-img');
 if (_rImg && _rImg.complete) ddiResultScale(_rImg);
-window.addEventListener('resize', function() {
-  var img = document.getElementById('ddi-result-img');
-  if (img && img.complete) ddiResultScale(img);
-});
+if (_rImg) {
+  new ResizeObserver(function() {
+    if (_rImg.complete) ddiResultScale(_rImg);
+  }).observe(_rImg);
+}
 </script>
 {% endif %}
 {% endwith %}
