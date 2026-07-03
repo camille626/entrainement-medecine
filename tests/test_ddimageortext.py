@@ -496,7 +496,7 @@ class TestCheckViewDDIImageOrText:
         assert ua.is_correct is True
         assert abs(ua.effective_fraction - 1.0) < 1e-6
 
-    def test_response_contains_zone_results(
+    def test_response_is_valid_after_zone_submission(
         self, client, user, session, ddi_question, drop_zones, drag_items
     ):
         client.force_login(user)
@@ -512,8 +512,8 @@ class TestCheckViewDDIImageOrText:
                 "zone_3": "rétine",  # correct
             },
         )
-        content = response.content.decode()
-        assert "sclérotique" in content or "zone" in content.lower()
+        assert response.status_code == 200
+        assert b"status-label" in response.content
 
     def test_zone_answers_stored_as_text_in_qroc_text(
         self, client, user, session, ddi_question, drop_zones, drag_items
@@ -859,3 +859,13 @@ class TestCorrectionDDIImageOverlay:
         response = self._post_check(client, session, ddi_question)
         assert response.status_code == 200
         assert b"ddi-result-container" not in response.content
+
+    def test_no_feedback_panel_for_ddimageortext(
+        self, client, user, session, ddi_question, drop_zones, drag_items
+    ):
+        """Aucune correction textuelle pour ddimageortext : ni panneau jaune, ni liste des zones."""
+        client.force_login(user)
+        response = self._post_check(client, session, ddi_question)
+        assert response.status_code == 200
+        assert b"text-warning-emphasis" not in response.content
+        assert "Votre réponse".encode() not in response.content
