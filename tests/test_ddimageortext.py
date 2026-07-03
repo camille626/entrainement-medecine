@@ -869,3 +869,25 @@ class TestCorrectionDDIImageOverlay:
         assert response.status_code == 200
         assert b"text-warning-emphasis" not in response.content
         assert "Votre réponse".encode() not in response.content
+
+
+# ── Tests rescaling des zones de dépôt ───────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestDDIQuestionZoneScaling:
+    """Tests pour le rescaling des zones de dépôt lors de changements de layout."""
+
+    def test_question_view_uses_resize_observer(
+        self, client, user, session, ddi_question, drop_zones, drag_items, bg_image
+    ):
+        """La page question ddimageortext utilise ResizeObserver pour rescaler les zones."""
+        client.force_login(user)
+        from qcm.models import QuizSessionQuestion
+
+        QuizSessionQuestion.objects.create(
+            session=session, question=ddi_question, order=1
+        )
+        response = client.get(f"/entrainement/session/{session.pk}/")
+        assert response.status_code == 200
+        assert b"ResizeObserver" in response.content
