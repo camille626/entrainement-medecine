@@ -8,6 +8,7 @@ from qcm.models import (
     Answer,
     Course,
     Errata,
+    ImageDropZone,
     Question,
     Semester,
     StudyYear,
@@ -42,6 +43,25 @@ def question(db):
     return q
 
 
+@pytest.fixture
+def ddi_zone(question):
+    """Zone de dépôt rattachée à une question ddimageortext distincte (issue #54)."""
+    ddi_question = Question.objects.create(
+        text="<p>Légender l'oeil :</p>",
+        course=question.course,
+        qtype=Question.DDIMAGEORTEXT,
+        moodle_id=5601,
+    )
+    return ImageDropZone.objects.create(
+        question=ddi_question,
+        no=1,
+        xleft=100,
+        ytop=50,
+        correct_drag_no=1,
+        correct_label="sclérotique",
+    )
+
+
 @pytest.mark.django_db
 class TestErrataModel:
     def test_create_errata(self, user, question):
@@ -74,6 +94,44 @@ class TestErrataModel:
         answer = question.answers.first()
         errata.concerned_answers.add(answer)
         assert errata.concerned_answers.count() == 1
+
+    def test_ddi_answer_type_choice_exists(self):
+        assert Errata.DDI_ANSWER == "ddi_answer"
+        assert (
+            Errata.DDI_ANSWER,
+            "Une de mes réponses est correcte (légende interactive)",
+        ) in (Errata.TYPE_CHOICES)
+
+    def test_errata_with_concerned_zone(self, user, ddi_zone):
+        errata = Errata.objects.create(
+            question=ddi_zone.question,
+            reported_by=user,
+            error_type=Errata.DDI_ANSWER,
+            qroc_suggested_text="choroïde",
+            concerned_zone=ddi_zone,
+        )
+        assert errata.concerned_zone == ddi_zone
+
+    def test_errata_concerned_zone_is_nullable(self, user, question):
+        errata = Errata.objects.create(
+            question=question,
+            reported_by=user,
+            error_type=Errata.OTHER,
+            description="Sans zone",
+        )
+        assert errata.concerned_zone is None
+
+    def test_errata_concerned_zone_set_null_on_zone_delete(self, user, ddi_zone):
+        errata = Errata.objects.create(
+            question=ddi_zone.question,
+            reported_by=user,
+            error_type=Errata.DDI_ANSWER,
+            qroc_suggested_text="choroïde",
+            concerned_zone=ddi_zone,
+        )
+        ddi_zone.delete()
+        errata.refresh_from_db()
+        assert errata.concerned_zone_id is None
 
 
 @pytest.mark.django_db

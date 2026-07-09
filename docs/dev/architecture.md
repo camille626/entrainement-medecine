@@ -258,6 +258,16 @@ Le répertoire `moodledata/` est détecté automatiquement s'il est voisin du fi
 
 Les coordonnées `xleft`/`ytop` sont en pixels dans l'image à sa taille naturelle. Un JS minimal (`ddiScaleZones`) recalcule les positions après chargement de l'image pour s'adapter à la taille affichée (responsive).
 
+### Erratas
+
+Pour une question `ddimageortext`, le formulaire de signalement (`/errata/question/<id>/`) ne propose que 4 types d'erreur : « Image manquante », « Erreur de tag », « Une de mes réponses est correcte (légende interactive) » et « Autre ». Les types portant sur des `Answer` (Correction, Points, QROC) n'ont pas de sens pour ce type de question, qui n'a pas de réponses associées.
+
+Pour signaler qu'une réponse a été marquée à tort comme fausse, l'étudiant sélectionne le type dédié puis clique directement sur la zone concernée dans l'image affichée en correction (elle reste visible et interactive pendant la sélection) ; la légende suggérée est pré-remplie avec la réponse initialement saisie, modifiable avant l'envoi. Le signalement porte sur `Errata.concerned_zone` (FK vers `ImageDropZone`, nullable) et réutilise le champ `qroc_suggested_text`.
+
+Dans la liste admin, ce type de signalement affiche l'image de fond avec la zone concernée mise en évidence. Accepter le signalement crée un `ImageDropZoneLabel` (réponse alternative acceptée) pour la zone via `get_or_create` — l'opération est idempotente.
+
+Le signalement « Image manquante » pour une question `ddimageortext` fonctionne comme pour les autres types de question, à une différence près : le nom de fichier Moodle utilisé pour l'upload provient de l'image de fond existante (`question.images.first`) si elle existe, ou du littéral `"background"` sinon — l'image de fond n'étant jamais référencée via `@@PLUGINFILE@@` dans le texte de la question (contrairement aux images intégrées dans l'énoncé des autres types de question).
+
 ## Configuration de la base de données
 
 La base de données est sélectionnée via la variable d'environnement `DATABASE_URL` :

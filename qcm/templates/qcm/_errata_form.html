@@ -74,12 +74,12 @@
       {% endfor %}
     </div>
 
-    <!-- Réponse QROC suggérée (type=qroc_answer) -->
+    <!-- Réponse QROC / légende de zone suggérée (type=qroc_answer ou ddi_answer) -->
     <div id="qroc-zone-{{ question.pk }}"
-         style="{% if prefill_type != 'qroc_answer' %}display:none;{% endif %}"
+         style="{% if prefill_type != 'qroc_answer' and prefill_type != 'ddi_answer' %}display:none;{% endif %}"
          class="mb-3">
       <label for="qroc_text_{{ question.pk }}" class="form-label fw-semibold small">
-        Réponse à ajouter comme variante acceptée <span class="text-danger">*</span>
+        Réponse / légende à ajouter comme variante acceptée <span class="text-danger">*</span>
       </label>
       <input type="text" name="qroc_suggested_text" id="qroc_text_{{ question.pk }}"
              class="form-control form-control-sm"
@@ -88,6 +88,15 @@
       <div class="form-text text-muted" style="font-size:0.75rem;">
         Vous pouvez modifier si votre réponse initiale contenait une faute de frappe.
       </div>
+    </div>
+
+    <!-- Sélection de zone (type=ddi_answer) -->
+    <div id="ddi-zone-hint-{{ question.pk }}"
+         style="{% if prefill_type != 'ddi_answer' %}display:none;{% endif %}"
+         class="mb-3">
+      <div class="text-muted small">Cliquez sur la zone concernée dans l'image ci-dessus.</div>
+      <input type="hidden" name="ddi_zone_id" id="ddi_zone_id_{{ question.pk }}" value="">
+      <span id="ddi-zone-selected-{{ question.pk }}" class="small fw-semibold"></span>
     </div>
 
     <!-- Tags suggérés (type=tag) -->
@@ -146,7 +155,10 @@ function toggleErrataFields(qpk, type) {
   document.getElementById('answers-zone-' + qpk).style.display = (type === 'correction') ? '' : 'none';
   document.getElementById('tags-zone-' + qpk).style.display = (type === 'tag') ? '' : 'none';
   const qrocZone = document.getElementById('qroc-zone-' + qpk);
-  if (qrocZone) qrocZone.style.display = (type === 'qroc_answer') ? '' : 'none';
+  if (qrocZone) qrocZone.style.display = (type === 'qroc_answer' || type === 'ddi_answer') ? '' : 'none';
+  const ddiHint = document.getElementById('ddi-zone-hint-' + qpk);
+  if (ddiHint) ddiHint.style.display = (type === 'ddi_answer') ? '' : 'none';
+  if (window.ddiEnableZonePicking) ddiEnableZonePicking(qpk, type === 'ddi_answer');
   const needsDesc = (type === 'correction' || type === 'autre');
   const req = document.getElementById('desc-required-' + qpk);
   const opt = document.getElementById('desc-optional-' + qpk);
@@ -157,4 +169,12 @@ function toggleErrataFields(qpk, type) {
 document.querySelectorAll('[data-bs-toggle="popover"]').forEach(el => {
   new bootstrap.Popover(el);
 });
+// Réarme la sélection de zone si ce fragment est réaffiché après une erreur de
+// validation (le radio "checked" seul ne déclenche pas onchange).
+(function() {
+  var pt = "{{ prefill_type|default:'' }}";
+  if (pt === 'ddi_answer' && window.ddiEnableZonePicking) {
+    ddiEnableZonePicking('{{ question.pk }}', true);
+  }
+})();
 </script>

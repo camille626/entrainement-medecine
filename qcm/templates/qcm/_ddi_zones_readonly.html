@@ -1,0 +1,57 @@
+{% load qcm_extras %}
+{% with bg_image=e.question.images.first %}
+{% if bg_image %}
+<style>
+.ddi-admin-container-{{ e.pk }} { position: relative; display: inline-block; max-width: 100%; }
+.ddi-admin-zone-{{ e.pk }} { position: absolute; transform: translate(-50%, -50%); }
+.ddi-admin-label-{{ e.pk }} {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.7rem;
+  border-radius: 1rem;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.28);
+  font-weight: 500;
+  background: rgba(108,117,125,0.85);
+  color: white;
+}
+.ddi-admin-label-{{ e.pk }}.ddi-admin-highlight { background: rgba(13,110,253,0.9); box-shadow: 0 0 0 3px #0d6efd, 0 1px 4px rgba(0,0,0,0.28); }
+</style>
+
+<div class="ddi-admin-container-{{ e.pk }} mb-3 overflow-auto">
+  <img id="ddi-admin-img-{{ e.pk }}" src="{{ bg_image.file.url }}"
+       alt="Image anatomique"
+       style="max-width:100%; display:block; border-radius:4px; border:1px solid #dee2e6;"
+       onload="ddiAdminResultScale{{ e.pk }}(this)">
+  {% for zone in e.question.drop_zones.all %}
+  <div class="ddi-admin-zone-{{ e.pk }}"
+       style="left:{{ zone.xleft }}px; top:{{ zone.ytop }}px;"
+       data-xleft="{{ zone.xleft }}" data-ytop="{{ zone.ytop }}">
+    <span class="ddi-admin-label-{{ e.pk }} {% if highlight_zone and zone.pk == highlight_zone.pk %}ddi-admin-highlight{% endif %}">
+      {{ zone.correct_label }}
+    </span>
+  </div>
+  {% endfor %}
+</div>
+<script>
+function ddiAdminResultScale{{ e.pk }}(img) {
+  var container = img.parentElement;
+  var scaleX = img.clientWidth / img.naturalWidth;
+  var scaleY = img.clientHeight / img.naturalHeight;
+  container.querySelectorAll('.ddi-admin-zone-{{ e.pk }}').forEach(function(zone) {
+    zone.style.left = (parseInt(zone.dataset.xleft) * scaleX) + 'px';
+    zone.style.top  = (parseInt(zone.dataset.ytop)  * scaleY) + 'px';
+  });
+}
+(function() {
+  var img = document.getElementById('ddi-admin-img-{{ e.pk }}');
+  if (img && img.complete) ddiAdminResultScale{{ e.pk }}(img);
+  if (img) {
+    new ResizeObserver(function() {
+      if (img.complete) ddiAdminResultScale{{ e.pk }}(img);
+    }).observe(img);
+  }
+})();
+</script>
+{% endif %}
+{% endwith %}
