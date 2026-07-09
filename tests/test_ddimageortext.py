@@ -8,6 +8,7 @@ from django.contrib.auth.models import User
 from qcm.models import (
     Answer,
     Course,
+    Errata,
     ImageDragItem,
     ImageDropZone,
     ImageDropZoneLabel,
@@ -92,6 +93,15 @@ def user(db):
 @pytest.fixture
 def session(user, course):
     return QuizSession.objects.create(user=user, course=course, mode="training")
+
+
+@pytest.fixture
+def staff_user(db):
+    return User.objects.create_user(
+        username="admin_ddi",
+        password="test",  # pragma: allowlist secret
+        is_staff=True,
+    )
 
 
 # ── Tests modèles ─────────────────────────────────────────────────────────────
@@ -891,3 +901,353 @@ class TestDDIQuestionZoneScaling:
         response = client.get(f"/entrainement/session/{session.pk}/")
         assert response.status_code == 200
         assert b"ResizeObserver" in response.content
+
+
+# ── Tests erratas pour ddimageortext (issue #54) ─────────────────────────────
+
+
+@pytest.mark.django_db
+class TestDDIErrataSubmission:
+    """Le formulaire de signalement doit être adapté aux questions ddimageortext."""
+
+    def test_form_shows_only_allowed_types_for_ddi(
+        self, client, user, ddi_question, drop_zones, drag_items
+    ):
+        client.force_login(user)
+        response = client.get(f"/errata/question/{ddi_question.pk}/")
+        content = response.content.decode()
+        assert 'value="image"' in content
+        assert 'value="tag"' in content
+        assert 'value="ddi_answer"' in content
+        assert 'value="autre"' in content
+        assert 'value="correction"' not in content
+        assert 'value="points"' not in content
+        assert 'value="qroc_answer"' not in content
+
+    def test_submit_ddi_answer_creates_errata_with_zone(
+        self, client, user, ddi_question, drop_zones, drag_items
+    ):
+        client.force_login(user)
+        zone = drop_zones[1]
+        client.post(
+            f"/errata/question/{ddi_question.pk}/",
+            {
+                "error_type": Errata.DDI_ANSWER,
+                "ddi_zone_id": str(zone.pk),
+                "qroc_suggested_text": "choroïde",
+            },
+            HTTP_HX_REQUEST="true",
+        )
+        assert Errata.objects.filter(
+            question=ddi_question,
+            error_type=Errata.DDI_ANSWER,
+            concerned_zone=zone,
+            qroc_suggested_text="choroïde",
+        ).exists()
+
+    def test_submit_ddi_answer_missing_zone_returns_error(
+        self, client, user, ddi_question, drop_zones, drag_items
+    ):
+        client.force_login(user)
+        response = client.post(
+            f"/errata/question/{ddi_question.pk}/",
+            {
+                "error_type": Errata.DDI_ANSWER,
+                "qroc_suggested_text": "choroïde",
+            },
+            HTTP_HX_REQUEST="true",
+        )
+        assert not Errata.objects.filter(
+            question=ddi_question, error_type=Errata.DDI_ANSWER
+        ).exists()
+        assert response.status_code == 200
+
+    def test_submit_ddi_answer_missing_text_returns_error(
+        self, client, user, ddi_question, drop_zones, drag_items
+    ):
+        client.force_login(user)
+        zone = drop_zones[0]
+        client.post(
+            f"/errata/question/{ddi_question.pk}/",
+            {
+                "error_type": Errata.DDI_ANSWER,
+                "ddi_zone_id": str(zone.pk),
+                "qroc_suggested_text": "",
+            },
+            HTTP_HX_REQUEST="true",
+        )
+        assert not Errata.objects.filter(
+            question=ddi_question, error_type=Errata.DDI_ANSWER
+        ).exists()
+
+    def test_submit_ddi_answer_rejects_zone_from_other_question(
+        self, client, user, ddi_question, drop_zones, drag_items, course
+    ):
+        other_question = Question.objects.create(
+            text="<p>Autre question</p>",
+            course=course,
+            qtype=Question.DDIMAGEORTEXT,
+            moodle_id=5602,
+        )
+        other_zone = ImageDropZone.objects.create(
+            question=other_question,
+            no=1,
+            xleft=10,
+            ytop=10,
+            correct_drag_no=1,
+            correct_label="autre",
+        )
+        client.force_login(user)
+        client.post(
+            f"/errata/question/{ddi_question.pk}/",
+            {
+                "error_type": Errata.DDI_ANSWER,
+                "ddi_zone_id": str(other_zone.pk),
+                "qroc_suggested_text": "choroïde",
+            },
+            HTTP_HX_REQUEST="true",
+        )
+        assert not Errata.objects.filter(
+            question=ddi_question, error_type=Errata.DDI_ANSWER
+        ).exists()
+
+
+@pytest.mark.django_db
+class TestDDIErrataAccept:
+    """L'acceptation d'un errata ddi_answer doit créer un ImageDropZoneLabel."""
+
+    def test_accept_creates_dropzone_label(
+        self, client, staff_user, ddi_question, drop_zones, drag_items, user
+    ):
+        zone = drop_zones[1]
+        errata = Errata.objects.create(
+            question=ddi_question,
+            reported_by=user,
+            error_type=Errata.DDI_ANSWER,
+            concerned_zone=zone,
+            qroc_suggested_text="choroïde",
+        )
+        client.force_login(staff_user)
+        client.post(f"/errata/{errata.pk}/accept/")
+        assert ImageDropZoneLabel.objects.filter(zone=zone, text="choroïde").exists()
+        errata.refresh_from_db()
+        assert errata.status == Errata.ACCEPTED
+
+    def test_accept_is_idempotent(
+        self, client, staff_user, ddi_question, drop_zones, drag_items, user
+    ):
+        zone = drop_zones[1]
+        ImageDropZoneLabel.objects.create(zone=zone, text="choroïde")
+        errata = Errata.objects.create(
+            question=ddi_question,
+            reported_by=user,
+            error_type=Errata.DDI_ANSWER,
+            concerned_zone=zone,
+            qroc_suggested_text="choroïde",
+        )
+        client.force_login(staff_user)
+        client.post(f"/errata/{errata.pk}/accept/")
+        assert (
+            ImageDropZoneLabel.objects.filter(zone=zone, text="choroïde").count() == 1
+        )
+
+    def test_accept_missing_zone_is_noop(
+        self, client, staff_user, ddi_question, drop_zones, drag_items, user
+    ):
+        errata = Errata.objects.create(
+            question=ddi_question,
+            reported_by=user,
+            error_type=Errata.DDI_ANSWER,
+            concerned_zone=None,
+            qroc_suggested_text="choroïde",
+        )
+        client.force_login(staff_user)
+        client.post(f"/errata/{errata.pk}/accept/")
+        assert ImageDropZoneLabel.objects.count() == 0
+        errata.refresh_from_db()
+        assert errata.status == Errata.ACCEPTED
+
+    def test_accept_requires_staff(
+        self, client, ddi_question, drop_zones, drag_items, user
+    ):
+        zone = drop_zones[0]
+        errata = Errata.objects.create(
+            question=ddi_question,
+            reported_by=user,
+            error_type=Errata.DDI_ANSWER,
+            concerned_zone=zone,
+            qroc_suggested_text="choroïde",
+        )
+        client.force_login(user)
+        response = client.post(f"/errata/{errata.pk}/accept/")
+        assert response.status_code == 404
+        assert not ImageDropZoneLabel.objects.filter(zone=zone).exists()
+
+
+@pytest.mark.django_db
+class TestDDIErrataZonePickingUI:
+    """La correction et le formulaire de signalement exposent les hooks JS
+    nécessaires pour sélectionner une zone (issue #54)."""
+
+    def test_correction_zones_have_data_zone_pk(
+        self, client, user, session, ddi_question, drop_zones, drag_items, bg_image
+    ):
+        QuizSessionQuestion.objects.create(
+            session=session, question=ddi_question, order=1
+        )
+        client.force_login(user)
+        response = client.post(
+            f"/entrainement/session/{session.pk}/check/",
+            {
+                "question_id": str(ddi_question.pk),
+                "zone_1": "sclérotique",
+                "zone_2": "choroide",
+                "zone_3": "rétine",
+            },
+        )
+        content = response.content.decode()
+        assert f'data-zone-pk="{drop_zones[0].pk}"' in content
+
+    def test_correction_includes_zone_picking_js(
+        self, client, user, session, ddi_question, drop_zones, drag_items, bg_image
+    ):
+        QuizSessionQuestion.objects.create(
+            session=session, question=ddi_question, order=1
+        )
+        client.force_login(user)
+        response = client.post(
+            f"/entrainement/session/{session.pk}/check/",
+            {
+                "question_id": str(ddi_question.pk),
+                "zone_1": "sclérotique",
+                "zone_2": "choroide",
+                "zone_3": "rétine",
+            },
+        )
+        assert b"ddiEnableZonePicking" in response.content
+
+    def test_errata_form_includes_ddi_zone_hidden_input(
+        self, client, user, ddi_question, drop_zones, drag_items
+    ):
+        client.force_login(user)
+        response = client.get(f"/errata/question/{ddi_question.pk}/")
+        content = response.content.decode()
+        assert f'id="ddi_zone_id_{ddi_question.pk}"' in content
+        assert f'id="ddi-zone-hint-{ddi_question.pk}"' in content
+
+
+@pytest.mark.django_db
+class TestDDIErrataListDisplay:
+    """La liste admin des erratas doit afficher correctement les questions
+    ddimageortext (issue #54)."""
+
+    def test_ddi_answer_branch_shows_accept_button_and_zone(
+        self, client, staff_user, ddi_question, drop_zones, drag_items, user, bg_image
+    ):
+        zone = drop_zones[1]
+        Errata.objects.create(
+            question=ddi_question,
+            reported_by=user,
+            error_type=Errata.DDI_ANSWER,
+            concerned_zone=zone,
+            qroc_suggested_text="choroïde",
+        )
+        client.force_login(staff_user)
+        response = client.get("/errata/")
+        content = response.content.decode()
+        assert "choroïde" in content
+        assert f"zone #{zone.no}" in content
+        assert "Accepter" in content
+
+    def test_ddi_answer_missing_zone_shows_warning(
+        self, client, staff_user, ddi_question, drop_zones, drag_items, user, bg_image
+    ):
+        Errata.objects.create(
+            question=ddi_question,
+            reported_by=user,
+            error_type=Errata.DDI_ANSWER,
+            concerned_zone=None,
+            qroc_suggested_text="choroïde",
+        )
+        client.force_login(staff_user)
+        response = client.get("/errata/")
+        assert response.status_code == 200
+        assert "Zone supprimée" in response.content.decode()
+
+    def test_generic_ddi_zones_shown_for_tag_type(
+        self, client, staff_user, ddi_question, drop_zones, drag_items, user, bg_image
+    ):
+        Errata.objects.create(
+            question=ddi_question,
+            reported_by=user,
+            error_type=Errata.TAG,
+            description="Mauvais tag",
+        )
+        client.force_login(staff_user)
+        response = client.get("/errata/")
+        content = response.content.decode()
+        assert bg_image.file.url in content
+        assert b"ResizeObserver" in response.content
+
+
+@pytest.mark.django_db
+class TestDDIErrataImageUpload:
+    """Le signalement 'Image manquante' doit fonctionner pour ddimageortext,
+    dont l'image de fond n'est jamais référencée en @@PLUGINFILE@@ (issue #54)."""
+
+    def test_hidden_filename_falls_back_to_background(
+        self, client, staff_user, ddi_question, drag_items, drop_zones, user
+    ):
+        Errata.objects.create(
+            question=ddi_question,
+            reported_by=user,
+            error_type=Errata.IMAGE,
+            description="Image manquante",
+        )
+        client.force_login(staff_user)
+        response = client.get("/errata/")
+        content = response.content.decode()
+        assert (
+            'name="moodle_filename"\n                     value="background"' in content
+        )
+
+    def test_hidden_filename_uses_existing_image(
+        self, client, staff_user, ddi_question, drag_items, drop_zones, user
+    ):
+        from django.core.files.base import ContentFile
+
+        img = QuestionImage(question=ddi_question, moodle_filename="oeil_bg.png")
+        img.file.save("oeil_bg.png", ContentFile(b"\x89PNG\r\n\x1a\n"), save=True)
+        Errata.objects.create(
+            question=ddi_question,
+            reported_by=user,
+            error_type=Errata.IMAGE,
+            description="Image manquante",
+        )
+        client.force_login(staff_user)
+        response = client.get("/errata/")
+        content = response.content.decode()
+        assert 'value="oeil_bg.png"' in content
+
+    def test_upload_creates_questionimage(
+        self, client, staff_user, ddi_question, drag_items, drop_zones, user
+    ):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        errata = Errata.objects.create(
+            question=ddi_question,
+            reported_by=user,
+            error_type=Errata.IMAGE,
+            description="Image manquante",
+        )
+        client.force_login(staff_user)
+        image_file = SimpleUploadedFile(
+            "bg.png", b"fake-image-bytes", content_type="image/png"
+        )
+        client.post(
+            f"/errata/{errata.pk}/upload-image/",
+            {"moodle_filename": "background", "image_file": image_file},
+        )
+        assert QuestionImage.objects.filter(
+            question=ddi_question, moodle_filename="background"
+        ).exists()

@@ -413,6 +413,7 @@ class Errata(models.Model):
     IMAGE = "image"
     TAG = "tag"
     QROC_ANSWER = "qroc_answer"
+    DDI_ANSWER = "ddi_answer"
     OTHER = "autre"
     TYPE_CHOICES = [
         (POINTS, "Erreur d'attribution de points"),
@@ -420,6 +421,7 @@ class Errata(models.Model):
         (IMAGE, "Image manquante"),
         (TAG, "Erreur de tag"),
         (QROC_ANSWER, "Ma réponse est correcte (QROC)"),
+        (DDI_ANSWER, "Une de mes réponses est correcte (légende interactive)"),
         (OTHER, "Autre"),
     ]
 
@@ -440,9 +442,10 @@ class Errata(models.Model):
     )
     error_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
     description = models.TextField(verbose_name="Description du problème", blank=True)
-    # QROC-specific fields for "ma réponse est correcte"
+    # Réponse suggérée : réutilisée par QROC_ANSWER (réponse texte libre) et
+    # DDI_ANSWER (légende de zone pour une question ddimageortext)
     qroc_suggested_text = models.TextField(
-        blank=True, verbose_name="Réponse suggérée (QROC)"
+        blank=True, verbose_name="Réponse suggérée (QROC / légende de zone)"
     )
     qroc_suggested_fraction = models.FloatField(
         null=True,
@@ -452,6 +455,14 @@ class Errata(models.Model):
     )
     concerned_answers = models.ManyToManyField(
         Answer, blank=True, related_name="erratas", verbose_name="Réponses concernées"
+    )
+    concerned_zone = models.ForeignKey(
+        "ImageDropZone",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="erratas",
+        verbose_name="Zone concernée (légende interactive)",
     )
     suggested_tags = models.ManyToManyField(
         Tag, blank=True, related_name="erratas", verbose_name="Tags suggérés"

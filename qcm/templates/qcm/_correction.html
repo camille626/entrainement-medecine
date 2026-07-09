@@ -40,6 +40,8 @@
 }
 .ddi-result-label.correct { background: rgba(25,135,84,0.85); color: white; }
 .ddi-result-label.incorrect { background: rgba(220,53,69,0.85); color: white; cursor: help; }
+.ddi-result-zone.ddi-pickable .ddi-result-label { outline: 2px dashed rgba(13,110,253,0.7); outline-offset: 2px; cursor: pointer; }
+.ddi-result-zone.ddi-selected .ddi-result-label { box-shadow: 0 0 0 3px #0d6efd, 0 1px 4px rgba(0,0,0,0.28); }
 </style>
 
 <div class="ddi-result-container mb-3 overflow-auto">
@@ -50,7 +52,8 @@
   {% for zr in zone_results %}
   <div class="ddi-result-zone"
        style="left:{{ zr.zone.xleft }}px; top:{{ zr.zone.ytop }}px;"
-       data-xleft="{{ zr.zone.xleft }}" data-ytop="{{ zr.zone.ytop }}">
+       data-xleft="{{ zr.zone.xleft }}" data-ytop="{{ zr.zone.ytop }}"
+       data-zone-pk="{{ zr.zone.pk }}" data-selected-label="{{ zr.selected_label|default:'' }}">
     <span class="ddi-result-label {% if zr.is_correct %}correct{% else %}incorrect{% endif %}"
           {% if not zr.is_correct %}
           data-bs-toggle="tooltip"
@@ -80,6 +83,34 @@ if (_rImg) {
   new ResizeObserver(function() {
     if (_rImg.complete) ddiResultScale(_rImg);
   }).observe(_rImg);
+}
+
+// Sélection d'une zone concernée par un errata "réponse correcte marquée fausse"
+// (issue #54) : activée/désactivée depuis _errata_form.html via toggleErrataFields.
+function ddiEnableZonePicking(qpk, enabled) {
+  document.querySelectorAll('.ddi-result-zone').forEach(function(zoneEl) {
+    zoneEl.classList.toggle('ddi-pickable', enabled);
+    if (enabled && !zoneEl.dataset.ddiBound) {
+      zoneEl.dataset.ddiBound = '1';
+      zoneEl.addEventListener('click', function() { ddiSelectZone(qpk, zoneEl); });
+    }
+    if (!enabled) zoneEl.classList.remove('ddi-selected');
+  });
+}
+function ddiSelectZone(qpk, zoneEl) {
+  var container = zoneEl.closest('.ddi-result-container');
+  var alreadySelected = zoneEl.classList.contains('ddi-selected');
+  container.querySelectorAll('.ddi-result-zone').forEach(function(z) {
+    z.classList.remove('ddi-selected');
+  });
+  zoneEl.classList.add('ddi-selected');
+  var zoneIdInput = document.getElementById('ddi_zone_id_' + qpk);
+  if (zoneIdInput) zoneIdInput.value = zoneEl.dataset.zonePk;
+  var textInput = document.getElementById('qroc_text_' + qpk);
+  if (textInput && !alreadySelected) textInput.value = zoneEl.dataset.selectedLabel || '';
+  var hint = document.getElementById('ddi-zone-selected-' + qpk);
+  var labelText = zoneEl.querySelector('.ddi-result-label');
+  if (hint) hint.textContent = labelText ? 'Zone sélectionnée : ' + labelText.textContent.trim() : '';
 }
 </script>
 {% endif %}

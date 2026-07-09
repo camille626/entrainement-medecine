@@ -72,6 +72,10 @@
               {{ e.question.render_text|safe }}
             </div>
 
+            {% if e.question.qtype == 'ddimageortext' and e.error_type != 'ddi_answer' %}
+            {% include "qcm/_ddi_zones_readonly.html" with e=e %}
+            {% endif %}
+
             {# ================================================================ #}
             {# BRANCHE 1 — Correction interactive (type=correction, pending)    #}
             {# ================================================================ #}
@@ -228,11 +232,55 @@
             </form>
 
             {# ================================================================ #}
+            {# BRANCHE 3b — Légende interactive : ajout d'une variante acceptée #}
+            {# ================================================================ #}
+            {% elif user.is_staff and e.status == 'pending' and e.error_type == 'ddi_answer' %}
+
+            {% include "qcm/_ddi_zones_readonly.html" with e=e highlight_zone=e.concerned_zone %}
+
+            <!-- Suggestion de l'utilisateur -->
+            <div class="mb-3 p-2 rounded border border-info bg-info bg-opacity-10">
+              <div class="fw-semibold small mb-1">Réponse suggérée par {{ e.reported_by.username }} :</div>
+              <span class="fs-6 fw-bold">{{ e.qroc_suggested_text|default:"(non renseignée)" }}</span>
+              <div class="small mt-1">
+                {% if e.concerned_zone %}
+                Concerne la zone #{{ e.concerned_zone.no }} — actuellement : « {{ e.concerned_zone.correct_label }} »
+                {% if e.concerned_zone.accepted_labels_text %} — alternatives : {{ e.concerned_zone.accepted_labels_text }}{% endif %}
+                {% else %}
+                <span class="text-danger">Zone supprimée depuis le signalement.</span>
+                {% endif %}
+              </div>
+            </div>
+
+            {% include "qcm/_errata_tags_and_meta.html" with e=e %}
+
+            {% if e.concerned_zone and e.qroc_suggested_text %}
+            <form method="post" action="/errata/{{ e.pk }}/accept/" class="mb-2">
+              {% csrf_token %}
+              <input type="hidden" name="back" value="{{ back_params }}">
+              <button type="submit" class="btn btn-sm btn-success">
+                ✅ Accepter — ajouter « {{ e.qroc_suggested_text }} » aux réponses de la zone #{{ e.concerned_zone.no }}
+              </button>
+            </form>
+            {% else %}
+            <div class="alert alert-warning small py-2">Signalement incomplet, impossible à accepter directement.</div>
+            {% endif %}
+
+            <form method="post" action="/errata/{{ e.pk }}/reject/" class="mt-2 d-flex gap-1">
+              {% csrf_token %}
+              <input type="hidden" name="back" value="{{ back_params }}">
+              <input type="text" name="admin_note" class="form-control form-control-sm"
+                     placeholder="Motif de refus (optionnel)" style="max-width:240px;">
+              <button type="submit" class="btn btn-sm btn-outline-danger">✗ Refuser</button>
+            </form>
+
+            {# ================================================================ #}
             {# BRANCHE 4 — Affichage standard (tag / image / autre)             #}
             {# ================================================================ #}
             {% else %}
 
             <!-- Propositions (lecture seule) -->
+            {% if e.question.qtype != 'ddimageortext' %}
             <div class="mb-3">
               {% for answer in e.question.answers.all %}
               <div class="d-flex align-items-start mb-1 p-1 rounded small
@@ -251,6 +299,7 @@
               </div>
               {% endfor %}
             </div>
+            {% endif %}
 
             {% include "qcm/_errata_tags_and_meta.html" with e=e %}
 
@@ -293,9 +342,15 @@
                   enctype="multipart/form-data" class="mb-2">
               {% csrf_token %}
               <input type="hidden" name="back" value="{{ back_params }}">
+              {% if e.question.qtype == 'ddimageortext' %}
+              <input type="hidden" name="moodle_filename"
+                     value="{{ e.question.images.first.moodle_filename|default:'background' }}"
+                     required>
+              {% else %}
               <input type="hidden" name="moodle_filename"
                      value="{{ e.question.text|pluginfile_names|first }}"
                      required>
+              {% endif %}
               <div class="mb-2">
                 <label class="small fw-semibold d-block mb-1">Fichier image :</label>
                 <input type="file" name="image_file"
