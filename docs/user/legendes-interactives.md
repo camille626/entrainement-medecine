@@ -21,9 +21,16 @@ Après soumission, **l'image reste affichée** avec les réponses positionnées 
 - Étiquette **verte** : réponse correcte
 - Étiquette **rouge** : réponse incorrecte — survolez l'étiquette pour afficher la bonne réponse attendue et les alternatives acceptées
 
-En dessous de l'image, la liste détaillée récapitule chaque zone avec ✓/✗ et le nom attendu si la réponse était fausse.
-
 Le score est proportionnel au nombre de zones correctement légendées (ex: 8/10 → 0,80 point).
+
+## Signaler une erreur
+
+Sur l'écran de correction, le bouton **Signaler une erreur** propose 4 types de signalement adaptés aux légendes interactives :
+
+- **Image manquante** : l'image de fond ne s'affiche pas.
+- **Erreur de tag** : la question est mal classée (mêmes tags EC/chapitre que pour les autres types de question).
+- **Une de mes réponses est correcte** : votre réponse a été marquée fausse à tort. Sélectionnez ce type puis **cliquez directement sur la zone concernée dans l'image**, qui reste affichée et interactive pendant la sélection. La réponse que vous aviez saisie est pré-remplie et modifiable avant l'envoi. Si l'administrateur accepte votre signalement, votre réponse est ajoutée aux variantes acceptées pour cette zone.
+- **Autre** : tout autre problème avec une description libre.
 
 ## Pour les administrateurs : créer ou modifier une question légende
 

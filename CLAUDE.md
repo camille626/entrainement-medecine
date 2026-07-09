@@ -41,7 +41,7 @@ Plateforme web de QCMs interactifs pour l'apprentissage des cours de médecine (
 │   ├── migrations/        # Migrations de base de données
 │   ├── admin.py           # Interface d'administration
 │   ├── apps.py
-│   ├── models.py          # Course, Category, Question, Answer, QuizSession, UserAnswer, UserProfile, ImageDragItem, ImageDropZone, ImageDropZoneLabel, Trophy, UserTrophy, LoginEvent
+│   ├── models.py          # Course, Question, Answer, Errata, QuizSession, UserAnswer, UserProfile, ImageDragItem, ImageDropZone, ImageDropZoneLabel, Trophy, UserTrophy, LoginEvent
 │   └── trophies.py        # Service d'attribution des trophées (check_and_award_trophies, award_login_trophies)
 ├── src/                   # Code source Python (utilitaires, scripts)
 ├── tests/                 # Tests unitaires et d'intégration

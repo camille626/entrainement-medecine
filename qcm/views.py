@@ -19,6 +19,7 @@ from .models import (
     Course,
     Errata,
     ImageDropZone,
+    ImageDropZoneLabel,
     Question,
     QuestionImage,
     QuizSession,
@@ -1565,6 +1566,14 @@ class ErrataAcceptView(LoginRequiredMixin, View):
                     },
                 )
 
+        elif errata.error_type == Errata.DDI_ANSWER:
+            # Ajouter la légende suggérée comme réponse alternative acceptée
+            suggested_text = errata.qroc_suggested_text.strip()
+            if errata.concerned_zone_id and suggested_text:
+                ImageDropZoneLabel.objects.get_or_create(
+                    zone=errata.concerned_zone, text=suggested_text
+                )
+
         from .models import Notification
 
         Notification.objects.create(
@@ -1684,6 +1693,51 @@ class ErrataListView(LoginRequiredMixin, View):
         )
 
 
+#: Types d'erreur proposés pour les questions ddimageortext (pas d'Answer donc
+#: pas de sens pour CORRECTION/POINTS/QROC_ANSWER — voir issue #54).
+_DDI_ALLOWED_ERROR_TYPES = {
+    Errata.IMAGE,
+    Errata.TAG,
+    Errata.DDI_ANSWER,
+    Errata.OTHER,
+}
+
+
+def _errata_form_context(question, **overrides):
+    """Contexte partagé par ErrataSubmitView.get() et ses réaffichages sur erreur."""
+    if question.qtype == Question.DDIMAGEORTEXT:
+        error_types = [
+            choice
+            for choice in Errata.TYPE_CHOICES
+            if choice[0] in _DDI_ALLOWED_ERROR_TYPES
+        ]
+    else:
+        error_types = Errata.TYPE_CHOICES
+    context = {
+        "question": question,
+        "existing": Errata.objects.filter(
+            question=question, status=Errata.PENDING
+        ).first(),
+        "ec_tags": Tag.objects.filter(
+            category__tag_type="souscategorie",
+            questions__course=question.course,
+        )
+        .distinct()
+        .order_by("name"),
+        "chapter_tags": Tag.objects.filter(
+            category__tag_type="chapitre",
+            questions__course=question.course,
+        )
+        .distinct()
+        .order_by("name"),
+        "error_types": error_types,
+        "prefill_qroc_text": "",
+        "prefill_type": "",
+    }
+    context.update(overrides)
+    return context
+
+
 class ErrataSubmitView(LoginRequiredMixin, View):
     """HTMX endpoint to submit an errata report."""
 
@@ -1698,16 +1752,37 @@ class ErrataSubmitView(LoginRequiredMixin, View):
             return render(
                 request,
                 "qcm/_errata_form.html",
-                {
-                    "question": question,
-                    "error": "La description est obligatoire pour ce type d'erreur.",
-                    "existing": Errata.objects.filter(
-                        question=question, status=Errata.PENDING
-                    ).first(),
-                },
+                _errata_form_context(
+                    question,
+                    error="La description est obligatoire pour ce type d'erreur.",
+                    prefill_type=error_type,
+                ),
             )
 
         qroc_suggested_text = request.POST.get("qroc_suggested_text", "").strip()
+
+        concerned_zone = None
+        if error_type == Errata.DDI_ANSWER:
+            ddi_zone_id = request.POST.get("ddi_zone_id", "").strip()
+            concerned_zone = (
+                question.drop_zones.filter(pk=ddi_zone_id).first()
+                if ddi_zone_id
+                else None
+            )
+            if concerned_zone is None or not qroc_suggested_text:
+                return render(
+                    request,
+                    "qcm/_errata_form.html",
+                    _errata_form_context(
+                        question,
+                        error=(
+                            "Merci de cliquer sur la zone concernée dans l'image "
+                            "et de renseigner la légende suggérée."
+                        ),
+                        prefill_type=error_type,
+                        prefill_qroc_text=qroc_suggested_text,
+                    ),
+                )
 
         errata = Errata.objects.create(
             question=question,
@@ -1715,6 +1790,7 @@ class ErrataSubmitView(LoginRequiredMixin, View):
             error_type=error_type,
             description=description,
             qroc_suggested_text=qroc_suggested_text,
+            concerned_zone=concerned_zone,
         )
 
         # Link concerned answers (for correction errors)
@@ -1733,40 +1809,17 @@ class ErrataSubmitView(LoginRequiredMixin, View):
 
     def get(self, request, question_id):
         question = get_object_or_404(Question, pk=question_id)
-        existing = Errata.objects.filter(
-            question=question, status=Errata.PENDING
-        ).first()
-        ec_tags = (
-            Tag.objects.filter(
-                category__tag_type="souscategorie",
-                questions__course=question.course,
-            )
-            .distinct()
-            .order_by("name")
-        )
-        chapter_tags = (
-            Tag.objects.filter(
-                category__tag_type="chapitre",
-                questions__course=question.course,
-            )
-            .distinct()
-            .order_by("name")
-        )
         # Pre-fill QROC text from query param (coming from ambiguous template)
         prefill_qroc_text = request.GET.get("qroc_text", "")
         prefill_type = request.GET.get("prefill_type", "")
         return render(
             request,
             "qcm/_errata_form.html",
-            {
-                "question": question,
-                "existing": existing,
-                "ec_tags": ec_tags,
-                "chapter_tags": chapter_tags,
-                "error_types": Errata.TYPE_CHOICES,
-                "prefill_qroc_text": prefill_qroc_text,
-                "prefill_type": prefill_type,
-            },
+            _errata_form_context(
+                question,
+                prefill_qroc_text=prefill_qroc_text,
+                prefill_type=prefill_type,
+            ),
         )
 
 
