@@ -99,6 +99,7 @@ urlpatterns = [
         name="questions_confirm",
     ),
     path("profil/", views.ProfileView.as_view(), name="profile"),
+    path("profil/theme/", views.ThemeToggleView.as_view(), name="theme_toggle"),
     path("inscription/", views.InscriptionView.as_view(), name="inscription"),
     path(
         "inscription/merci/",

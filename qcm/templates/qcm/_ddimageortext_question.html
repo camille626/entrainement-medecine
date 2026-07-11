@@ -60,8 +60,8 @@
   {% if bg_image %}
   <div class="ddi-container mb-3 overflow-auto">
     <img id="ddi-img" src="{{ bg_image.file.url }}"
-         alt="Image anatomique"
-         style="max-width:100%; display:block; border-radius:4px; border:1px solid #dee2e6;"
+         alt="Image anatomique" class="border"
+         style="max-width:100%; display:block; border-radius:4px;"
          onload="ddiScaleZones(this)">
     {% for zone in drop_zones %}
     <div class="ddi-zone"
