@@ -61,11 +61,58 @@
 
 <body>
   <!-- Top navbar -->
-  <nav class="navbar navbar-expand navbar-light bg-white border-bottom shadow-sm px-3">
+  <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm px-3">
     <a class="navbar-brand text-primary me-4" href="/">🩺 StudyMed</a>
 
+    <!-- Right side: notifications + user (toujours visible, hors du menu repliable) -->
+    {% if user.is_authenticated %}
+    <div class="d-flex align-items-center gap-2 ms-auto me-3 me-lg-0 order-lg-3">
+      <!-- Notification bell -->
+      {% include "qcm/_notif_bell.html" %}
+
+      <!-- User dropdown -->
+      <div class="dropdown">
+        <button class="btn btn-sm btn-outline-primary dropdown-toggle d-flex align-items-center gap-1" type="button"
+          data-bs-toggle="dropdown" aria-expanded="false">
+          {% if user.profile.photo %}
+          <img src="{{ user.profile.photo.url }}" alt=""
+               class="rounded-circle" style="width:20px;height:20px;object-fit:cover;">
+          {% else %}
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-person-circle"
+            viewBox="0 0 16 16">
+            <path d="M11 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0" />
+            <path fill-rule="evenodd"
+              d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8m8-7a7 7 0 0 0-5.468 11.37C3.242 11.226 4.805 10 8 10s4.757 1.225 5.468 2.37A7 7 0 0 0 8 1" />
+          </svg>
+          {% endif %}
+          <span class="d-none d-md-inline">{{ user.get_full_name|default:user.username }}</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end shadow">
+          <li><span class="dropdown-item-text text-muted small">{{ user.username }}</span></li>
+          <li>
+            <hr class="dropdown-divider">
+          </li>
+          <li><a class="dropdown-item" href="{% url 'qcm:profile' %}">👤 Profil</a></li>
+          <li>
+            <form method="post" action="/logout/" class="m-0">
+              {% csrf_token %}
+              <button type="submit" class="dropdown-item text-danger">🚪 Déconnexion</button>
+            </form>
+          </li>
+        </ul>
+      </div>
+    </div>
+    {% endif %}
+
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+      data-bs-target="#mainNavCollapse" aria-controls="mainNavCollapse"
+      aria-expanded="false" aria-label="Afficher/masquer la navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse order-lg-2" id="mainNavCollapse">
     <!-- Navigation tabs -->
-    <ul class="nav nav-tabs border-0 flex-grow-1" id="mainNav">
+    <ul class="navbar-nav nav-tabs border-0 flex-grow-1 align-items-center" id="mainNav">
       <li class="nav-item">
         <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/">Accueil</a>
       </li>
@@ -115,46 +162,7 @@
       </li>
       {% endif %}
     </ul>
-
-    <!-- Right side: notifications + user -->
-    {% if user.is_authenticated %}
-    <div class="d-flex align-items-center gap-2 ms-3">
-      <!-- Notification bell -->
-      {% include "qcm/_notif_bell.html" %}
-
-      <!-- User dropdown -->
-      <div class="dropdown">
-        <button class="btn btn-sm btn-outline-primary dropdown-toggle d-flex align-items-center gap-1" type="button"
-          data-bs-toggle="dropdown" aria-expanded="false">
-          {% if user.profile.photo %}
-          <img src="{{ user.profile.photo.url }}" alt=""
-               class="rounded-circle" style="width:20px;height:20px;object-fit:cover;">
-          {% else %}
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-person-circle"
-            viewBox="0 0 16 16">
-            <path d="M11 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0" />
-            <path fill-rule="evenodd"
-              d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8m8-7a7 7 0 0 0-5.468 11.37C3.242 11.226 4.805 10 8 10s4.757 1.225 5.468 2.37A7 7 0 0 0 8 1" />
-          </svg>
-          {% endif %}
-          <span class="d-none d-md-inline">{{ user.get_full_name|default:user.username }}</span>
-        </button>
-        <ul class="dropdown-menu dropdown-menu-end shadow">
-          <li><span class="dropdown-item-text text-muted small">{{ user.username }}</span></li>
-          <li>
-            <hr class="dropdown-divider">
-          </li>
-          <li><a class="dropdown-item" href="{% url 'qcm:profile' %}">👤 Profil</a></li>
-          <li>
-            <form method="post" action="/logout/" class="m-0">
-              {% csrf_token %}
-              <button type="submit" class="dropdown-item text-danger">🚪 Déconnexion</button>
-            </form>
-          </li>
-        </ul>
-      </div>
     </div>
-    {% endif %}
   </nav>
 
   <!-- Page content -->

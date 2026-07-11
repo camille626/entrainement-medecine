@@ -1,5 +1,7 @@
 """Tests pour la navbar et le dashboard (issue #27)."""
 
+import re
+
 import pytest
 from django.contrib.auth.models import User
 
@@ -66,6 +68,108 @@ class TestNavbar:
         client.force_login(user)
         response = client.get("/")
         assert b"Camille" in response.content
+
+
+@pytest.mark.django_db
+class TestNavbarResponsive:
+    """Tests pour le menu hamburger responsive (issue #78)."""
+
+    def test_navbar_uses_breakpoint_expand_class(self, client, user):
+        client.force_login(user)
+        response = client.get("/")
+        content = response.content.decode()
+        assert "navbar-expand-lg" in content
+
+    def test_navbar_does_not_use_bare_expand_class(self, client, user):
+        client.force_login(user)
+        response = client.get("/")
+        content = response.content.decode()
+        # "navbar-expand" seul (sans breakpoint) ne doit plus apparaître comme
+        # classe isolée sur la balise <nav> : seul "navbar-expand-lg" doit rester.
+        assert "navbar-expand navbar-light" not in content
+        assert 'class="navbar navbar-expand ' not in content
+
+    def test_navbar_has_toggler_button(self, client, user):
+        client.force_login(user)
+        response = client.get("/")
+        content = response.content.decode()
+        assert "navbar-toggler" in content
+        assert 'data-bs-toggle="collapse"' in content
+
+    def test_navbar_toggler_target_matches_collapse_container(self, client, user):
+        client.force_login(user)
+        response = client.get("/")
+        content = response.content.decode()
+
+        match = re.search(r'data-bs-target="#([\w-]+)"', content)
+        assert match is not None, "Le bouton toggler doit avoir un data-bs-target"
+        target_id = match.group(1)
+
+        assert f'id="{target_id}"' in content
+        container_match = re.search(
+            rf'<div class="([^"]*)"\s+id="{target_id}">'
+            rf'|<div class="([^"]*)" id="{target_id}"[^>]*>',
+            content,
+        )
+        assert container_match is not None, f"Conteneur #{target_id} introuvable"
+        container_classes = (container_match.group(1) or "").split()
+        assert "collapse" in container_classes
+        assert "navbar-collapse" in container_classes
+
+    def test_nav_links_use_navbar_nav_class_for_vertical_stacking(self, client, user):
+        # La classe "navbar-nav" (native Bootstrap 5) fait passer la liste de
+        # liens en flex-direction: column sous le breakpoint navbar-expand-lg,
+        # donc les options s'affichent les unes en dessous des autres une fois
+        # le menu hamburger déplié sur mobile.
+        client.force_login(user)
+        response = client.get("/")
+        content = response.content.decode()
+
+        match = re.search(r'<ul class="([^"]*)"\s+id="mainNav">', content)
+        assert match is not None, "Liste de liens #mainNav introuvable"
+        classes = match.group(1).split()
+        assert "navbar-nav" in classes
+
+    def test_nav_links_are_centered(self, client, user):
+        client.force_login(user)
+        response = client.get("/")
+        content = response.content.decode()
+
+        match = re.search(r'<ul class="([^"]*)"\s+id="mainNav">', content)
+        assert match is not None, "Liste de liens #mainNav introuvable"
+        classes = match.group(1).split()
+        assert "align-items-center" in classes
+
+    def test_notif_bell_and_user_dropdown_stay_outside_collapsible_menu(
+        self, client, user
+    ):
+        # La cloche de notifications et le dropdown utilisateur ne sont pas
+        # des liens de navigation : ils doivent rester visibles en permanence,
+        # juste à gauche du bouton hamburger, et non repliés dans le menu.
+        client.force_login(user)
+        response = client.get("/")
+        content = response.content.decode()
+
+        toggler_idx = content.index("navbar-toggler")
+        collapse_idx = content.index('id="mainNavCollapse"')
+        notif_idx = content.index("notif-bell-zone")
+
+        assert notif_idx < toggler_idx < collapse_idx
+
+    def test_user_block_has_spacing_before_toggler(self, client, user):
+        # Le bloc notifications/profil ne doit pas être collé au hamburger :
+        # une marge (me-*) le sépare visuellement du bouton toggler.
+        client.force_login(user)
+        response = client.get("/")
+        content = response.content.decode()
+
+        match = re.search(r'<div class="([^"]*order-lg-3[^"]*)">', content)
+        assert match is not None, "Bloc utilisateur (order-lg-3) introuvable"
+        classes = match.group(1).split()
+        assert any(cls.startswith("me-") for cls in classes), (
+            "Le bloc utilisateur doit avoir une marge droite (me-*) "
+            "pour ne pas coller au hamburger"
+        )
 
 
 @pytest.mark.django_db
