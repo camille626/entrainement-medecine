@@ -18,6 +18,12 @@
   .nav-q-incorrect    { background: #fde8ea; border-color: #f5b8bc; }
   .nav-q-current      { outline: 2px solid #0d6efd; outline-offset: 1px; }
   .nav-q:hover        { opacity: 0.8; }
+
+  [data-bs-theme="dark"] .nav-q             { color: #e9ecef !important; border-color: rgba(255,255,255,0.15); }
+  [data-bs-theme="dark"] .nav-q-not-answered { background: #3a3d40; }
+  [data-bs-theme="dark"] .nav-q-correct      { background: #1e4a2a; border-color: #3a7a4c; }
+  [data-bs-theme="dark"] .nav-q-partial      { background: #4a3b12; border-color: #a67c00; }
+  [data-bs-theme="dark"] .nav-q-incorrect    { background: #4a1f24; border-color: #8a3b42; }
 </style>
 {% endblock %}
 
@@ -56,7 +62,7 @@
 
   <!-- ── Zone principale ── -->
   <div id="main-col" class="col-md-7">
-    <div class="card mb-3 border-info" style="background-color: #e8f4f8;">
+    <div class="card mb-3 border-info qcm-alert-info">
       <div class="card-body">
         <!-- Énoncé -->
         <div class="mb-3">{{ question.render_text|safe }}</div>
@@ -152,7 +158,7 @@
           {% endfor %}
         </div>
 
-        <div class="mt-2 border-top pt-1 d-flex flex-wrap gap-1" style="font-size:0.6rem; color:#6c757d;">
+        <div class="mt-2 border-top pt-1 d-flex flex-wrap gap-1 text-muted" style="font-size:0.6rem;">
           <span><span class="nav-q nav-q-correct" style="width:1.1rem;height:0.9rem;font-size:0.5rem;"> </span> Correct</span>
           <span><span class="nav-q nav-q-partial" style="width:1.1rem;height:0.9rem;font-size:0.5rem;"> </span> Partiel</span>
           <span><span class="nav-q nav-q-incorrect" style="width:1.1rem;height:0.9rem;font-size:0.5rem;"> </span> Incorrect</span>

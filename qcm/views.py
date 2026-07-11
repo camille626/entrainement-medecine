@@ -7,7 +7,7 @@ import unicodedata
 from typing import TYPE_CHECKING
 
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
@@ -1634,6 +1634,17 @@ class NotificationMarkAllReadView(LoginRequiredMixin, View):
 
         Notification.objects.filter(user=request.user, read=False).update(read=True)
         return render(request, "qcm/_notif_bell.html")
+
+
+class ThemeToggleView(LoginRequiredMixin, View):
+    def post(self, request):
+        theme = request.POST.get("theme")
+        if theme not in dict(UserProfile.THEME_CHOICES):
+            return HttpResponseBadRequest()
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        profile.theme = theme
+        profile.save(update_fields=["theme"])
+        return HttpResponse(status=204)
 
 
 class ErrataListView(LoginRequiredMixin, View):

@@ -126,8 +126,9 @@ Contrainte `unique_together = (question, moodle_filename)`. La méthode `Questio
 |-------|------|-------------|
 | `user` | OneToOneField → User (CASCADE) | Utilisateur Django (related_name `profile`) |
 | `photo` | ImageField (nullable) | Photo de profil stockée sous `MEDIA_ROOT/profile_photos/` |
+| `theme` | CharField, choix `light`/`dark`, blank | Préférence de thème explicite ; vide = pas de choix (le client détecte `prefers-color-scheme`) |
 
-Créé à la demande via `get_or_create` dans `ProfileView`. Accessible depuis les templates via `user.profile.photo` — Django intercepte silencieusement `RelatedObjectDoesNotExist` (hérite de `AttributeError`), ce qui rend `{% if user.profile.photo %}` safe même sans profil existant.
+Créé à la demande via `get_or_create` dans `ProfileView` (et dans `ThemeToggleView` pour le changement de thème). Accessible depuis les templates via `user.profile.photo` — Django intercepte silencieusement `RelatedObjectDoesNotExist` (hérite de `AttributeError`), ce qui rend `{% if user.profile.photo %}` safe même sans profil existant. Même principe pour `user.profile.theme` dans `base.html`, qui rend un attribut `data-bs-theme` vide si le profil n'existe pas encore.
 
 **`QuizSession`** — une session d'entraînement d'un utilisateur
 

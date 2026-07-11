@@ -170,6 +170,7 @@ uv run --active python manage.py import_fixture --fixture fixture.json [--media-
 # /errata/<pk>/upload-image/ → upload image pour un errata type IMAGE (POST, staff)
 # /profil/                  → page profil utilisateur (GET/POST : infos + photo + onglet trophées)
 # /profil/mot-de-passe/     → changement de mot de passe (Django PasswordChangeView)
+# /profil/theme/            → sauvegarde du choix de thème clair/sombre (POST, HTMX, staff+utilisateurs)
 ```
 
 **Important** : toujours utiliser `uv run --active` pour éviter de créer un environnement `.venv` parasite.
