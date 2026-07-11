@@ -19,7 +19,7 @@
           <div class="card-body d-flex flex-column">
             <h5 class="card-title">🎯 Entraînement</h5>
             <p class="card-text text-muted flex-grow-1">Lancez une session de questions</p>
-            <a href="/entrainement/" class="btn btn-outline-primary mt-2">Démarrer une session</a>
+            <a href="/entrainement/" class="btn btn-outline-primary qcm-cta-btn mt-2">Démarrer une session</a>
           </div>
         </div>
       </div>
@@ -32,7 +32,7 @@
             <p class="card-text text-muted flex-grow-1 small">
               Consultez vos statistiques et votre progression.
             </p>
-            <a href="/statistiques/" class="btn btn-outline-warning mt-2">Voir mes stats</a>
+            <a href="/statistiques/" class="btn btn-outline-warning qcm-cta-btn mt-2">Voir mes stats</a>
           </div>
         </div>
       </div>
@@ -45,7 +45,7 @@
             <p class="card-text text-muted flex-grow-1 small">
               Retrouvez vos sessions passées, reprenez une tentative ou relisez vos corrections.
             </p>
-            <a href="/historique/" class="btn btn-outline-secondary mt-2">Voir l'historique</a>
+            <a href="/historique/" class="btn btn-outline-secondary qcm-cta-btn mt-2">Voir l'historique</a>
           </div>
         </div>
       </div>
@@ -65,7 +65,7 @@
           <div class="row row-cols-1 row-cols-md-3 g-2">
             {% for course in sem_item.courses %}
             <div class="col">
-              <div class="d-flex align-items-center border rounded p-2 bg-white h-100">
+              <div class="d-flex align-items-center border rounded p-2 bg-body-tertiary h-100">
                 <div class="text-primary me-2 fs-4">🎓</div>
                 <div>
                   <div class="fw-semibold small">{{ course.name }}</div>

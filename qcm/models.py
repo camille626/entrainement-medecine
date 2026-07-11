@@ -552,8 +552,13 @@ class ImageDropZoneLabel(models.Model):
 
 
 class UserProfile(models.Model):
+    THEME_CHOICES = [("light", "Clair"), ("dark", "Sombre")]
+
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
     photo = models.ImageField(upload_to="profile_photos/", blank=True, null=True)
+    theme = models.CharField(
+        max_length=5, choices=THEME_CHOICES, blank=True, default=""
+    )
 
     class Meta:
         verbose_name = "Profil utilisateur"

@@ -60,7 +60,7 @@
         <div id="q{{ forloop.counter }}" class="accordion-collapse collapse">
           <div class="accordion-body">
             <!-- Énoncé -->
-            <div class="mb-3 p-3 rounded" style="background-color: #e8f4f8;">
+            <div class="mb-3 p-3 rounded qcm-alert-info">
               {{ result.question.text|safe }}
             </div>
 
@@ -100,7 +100,7 @@
 
             <!-- Correction -->
             {% if result.question.feedback %}
-            <div class="mt-3 p-3 rounded" style="background-color: #fff3cd; border: 1px solid #ffc107;">
+            <div class="mt-3 p-3 rounded qcm-alert-warning">
               <strong class="text-warning-emphasis">Correction</strong>
               <div class="mt-2">{{ result.question.feedback|safe }}</div>
             </div>

@@ -20,8 +20,8 @@
 
 <div class="ddi-admin-container-{{ e.pk }} mb-3 overflow-auto">
   <img id="ddi-admin-img-{{ e.pk }}" src="{{ bg_image.file.url }}"
-       alt="Image anatomique"
-       style="max-width:100%; display:block; border-radius:4px; border:1px solid #dee2e6;"
+       alt="Image anatomique" class="border"
+       style="max-width:100%; display:block; border-radius:4px;"
        onload="ddiAdminResultScale{{ e.pk }}(this)">
   {% for zone in e.question.drop_zones.all %}
   <div class="ddi-admin-zone-{{ e.pk }}"

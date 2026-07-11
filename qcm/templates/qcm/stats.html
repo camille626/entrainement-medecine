@@ -117,7 +117,7 @@
         {% if course_stats %}
         <div class="table-responsive">
           <table class="table table-hover table-sm align-middle">
-            <thead class="table-light">
+            <thead class="bg-body-secondary">
               <tr>
                 <th>Cours</th>
                 <th class="text-center">Réalisées</th>
@@ -131,7 +131,7 @@
             <tbody>
               {% for s in course_stats %}
               {% ifchanged s.semester_label %}
-              <tr class="table-secondary">
+              <tr class="bg-body-secondary">
                 <td colspan="7" class="fw-semibold small text-muted py-1 px-2">
                   📅 {{ s.semester_label }}
                 </td>
