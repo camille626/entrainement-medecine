@@ -104,6 +104,57 @@ class TestStatsPage:
             or b"progression" in response.content.lower()
         )
 
+    def test_stats_counts_ddimageortext_like_other_types(
+        self, client, user, study_data
+    ):
+        """Les questions à légender (ddimageortext) sont comptées comme les autres
+        types dans le total disponible (issue #63)."""
+        from qcm.models import Question
+
+        Question.objects.create(
+            text="Légende",
+            course=study_data["course"],
+            qtype=Question.DDIMAGEORTEXT,
+        )
+
+        client.force_login(user)
+        response = client.get("/statistiques/")
+
+        # q1, q2 (multichoice) + la question ddimageortext
+        assert response.context["total_available"] == 3
+        course_stat = next(
+            s
+            for s in response.context["course_stats"]
+            if s["course"] == study_data["course"]
+        )
+        assert course_stat["nb_available"] == 3
+
+    def test_stats_note_accounts_for_ddimageortext_partial_credit(
+        self, client, user, study_data
+    ):
+        """Une réponse ddimageortext partiellement correcte pèse dans la note
+        globale (issue #63) — fraction_override doit primer sur is_correct."""
+        from qcm.models import Question, UserAnswer
+
+        ddi_question = Question.objects.create(
+            text="Légende",
+            course=study_data["course"],
+            qtype=Question.DDIMAGEORTEXT,
+        )
+        UserAnswer.objects.create(
+            session=study_data["session"],
+            question=ddi_question,
+            answer=None,
+            is_correct=False,
+            fraction_override=0.5,
+        )
+
+        client.force_login(user)
+        response = client.get("/statistiques/")
+
+        # q1 correct (1.0) + q2 incorrect (0.0) + ddi partiel (0.5) sur 3 * 20
+        assert response.context["note_20"] == 10.0
+
 
 @pytest.mark.django_db
 class TestStatsNavbar:

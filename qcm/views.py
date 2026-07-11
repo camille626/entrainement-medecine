@@ -48,6 +48,10 @@ FRACTION_CHOICES = [
 ]
 FRACTION_CHOICES_JSON = json.dumps([[val, label] for val, label in FRACTION_CHOICES])
 
+# Types de questions jouables en session, comptabilisés dans les statistiques
+# (issue #63 : les légendes interactives comptent comme les autres types).
+PLAYABLE_QTYPES = ["multichoice", "shortanswer", Question.DDIMAGEORTEXT]
+
 
 if TYPE_CHECKING:
     from typing import Any
@@ -110,8 +114,14 @@ def match_zone_label(zone: "ImageDropZone", user_text: str) -> bool:
 # ── Helpers de score ─────────────────────────────────────────────────────────
 
 
-def _ua_fraction(answer_fraction: "float | None", is_correct: bool) -> float:
-    """Fraction effective pour un dict UserAnswer (gère l'auto-éval QROC)."""
+def _ua_fraction(
+    answer_fraction: "float | None",
+    is_correct: bool,
+    fraction_override: "float | None" = None,
+) -> float:
+    """Fraction effective pour un dict UserAnswer (gère QROC et ddimageortext)."""
+    if fraction_override is not None:
+        return fraction_override
     if answer_fraction is not None:
         return answer_fraction
     return 1.0 if is_correct else 0.0
@@ -1126,20 +1136,24 @@ def _compute_course_block(course, all_answers):
     """Return stats dict for a single course."""
     from collections import defaultdict
 
-    from .models import Question
-
     answers = all_answers.filter(question__course=course)
     nb_available = Question.objects.filter(
-        course=course, qtype__in=["multichoice", "shortanswer"]
+        course=course, qtype__in=PLAYABLE_QTYPES
     ).count()
     nb_done = answers.values("question_id").distinct().count()
 
     # Compute note at question-attempt level: group fractions by (session, question)
     pair_fracs: dict = defaultdict(list)
     for ua in answers.values(
-        "session_id", "question_id", "answer__fraction", "is_correct"
+        "session_id",
+        "question_id",
+        "answer__fraction",
+        "is_correct",
+        "fraction_override",
     ):
-        frac = _ua_fraction(ua["answer__fraction"], ua["is_correct"])
+        frac = _ua_fraction(
+            ua["answer__fraction"], ua["is_correct"], ua["fraction_override"]
+        )
         pair_fracs[(ua["session_id"], ua["question_id"])].append(frac)
 
     nb_total_sessions = len(pair_fracs)
@@ -1190,6 +1204,7 @@ class StatsView(LoginRequiredMixin, View):
                 "question_id",
                 "is_correct",
                 "answer__fraction",
+                "fraction_override",
                 "session__started_at",
             )
         )
@@ -1205,7 +1220,9 @@ class StatsView(LoginRequiredMixin, View):
             # Group answer fractions by (session, question) for question-level scoring
             pair_fracs: dict = defaultdict(list)
             for r in raw:
-                frac = _ua_fraction(r["answer__fraction"], r["is_correct"])
+                frac = _ua_fraction(
+                    r["answer__fraction"], r["is_correct"], r["fraction_override"]
+                )
                 pair_fracs[(r["session_id"], r["question_id"])].append(frac)
 
             # Question score = sum of answer fractions clamped to [0, 1]
@@ -1259,11 +1276,9 @@ class StatsView(LoginRequiredMixin, View):
             stat["semester_label"] = str(sem) if sem else "Autres"
 
         # Global totals
-        from .models import Question
-
         total_available = Question.objects.filter(
             course__in=[c.pk for c in enrolled_courses],
-            qtype__in=["multichoice", "shortanswer"],
+            qtype__in=PLAYABLE_QTYPES,
         ).count()
         total_done = all_answers.values("question_id").distinct().count()
         pct_done_global = (
@@ -1289,7 +1304,17 @@ class StatsView(LoginRequiredMixin, View):
             if not entries:
                 return None, 0
             score = sum(
-                min(1.0, max(0.0, _ua_fraction(e["answer__fraction"], e["is_correct"])))
+                min(
+                    1.0,
+                    max(
+                        0.0,
+                        _ua_fraction(
+                            e["answer__fraction"],
+                            e["is_correct"],
+                            e["fraction_override"],
+                        ),
+                    ),
+                )
                 for e in entries
             )
             note = round(score / len(entries) * 20, 1)
@@ -1959,7 +1984,7 @@ class CourseStatsView(LoginRequiredMixin, View):
             ec_answers = all_answers.filter(question__tags=tag)
             nb_available = Question.objects.filter(
                 course=course,
-                qtype__in=["multichoice", "shortanswer"],
+                qtype__in=PLAYABLE_QTYPES,
                 tags=tag,
             ).count()
             nb_done = ec_answers.values("question_id").distinct().count()
@@ -1968,9 +1993,15 @@ class CourseStatsView(LoginRequiredMixin, View):
             # Question-level scoring: group answer fractions by (session, question)
             pair_fracs: dict = defaultdict(list)
             for ua in ec_answers.values(
-                "session_id", "question_id", "answer__fraction", "is_correct"
+                "session_id",
+                "question_id",
+                "answer__fraction",
+                "is_correct",
+                "fraction_override",
             ):
-                frac = _ua_fraction(ua["answer__fraction"], ua["is_correct"])
+                frac = _ua_fraction(
+                    ua["answer__fraction"], ua["is_correct"], ua["fraction_override"]
+                )
                 pair_fracs[(ua["session_id"], ua["question_id"])].append(frac)
 
             nb_total_sessions = len(pair_fracs)
@@ -2306,13 +2337,19 @@ class ProfileView(LoginRequiredMixin, View):
         # Même calcul que StatsView : grouper par (session, question)
         raw = list(
             UserAnswer.objects.filter(session__user=user).values(
-                "session_id", "question_id", "is_correct", "answer__fraction"
+                "session_id",
+                "question_id",
+                "is_correct",
+                "answer__fraction",
+                "fraction_override",
             )
         )
         pair_fracs: dict = defaultdict(list)
         for r in raw:
             pair_fracs[(r["session_id"], r["question_id"])].append(
-                _ua_fraction(r["answer__fraction"], r["is_correct"])
+                _ua_fraction(
+                    r["answer__fraction"], r["is_correct"], r["fraction_override"]
+                )
             )
         q_scores = [max(0.0, min(1.0, sum(fracs))) for fracs in pair_fracs.values()]
         total_questions = len(q_scores)
