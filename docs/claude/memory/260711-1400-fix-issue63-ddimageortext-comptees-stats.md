@@ -20,6 +20,7 @@ En creusant le comptage, découverte d'un second bug lié : les requêtes `.valu
   - `CourseStatsView.get` (nb_available par EC dans le breakdown `/statistiques/cours/<id>/`)
   - (le type `Question.MATCH` existe dans `QTYPE_CHOICES` mais n'a aucune question en base et aucun handler de session — volontairement exclu de `PLAYABLE_QTYPES`)
 - `_ua_fraction()` prend un 3e paramètre optionnel `fraction_override: float | None = None`, avec la même priorité que `UserAnswer.effective_fraction`. Les 5 call sites ont été mis à jour pour sélectionner `"fraction_override"` dans leurs `.values()` et le passer à l'appel : `_compute_course_block`, `StatsView.get` (note globale + `_week_stats` pour la progression hebdomadaire), `CourseStatsView.get` (note par EC), `ProfileView._build_context` (note moyenne affichée sur la page profil — même calcul dupliqué, donc même bug corrigé au passage).
+- **`StatsView.get` n'est plus scopé par `UserEnrollment`** : le breakdown `course_stats` et le total `total_available` portaient uniquement sur les cours "inscrits" (`UserEnrollment`, avec repli sur "cours où l'utilisateur a répondu à ≥1 question" si aucune inscription explicite). Sur retour utilisateur ("je veux que toutes les questions disponibles soient affichées... les cours jamais pratiqués doivent quand même être inclus"), ce scoping est supprimé : `course_stats` est maintenant construit sur `Course.objects.all()` et `total_available` sur `Question.objects.filter(qtype__in=PLAYABLE_QTYPES).count()` sans filtre de cours. Les ~30 lignes de logique `UserEnrollment`/fallback ont été supprimées de `StatsView.get` (le modèle `UserEnrollment` reste utilisé ailleurs — `IndexView`, `SessionConfigView` — pour le choix des cours à l'entraînement, ce n'est retiré que du calcul des stats). Conséquence attendue : `total_available` devient égal au `question_count` du dashboard admin dès lors que `PLAYABLE_QTYPES` couvre tous les qtypes réellement en base (c'était le cas : seuls multichoice/shortanswer/ddimageortext existent, `match` est inutilisé).
 
 ### Ce qui a été essayé puis retiré
 
@@ -30,6 +31,7 @@ Une note explicative sur `qcm/templates/qcm/stats.html` (sous "questions distinc
 `tests/test_stats.py`, classe `TestStatsPage` :
 - `test_stats_counts_ddimageortext_like_other_types` : une question ddimageortext dans un cours inscrit fait passer `total_available` de 2 à 3, et `course_stat["nb_available"]` (via `course_stats` dans le contexte) suit pareil.
 - `test_stats_note_accounts_for_ddimageortext_partial_credit` : une `UserAnswer` avec `fraction_override=0.5` et `is_correct=False` doit peser 0.5 (pas 0) dans `note_20` — RED avant le fix `_ua_fraction` (donnait 6.7 au lieu de 10.0 attendu sur 3 questions).
+- `test_stats_includes_courses_never_practiced` : un cours créé sans `UserEnrollment` et sans aucune `UserAnswer` doit quand même apparaître dans `course_stats` (avec `nb_done == 0`) et être compté dans `total_available` — RED avant la suppression du scoping `UserEnrollment`.
 
 ## Pattern à retenir
 

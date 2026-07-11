@@ -1240,26 +1240,11 @@ class StatsView(LoginRequiredMixin, View):
             pct_incorrect = round(incorrect / total_checks * 100)
 
         # --- Per-course stats ---
-        from .models import Course, UserEnrollment
+        # Tous les cours sont affichés, y compris ceux jamais pratiqués (issue #63) —
+        # le total doit refléter l'intégralité des questions disponibles.
+        all_courses = list(Course.objects.select_related("semester__study_year").all())
 
-        # Always prefer explicit enrollment (shows courses even with 0 answers)
-        enrollment_qs = UserEnrollment.objects.filter(user=user).select_related(
-            "course__semester__study_year"
-        )
-        if enrollment_qs.exists():
-            enrolled_courses = [e.course for e in enrollment_qs]
-        else:
-            # No enrollment records: fall back to courses with at least 1 answer
-            answered_course_ids = all_answers.values_list(
-                "question__course_id", flat=True
-            ).distinct()
-            enrolled_courses = list(
-                Course.objects.filter(pk__in=answered_course_ids).select_related(
-                    "semester__study_year"
-                )
-            )
-
-        course_stats = [_compute_course_block(c, all_answers) for c in enrolled_courses]
+        course_stats = [_compute_course_block(c, all_answers) for c in all_courses]
 
         # Sort by semester (study_year order → semester order → course name)
         def _sem_key(stat):
@@ -1276,10 +1261,7 @@ class StatsView(LoginRequiredMixin, View):
             stat["semester_label"] = str(sem) if sem else "Autres"
 
         # Global totals
-        total_available = Question.objects.filter(
-            course__in=[c.pk for c in enrolled_courses],
-            qtype__in=PLAYABLE_QTYPES,
-        ).count()
+        total_available = Question.objects.filter(qtype__in=PLAYABLE_QTYPES).count()
         total_done = all_answers.values("question_id").distinct().count()
         pct_done_global = (
             round(total_done / total_available * 100) if total_available > 0 else 0
