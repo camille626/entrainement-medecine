@@ -13,6 +13,11 @@ NAS Synology
         └── tous les fichiers nécessaires (données + config nginx) montés en
             bind-mount sous ${STORAGE_DIR}/ (ex: /volume1/docker/studymed/),
             indépendant du dossier interne où Portainer clone le repo
+  └── watchtower : stack Portainer indépendant (pas dans ce repo), surveille en
+        continu (1x/jour) les conteneurs portant le label
+        com.centurylinklabs.watchtower.enable=true (le service web en est doté,
+        voir docker-compose.yml) et les met à jour automatiquement dès qu'une
+        nouvelle image est publiée sur ghcr.io
 
 DSM (reverse-proxy) : termine le TLS, route vers le port nginx du stack
 ```
@@ -257,14 +262,31 @@ PermissionError: [Errno 13] Permission denied: '/app/staticfiles/admin'
 
 Correctif : File Station > `data/media/` et `data/static/` > **Propriétés** > **Permission** > ajouter le groupe **"Tout le monde"** avec accès **Lecture/Écriture**, puis redémarrer le conteneur `web`.
 
+### Dépannage : mise à jour automatique jamais déclenchée malgré watchtower actif
+
+Symptôme : watchtower tourne bien sur le NAS et met à jour d'autres stacks avec succès, mais le site studymed ne se met jamais à jour tout seul après un push sur `main`.
+
+Diagnostic : vérifier que le label est bien présent sur le conteneur `web` **réellement en cours d'exécution** (pas seulement dans `docker-compose.yml` du repo — un label ne prend effet qu'à la création du conteneur) :
+
+```bash
+docker inspect studymed-web-1 --format '{{json .Config.Labels}}'
+```
+
+Si `com.centurylinklabs.watchtower.enable` n'apparaît pas dans le résultat (seuls des labels `com.docker.compose.*` sont présents), c'est que le conteneur a été créé avant l'ajout du label (ou plus généralement avant le dernier changement de `docker-compose.yml`) et n'a jamais été recréé depuis. Un simple redémarrage du conteneur (reboot NAS, `restart: unless-stopped`) ne recrée pas le conteneur et ne rafraîchit donc pas ses labels.
+
+Correctif : Portainer > **Stacks** > `studymed` > **Pull and redeploy** (ou **Update the stack**) pour recréer le conteneur `web` avec la configuration à jour. Voir [Mises à jour ultérieures](#mises-a-jour-ulterieures) pour la distinction entre mise à jour de contenu d'image (automatique) et changement de configuration (manuel, une fois).
+
 ## 6. Tester
 
 `https://studymed.ascot63.synology.me` doit afficher l'application, et la connexion/inscription doit fonctionner sans erreur CSRF.
 
 ## Mises à jour ultérieures
 
-1. Un push sur `main` republie automatiquement l'image `latest` sur ghcr.io.
-2. Dans Portainer : **Stacks** > `studymed` > **Pull and redeploy** (ou re-déployer le stack) pour récupérer la nouvelle image et redémarrer les conteneurs.
+Deux mécanismes distincts, à ne pas confondre :
+
+**Mise à jour du contenu de l'image `web`** (nouveau push sur `main` touchant le code applicatif) : automatique, sans action manuelle. Un push republie l'image `latest` sur ghcr.io ; watchtower (stack Portainer indépendant sur le NAS, voir [Vue d'ensemble](#vue-densemble)) surveille en continu les conteneurs portant le label `com.centurylinklabs.watchtower.enable=true` — le service `web` en est doté — et le met à jour dès qu'une nouvelle image est disponible.
+
+**Changement de `docker-compose.yml` lui-même** (nouveau label, nouvelle variable d'environnement, nouveau volume, etc.) : nécessite toujours un redéploiement manuel unique dans Portainer (**Stacks** > `studymed` > **Pull and redeploy**, ou **Update the stack**). Watchtower ne recrée un conteneur que pour appliquer une nouvelle image, jamais pour appliquer un changement de configuration — un conteneur déjà en cours d'exécution garde la config (labels compris) qu'il avait à sa création tant qu'il n'est pas explicitement recréé. Voir [Dépannage](#depannage-mise-a-jour-automatique-jamais-declenchee-malgre-watchtower-actif) si ce redéploiement a été oublié.
 
 Les migrations et le `collectstatic` sont rejoués automatiquement par `entrypoint.sh` à chaque redémarrage du conteneur `web`.
 
