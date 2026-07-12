@@ -142,6 +142,7 @@ class Question(models.Model):
     qtype = models.CharField(max_length=50, choices=QTYPE_CHOICES, default=MULTICHOICE)
     moodle_id = models.IntegerField(unique=True, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     tags = models.ManyToManyField(Tag, blank=True, related_name="questions")
 
     class Meta:

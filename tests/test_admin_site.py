@@ -336,6 +336,155 @@ class TestAdminQuestions:
         question.refresh_from_db()
         assert question.text == "<p>Texte modifié</p>"
 
+    def test_list_filtered_by_tags_include(self, client, staff_user, question, course):
+        """Le filtre 'tags' (inclusion multi-sélection) ne montre que les questions taguées."""
+        from qcm.models import Tag
+
+        tag = Tag.objects.create(name="hemato")
+        question.tags.add(tag)
+        other = Question.objects.create(
+            text="Question sans tag hemato", course=course, qtype="multichoice"
+        )
+        client.force_login(staff_user)
+        response = client.get(f"/admin-site/questions/?tags={tag.pk}")
+        content = response.content.decode()
+        assert "Question test admin" in content
+        assert other.text not in content
+
+    def test_list_filtered_by_tags_include_is_ored(self, client, staff_user, course):
+        """Sélectionner plusieurs tags à inclure retourne les questions ayant au moins un des tags."""
+        from qcm.models import Tag
+
+        tag_a = Tag.objects.create(name="tag-a")
+        tag_b = Tag.objects.create(name="tag-b")
+        q_a = Question.objects.create(
+            text="Question avec tag A", course=course, qtype="multichoice"
+        )
+        q_a.tags.add(tag_a)
+        q_b = Question.objects.create(
+            text="Question avec tag B", course=course, qtype="multichoice"
+        )
+        q_b.tags.add(tag_b)
+        q_none = Question.objects.create(
+            text="Question sans tag A ni B", course=course, qtype="multichoice"
+        )
+        client.force_login(staff_user)
+        response = client.get(f"/admin-site/questions/?tags={tag_a.pk}&tags={tag_b.pk}")
+        content = response.content.decode()
+        assert q_a.text in content
+        assert q_b.text in content
+        assert q_none.text not in content
+
+    def test_list_filtered_by_exclude_tags(self, client, staff_user, question, course):
+        """Le filtre 'exclude_tags' exclut les questions portant un des tags sélectionnés."""
+        from qcm.models import Tag
+
+        tag = Tag.objects.create(name="a-exclure")
+        question.tags.add(tag)
+        other = Question.objects.create(
+            text="Question sans le tag exclu", course=course, qtype="multichoice"
+        )
+        client.force_login(staff_user)
+        response = client.get(f"/admin-site/questions/?exclude_tags={tag.pk}")
+        content = response.content.decode()
+        assert "Question test admin" not in content
+        assert other.text in content
+
+    def test_list_filtered_by_exclude_courses(
+        self, client, staff_user, question, course
+    ):
+        """Le filtre 'exclude_courses' exclut toutes les questions des cours sélectionnés."""
+        other_course = Course.objects.create(name="Autre cours", short_name="autre")
+        other = Question.objects.create(
+            text="Question d'un autre cours", course=other_course, qtype="multichoice"
+        )
+        client.force_login(staff_user)
+        response = client.get(f"/admin-site/questions/?exclude_courses={course.pk}")
+        content = response.content.decode()
+        assert "Question test admin" not in content
+        assert other.text in content
+
+    def test_tags_dropdown_scoped_to_selected_course(
+        self, client, staff_user, question, course
+    ):
+        """Quand un cours est sélectionné, seuls les tags de ce cours apparaissent dans le filtre par tag."""
+        from qcm.models import Tag
+
+        other_course = Course.objects.create(name="Autre cours 2", short_name="autre2")
+        tag_this_course = Tag.objects.create(name="tag-du-cours")
+        question.tags.add(tag_this_course)
+        other_question = Question.objects.create(
+            text="Q autre cours", course=other_course, qtype="multichoice"
+        )
+        tag_other_course = Tag.objects.create(name="tag-autre-cours")
+        other_question.tags.add(tag_other_course)
+
+        client.force_login(staff_user)
+        response = client.get(f"/admin-site/questions/?course={course.pk}")
+        content = response.content.decode()
+        assert "tag-du-cours" in content
+        assert "tag-autre-cours" not in content
+
+    def test_list_filtered_no_chapitre(self, client, staff_user, question, course):
+        """Le filtre 'sans tag chapitre' exclut les questions ayant un tag chapitre."""
+        from qcm.models import Tag, TagCategory
+
+        cat = TagCategory.objects.create(
+            name="Chapitres", tag_type=TagCategory.CHAPITRE
+        )
+        tag = Tag.objects.create(name="chap1", category=cat)
+        question.tags.add(tag)
+        untagged = Question.objects.create(
+            text="Question sans tag chapitre", course=course, qtype="multichoice"
+        )
+        client.force_login(staff_user)
+        response = client.get("/admin-site/questions/?no_chapitre=1")
+        content = response.content.decode()
+        assert "Question test admin" not in content
+        assert untagged.text in content
+
+    def test_list_filtered_no_ec(self, client, staff_user, question, course):
+        """Le filtre 'sans tag EC' exclut les questions ayant un tag EC (souscategorie)."""
+        from qcm.models import Tag, TagCategory
+
+        cat = TagCategory.objects.create(name="EC", tag_type=TagCategory.SOUSCATEGORIE)
+        tag = Tag.objects.create(name="semio", category=cat)
+        question.tags.add(tag)
+        untagged = Question.objects.create(
+            text="Question sans tag EC", course=course, qtype="multichoice"
+        )
+        client.force_login(staff_user)
+        response = client.get("/admin-site/questions/?no_ec=1")
+        content = response.content.decode()
+        assert "Question test admin" not in content
+        assert untagged.text in content
+
+    def test_list_shows_last_modified_column(self, client, staff_user, question):
+        """La liste affiche la date de dernière modification de chaque question."""
+        client.force_login(staff_user)
+        response = client.get("/admin-site/questions/")
+        content = response.content.decode()
+        assert question.updated_at.strftime("%d/%m/%Y") in content
+
+    def test_list_sortable_by_last_modified(self, client, staff_user, question, course):
+        """Le tri par dernière modification (desc) place la question la plus récente en premier."""
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        older = Question.objects.create(
+            text="Question plus ancienne", course=course, qtype="multichoice"
+        )
+        Question.objects.filter(pk=older.pk).update(
+            updated_at=timezone.now() - timedelta(days=5)
+        )
+        client.force_login(staff_user)
+        response = client.get("/admin-site/questions/?sort=-updated_at")
+        content = response.content.decode()
+        assert content.index("Question test admin") < content.index(
+            "Question plus ancienne"
+        )
+
     def test_delete_list_form_carries_current_filters_as_back_url(
         self, client, staff_user, question, course
     ):

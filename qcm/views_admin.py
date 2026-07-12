@@ -371,18 +371,30 @@ class AdminChangeUserYearView(StaffRequiredMixin, View):
 class AdminQuestionsView(StaffRequiredMixin, View):
     template_name = "qcm/admin_site/questions.html"
 
+    SORT_FIELDS = {"updated_at", "-updated_at"}
+
     def get(self, request):
         from django.core.paginator import Paginator
+
+        from .models import Tag, TagCategory
 
         # Guard against non-numeric values (e.g. "None" string from duplicate params)
         raw_course = request.GET.get("course", "")
         course_id = raw_course if raw_course.isdigit() else None
         qtype = request.GET.get("qtype", "").strip()
         search = request.GET.get("q", "").strip()
+        tag_ids = [t for t in request.GET.getlist("tags") if t.isdigit()]
+        exclude_tag_ids = [
+            t for t in request.GET.getlist("exclude_tags") if t.isdigit()
+        ]
+        exclude_course_ids = [
+            c for c in request.GET.getlist("exclude_courses") if c.isdigit()
+        ]
+        no_chapitre = request.GET.get("no_chapitre", "") == "1"
+        no_ec = request.GET.get("no_ec", "") == "1"
+        sort = request.GET.get("sort", "").strip()
 
-        qs = Question.objects.select_related("course").order_by(
-            "course__name", "moodle_id"
-        )
+        qs = Question.objects.select_related("course")
         if course_id:
             qs = qs.filter(course_id=course_id)
         if qtype:
@@ -391,8 +403,31 @@ class AdminQuestionsView(StaffRequiredMixin, View):
             from django.db.models import Q
 
             qs = qs.filter(Q(text__icontains=search))
+        if tag_ids:
+            qs = qs.filter(tags__id__in=tag_ids).distinct()
+        if exclude_tag_ids:
+            qs = qs.exclude(tags__id__in=exclude_tag_ids)
+        if exclude_course_ids:
+            qs = qs.exclude(course_id__in=exclude_course_ids)
+        if no_chapitre:
+            qs = qs.exclude(tags__category__tag_type=TagCategory.CHAPITRE).distinct()
+        if no_ec:
+            qs = qs.exclude(
+                tags__category__tag_type=TagCategory.SOUSCATEGORIE
+            ).distinct()
+
+        if sort in self.SORT_FIELDS:
+            qs = qs.order_by(sort, "course__name", "moodle_id")
+        else:
+            qs = qs.order_by("course__name", "moodle_id")
 
         courses = Course.objects.order_by("name")
+
+        available_tags_qs = Tag.objects.order_by("name")
+        if course_id:
+            available_tags_qs = available_tags_qs.filter(
+                questions__course_id=course_id
+            ).distinct()
 
         paginator = Paginator(qs, 50)
         page_number = request.GET.get("page", 1)
@@ -409,6 +444,13 @@ class AdminQuestionsView(StaffRequiredMixin, View):
                 "selected_course": course_id or "",
                 "selected_qtype": qtype,
                 "search": search,
+                "available_tags": available_tags_qs,
+                "selected_tag_ids": {int(t) for t in tag_ids},
+                "selected_exclude_tag_ids": {int(t) for t in exclude_tag_ids},
+                "selected_exclude_course_ids": {int(c) for c in exclude_course_ids},
+                "no_chapitre": no_chapitre,
+                "no_ec": no_ec,
+                "sort": sort,
                 "total": qs.count(),
             },
         )

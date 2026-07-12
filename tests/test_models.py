@@ -75,6 +75,16 @@ class TestQuestion:
     def test_str_representation(self, question):
         assert "200" in str(question)
 
+    def test_updated_at_set_on_create(self, question):
+        assert question.updated_at is not None
+
+    def test_updated_at_changes_on_save(self, question):
+        original = question.updated_at
+        question.text = "<p>Texte modifié</p>"
+        question.save()
+        question.refresh_from_db()
+        assert question.updated_at > original
+
 
 @pytest.mark.django_db
 class TestAnswer:
