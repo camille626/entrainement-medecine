@@ -520,6 +520,132 @@ class TestAdminQuestions:
         assert response.status_code == 302
         assert response["Location"] == "/admin-site/questions/"
 
+    def test_bulk_delete_requires_staff(self, client, regular_user, question):
+        """Un utilisateur non-staff est redirigé, la question n'est pas supprimée."""
+        client.force_login(regular_user)
+        response = client.post(
+            "/admin-site/questions/supprimer-multiple/",
+            {"pks": [str(question.pk)]},
+        )
+        assert response.status_code == 302
+        assert Question.objects.filter(pk=question.pk).exists()
+
+    def test_bulk_delete_requires_login(self, client, question):
+        """Un utilisateur anonyme est redirigé vers la connexion."""
+        response = client.post(
+            "/admin-site/questions/supprimer-multiple/",
+            {"pks": [str(question.pk)]},
+        )
+        assert response.status_code == 302
+        assert Question.objects.filter(pk=question.pk).exists()
+
+    def test_bulk_delete_removes_selected_questions(self, client, staff_user, course):
+        """POST avec plusieurs pks supprime toutes les questions sélectionnées, et seulement elles."""
+        q1 = Question.objects.create(
+            text="A supprimer 1", course=course, qtype="multichoice"
+        )
+        q2 = Question.objects.create(
+            text="A supprimer 2", course=course, qtype="multichoice"
+        )
+        q3 = Question.objects.create(
+            text="A garder", course=course, qtype="multichoice"
+        )
+        client.force_login(staff_user)
+        response = client.post(
+            "/admin-site/questions/supprimer-multiple/",
+            {"pks": [str(q1.pk), str(q2.pk)]},
+        )
+        assert response.status_code == 302
+        assert not Question.objects.filter(pk=q1.pk).exists()
+        assert not Question.objects.filter(pk=q2.pk).exists()
+        assert Question.objects.filter(pk=q3.pk).exists()
+
+    def test_bulk_delete_with_empty_selection_is_noop(
+        self, client, staff_user, question
+    ):
+        """Sans pks, aucune suppression n'a lieu, la redirection reste normale (pas d'erreur 500)."""
+        client.force_login(staff_user)
+        response = client.post("/admin-site/questions/supprimer-multiple/", {})
+        assert response.status_code == 302
+        assert Question.objects.filter(pk=question.pk).exists()
+
+    def test_bulk_delete_ignores_invalid_pks(self, client, staff_user, question):
+        """Des pks non numériques ou inexistants sont ignorés sans lever d'erreur."""
+        client.force_login(staff_user)
+        response = client.post(
+            "/admin-site/questions/supprimer-multiple/",
+            {"pks": ["abc", "999999", str(question.pk)]},
+        )
+        assert response.status_code == 302
+        assert not Question.objects.filter(pk=question.pk).exists()
+
+    def test_bulk_delete_redirects_to_posted_back_url(
+        self, client, staff_user, question
+    ):
+        """La suppression en masse redirige vers back_url si fourni, en conservant les filtres."""
+        client.force_login(staff_user)
+        back_url = "/admin-site/questions/?course=9&qtype=ddimageortext"
+        response = client.post(
+            "/admin-site/questions/supprimer-multiple/",
+            {"pks": [str(question.pk)], "back_url": back_url},
+        )
+        assert response.status_code == 302
+        assert response["Location"] == back_url
+
+    def test_bulk_delete_without_back_url_defaults_to_list(
+        self, client, staff_user, question
+    ):
+        """Sans back_url, la redirection va vers la liste non filtrée."""
+        client.force_login(staff_user)
+        response = client.post(
+            "/admin-site/questions/supprimer-multiple/",
+            {"pks": [str(question.pk)]},
+        )
+        assert response.status_code == 302
+        assert response["Location"] == "/admin-site/questions/"
+
+    def test_list_renders_row_checkboxes(self, client, staff_user, question):
+        """Chaque ligne de la liste affiche une checkbox de sélection nommée 'pks'."""
+        client.force_login(staff_user)
+        response = client.get("/admin-site/questions/")
+        content = response.content.decode()
+        assert f'name="pks" value="{question.pk}"' in content
+        assert 'class="form-check-input q-select-checkbox"' in content
+
+    def test_list_renders_select_all_checkbox(self, client, staff_user, question):
+        """La liste affiche une checkbox 'tout sélectionner' pour la page courante."""
+        client.force_login(staff_user)
+        response = client.get("/admin-site/questions/")
+        content = response.content.decode()
+        assert 'id="selectAllQuestions"' in content
+
+    def test_list_renders_bulk_delete_action_bar(self, client, staff_user, question):
+        """La barre d'action bulk (compteur + bouton) est présente dans le HTML."""
+        client.force_login(staff_user)
+        response = client.get("/admin-site/questions/")
+        content = response.content.decode()
+        assert 'id="bulkDeleteBtn"' in content
+        assert 'id="bulkSelectedCount"' in content
+
+    def test_list_bulk_delete_form_targets_bulk_delete_url(
+        self, client, staff_user, question
+    ):
+        """Le formulaire de confirmation bulk pointe vers la route de suppression en masse."""
+        client.force_login(staff_user)
+        response = client.get("/admin-site/questions/")
+        content = response.content.decode()
+        assert "/admin-site/questions/supprimer-multiple/" in content
+
+    def test_list_includes_shift_click_range_selection_script(
+        self, client, staff_user, question
+    ):
+        """Le JS de sélection par plage (shift+clic) est présent dans la page."""
+        client.force_login(staff_user)
+        response = client.get("/admin-site/questions/")
+        content = response.content.decode()
+        assert "e.shiftKey" in content
+        assert "lastClickedIndex" in content
+
     def test_edit_page_shows_delete_button(self, client, staff_user, question):
         """La page de modification propose un bouton de suppression."""
         client.force_login(staff_user)

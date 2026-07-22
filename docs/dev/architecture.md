@@ -29,7 +29,7 @@ Une section staff-only `/admin-site/` permet de gérer les données sans passer 
 | `/admin-site/` | Tableau de bord (compteurs) |
 | `/admin-site/demandes/` | Accepter/refuser les inscriptions |
 | `/admin-site/utilisateurs/` | Liste, activer/désactiver, supprimer, changer d'année |
-| `/admin-site/questions/` | Liste paginée, filtrable (cours, type, texte, tags à inclure/exclure, cours à exclure, sans tag chapitre/EC), triable par date de modification ; modifier, supprimer |
+| `/admin-site/questions/` | Liste paginée, filtrable (cours, type, texte, tags à inclure/exclure, cours à exclure, sans tag chapitre/EC), triable par date de modification ; modifier, supprimer, sélection multiple (avec shift-clic pour sélectionner une plage) et suppression en masse |
 | `/admin-site/cours/` | Ajouter un cours, assigner un semestre |
 | `/admin-site/tags/` | Ajouter des tags EC/chapitre avec leur appartenance |
 

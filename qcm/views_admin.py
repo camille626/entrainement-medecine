@@ -685,6 +685,16 @@ class AdminQuestionDeleteView(StaffRequiredMixin, View):
         return redirect(back_url)
 
 
+class AdminQuestionsBulkDeleteView(StaffRequiredMixin, View):
+    def post(self, request):
+        raw_pks = request.POST.getlist("pks")
+        valid_pks = [int(pk) for pk in raw_pks if pk.isdigit()]
+        back_url = request.POST.get("back_url", "/admin-site/questions/")
+        if valid_pks:
+            Question.objects.filter(pk__in=valid_pks).delete()
+        return redirect(back_url)
+
+
 class AdminCoursesView(StaffRequiredMixin, View):
     template_name = "qcm/admin_site/courses.html"
 
