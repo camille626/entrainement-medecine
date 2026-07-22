@@ -168,6 +168,11 @@ urlpatterns = [
         name="admin_question_delete",
     ),
     path(
+        "admin-site/questions/supprimer-multiple/",
+        views_admin.AdminQuestionsBulkDeleteView.as_view(),
+        name="admin_questions_bulk_delete",
+    ),
+    path(
         "admin-site/cours/",
         views_admin.AdminCoursesView.as_view(),
         name="admin_courses",

@@ -134,11 +134,22 @@
   {% endif %}
 </form>
 
+<div class="d-flex align-items-center gap-2 mb-2">
+  <span class="small text-muted"><span id="bulkSelectedCount">0</span> question(s) sélectionnée(s)</span>
+  <button type="button" id="bulkDeleteBtn" class="btn btn-sm btn-outline-danger" disabled
+          data-bs-toggle="modal" data-bs-target="#bulkDeleteModal">
+    🗑 Supprimer la sélection
+  </button>
+</div>
+
 {% if questions %}
 <div class="table-responsive">
   <table class="table table-hover table-sm align-middle">
     <thead class="table-light">
       <tr>
+        <th style="width:2rem;">
+          <input type="checkbox" id="selectAllQuestions" class="form-check-input" aria-label="Tout sélectionner">
+        </th>
         <th>#</th>
         <th>Cours</th>
         <th>Type</th>
@@ -158,6 +169,9 @@
     <tbody>
       {% for q in questions %}
       <tr>
+        <td>
+          <input type="checkbox" name="pks" value="{{ q.pk }}" class="form-check-input q-select-checkbox">
+        </td>
         <td class="text-muted small">{{ q.moodle_id|default:"—" }}</td>
         <td class="small">
           <div class="fw-semibold">{{ q.course.name }}</div>
@@ -240,6 +254,30 @@
   </div>
 </div>
 
+<!-- Modal confirmation suppression multiple -->
+<div class="modal fade" id="bulkDeleteModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title text-danger">⚠ Confirmer la suppression multiple</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Supprimer <strong id="bulkDeleteCount">0</strong> question(s) sélectionnée(s) ?</p>
+        <p class="text-danger small mb-0">Les réponses et données associées seront supprimées.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+        <form method="post" id="bulkDeleteForm" class="m-0" action="/admin-site/questions/supprimer-multiple/">
+          {% csrf_token %}
+          <input type="hidden" name="back_url" value="{{ request.get_full_path }}">
+          <button type="submit" class="btn btn-danger">Supprimer</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 document.getElementById('deleteQModal').addEventListener('show.bs.modal', function(e) {
   const btn = e.relatedTarget;
@@ -256,5 +294,76 @@ function filterDropdownOptions(input) {
     row.style.display = label.includes(term) ? '' : 'none';
   });
 }
+
+// ── Sélection multiple + suppression en masse ──────────────────────────────
+(function () {
+  const selectAll = document.getElementById('selectAllQuestions');
+  const rowCheckboxes = () => Array.from(document.querySelectorAll('.q-select-checkbox'));
+  const countLabel = document.getElementById('bulkSelectedCount');
+  const deleteBtn = document.getElementById('bulkDeleteBtn');
+  const modalCount = document.getElementById('bulkDeleteCount');
+  const bulkForm = document.getElementById('bulkDeleteForm');
+
+  if (!selectAll || !bulkForm) return;
+
+  function selectedCheckboxes() {
+    return rowCheckboxes().filter(cb => cb.checked);
+  }
+
+  function updateBulkUI() {
+    const selected = selectedCheckboxes();
+    const all = rowCheckboxes();
+    countLabel.textContent = selected.length;
+    deleteBtn.disabled = selected.length === 0;
+    selectAll.checked = all.length > 0 && selected.length === all.length;
+    selectAll.indeterminate = selected.length > 0 && selected.length < all.length;
+  }
+
+  selectAll.addEventListener('change', function () {
+    rowCheckboxes().forEach(cb => { cb.checked = selectAll.checked; });
+    updateBulkUI();
+  });
+
+  let lastClickedIndex = null;
+
+  document.addEventListener('click', function (e) {
+    if (!e.target.classList.contains('q-select-checkbox')) return;
+    const boxes = rowCheckboxes();
+    const currentIndex = boxes.indexOf(e.target);
+    if (e.shiftKey && lastClickedIndex !== null) {
+      const start = Math.min(lastClickedIndex, currentIndex);
+      const end = Math.max(lastClickedIndex, currentIndex);
+      const checkedState = e.target.checked;
+      for (let i = start; i <= end; i++) {
+        boxes[i].checked = checkedState;
+      }
+      updateBulkUI();
+    }
+    lastClickedIndex = currentIndex;
+  });
+
+  document.addEventListener('change', function (e) {
+    if (e.target.classList.contains('q-select-checkbox')) {
+      updateBulkUI();
+    }
+  });
+
+  document.getElementById('bulkDeleteModal').addEventListener('show.bs.modal', function () {
+    const selected = selectedCheckboxes();
+    modalCount.textContent = selected.length;
+
+    bulkForm.querySelectorAll('input[name="pks"]').forEach(el => el.remove());
+
+    selected.forEach(function (cb) {
+      const hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.name = 'pks';
+      hidden.value = cb.value;
+      bulkForm.appendChild(hidden);
+    });
+  });
+
+  updateBulkUI();
+})();
 </script>
 {% endblock content %}
