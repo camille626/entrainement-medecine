@@ -5,26 +5,26 @@
   <div class="col-md-2 mb-3">
     <div class="list-group list-group-flush">
       <a href="/admin-site/" class="list-group-item list-group-item-action {% if request.path == '/admin-site/' %}active{% endif %}">
-        📊 Tableau de bord
+        <svg class="bi"><use href="#bi-bar-chart-fill"></use></svg> Tableau de bord
       </a>
       <a href="/admin-site/demandes/" class="list-group-item list-group-item-action {% if '/demandes' in request.path %}active{% endif %}">
-        📋 Demandes
+        <svg class="bi"><use href="#bi-clipboard"></use></svg> Demandes
         {% if admin_pending_registrations %}
         <span class="badge bg-danger ms-1">{{ admin_pending_registrations }}</span>
         {% endif %}
       </a>
       <a href="/admin-site/utilisateurs/" class="list-group-item list-group-item-action {% if '/utilisateurs' in request.path %}active{% endif %}">
-        👥 Utilisateurs
+        <svg class="bi"><use href="#bi-people-fill"></use></svg> Utilisateurs
       </a>
       <a href="/admin-site/cours/" class="list-group-item list-group-item-action {% if '/cours' in request.path %}active{% endif %}">
-        📚 Cours
+        <svg class="bi"><use href="#bi-book"></use></svg> Cours
       </a>
       <a href="/admin-site/tags/" class="list-group-item list-group-item-action {% if '/tags' in request.path %}active{% endif %}">
-        🏷 Tags
+        <svg class="bi"><use href="#bi-tags-fill"></use></svg> Tags
       </a>
       <hr class="my-1">
       <a href="/admin/" class="list-group-item list-group-item-action text-muted small">
-        ⚙ Django Admin
+        <svg class="bi"><use href="#bi-gear-fill"></use></svg> Django Admin
       </a>
     </div>
   </div>

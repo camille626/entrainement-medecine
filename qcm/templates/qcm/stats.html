@@ -1,10 +1,11 @@
 {% extends "qcm/base.html" %}
+{% load static %}
 {% block title %}Statistiques — StudyMed{% endblock %}
 
 {% block content %}
 <div class="row">
   <div class="col-12">
-    <h2 class="mb-4">📊 Mes statistiques</h2>
+    <h2 class="mb-4"><svg class="bi"><use href="#bi-bar-chart-fill"></use></svg> Mes statistiques</h2>
 
     {% if total_checks == 0 %}
     <div class="alert alert-info">
@@ -17,9 +18,9 @@
 
       <!-- Note moyenne -->
       <div class="col-md-3">
-        <div class="card text-center border-primary h-100">
+        <div class="card text-center h-100">
           <div class="card-body d-flex flex-column justify-content-center">
-            <div class="display-6 fw-bold text-primary">{{ note_20 }}<small class="fs-5">/20</small></div>
+            <div class="display-6 fw-bold">{{ note_20 }}<small class="fs-5">/20</small></div>
             <div class="small text-muted mt-1">Note moyenne</div>
           </div>
         </div>
@@ -43,10 +44,10 @@
 
       <!-- Questions ancrées -->
       <div class="col-md-3">
-        <div class="card text-center border-warning h-100">
+        <div class="card text-center h-100">
           <div class="card-body d-flex flex-column justify-content-center">
-            <div class="display-6 fw-bold text-warning">{{ total_anchored }}</div>
-            <div class="small text-muted">Questions ancrées ⚓</div>
+            <div class="display-6 fw-bold">{{ total_anchored }}</div>
+            <div class="small text-muted">Questions ancrées <svg class="bi"><use href="#bi-anchor"></use></svg></div>
             <div class="small text-muted">{{ pct_anchored }}% du total</div>
           </div>
         </div>
@@ -54,9 +55,9 @@
 
       <!-- % correctes -->
       <div class="col-md-3">
-        <div class="card text-center border-success h-100">
+        <div class="card text-center h-100">
           <div class="card-body d-flex flex-column justify-content-center">
-            <div class="display-6 fw-bold text-success">{{ pct_correct }}%</div>
+            <div class="display-6 fw-bold">{{ pct_correct }}%</div>
             <div class="small text-muted">Entièrement correctes</div>
             <div class="small text-muted">{{ total_sessions }} sessions</div>
           </div>
@@ -70,25 +71,25 @@
         <h6 class="card-title mb-3">Répartition des questions</h6>
         <div class="progress" style="height: 24px;">
           {% if pct_correct > 0 %}
-          <div class="progress-bar bg-success" style="width: {{ pct_correct }}%" title="{{ pct_correct }}% correctes">
+          <div class="progress-bar bg-primary" style="width: {{ pct_correct }}%" title="{{ pct_correct }}% correctes">
             {% if pct_correct > 8 %}{{ pct_correct }}%{% endif %}
           </div>
           {% endif %}
           {% if pct_partial > 0 %}
-          <div class="progress-bar bg-warning" style="width: {{ pct_partial }}%" title="{{ pct_partial }}% partielles">
+          <div class="progress-bar bg-secondary" style="width: {{ pct_partial }}%" title="{{ pct_partial }}% partielles">
             {% if pct_partial > 8 %}{{ pct_partial }}%{% endif %}
           </div>
           {% endif %}
           {% if pct_incorrect > 0 %}
-          <div class="progress-bar bg-danger" style="width: {{ pct_incorrect }}%" title="{{ pct_incorrect }}% incorrectes">
+          <div class="progress-bar bg-qcm-purple" style="width: {{ pct_incorrect }}%" title="{{ pct_incorrect }}% incorrectes">
             {% if pct_incorrect > 8 %}{{ pct_incorrect }}%{% endif %}
           </div>
           {% endif %}
         </div>
         <div class="d-flex gap-3 mt-2 small">
-          <span><span class="badge bg-success">✓</span> {{ correct }} correctes</span>
-          <span><span class="badge bg-warning text-dark">~</span> {{ partial }} partielles</span>
-          <span><span class="badge bg-danger">✗</span> {{ incorrect }} incorrectes</span>
+          <span><span class="badge bg-primary"><svg class="bi"><use href="#bi-check-lg"></use></svg></span> {{ correct }} correctes</span>
+          <span><span class="badge bg-secondary">~</span> {{ partial }} partielles</span>
+          <span><span class="badge bg-qcm-purple"><svg class="bi"><use href="#bi-x-lg"></use></svg></span> {{ incorrect }} incorrectes</span>
           <span class="text-muted ms-auto">sur {{ total_checks }} tentatives</span>
         </div>
       </div>
@@ -125,7 +126,7 @@
                 <th class="text-center">Disponibles</th>
                 <th class="text-center">Progression</th>
                 <th class="text-center">Note /20</th>
-                <th class="text-center">Ancrées ⚓</th>
+                <th class="text-center">Ancrées <svg class="bi"><use href="#bi-anchor"></use></svg></th>
               </tr>
             </thead>
             <tbody>
@@ -133,7 +134,7 @@
               {% ifchanged s.semester_label %}
               <tr class="bg-body-secondary">
                 <td colspan="7" class="fw-semibold small text-muted py-1 px-2">
-                  📅 {{ s.semester_label }}
+                  <svg class="bi"><use href="#bi-calendar3"></use></svg> {{ s.semester_label }}
                 </td>
               </tr>
               {% endifchanged %}
@@ -156,12 +157,12 @@
                   </div>
                 </td>
                 <td class="text-center">
-                  <span class="fw-bold {% if s.note_20 >= 14 %}text-success{% elif s.note_20 >= 10 %}text-warning{% elif s.note_20 > 0 %}text-danger{% else %}text-muted{% endif %}">
+                  <span class="fw-bold {% if s.note_20 >= 14 %}text-primary{% elif s.note_20 >= 10 %}text-secondary{% elif s.note_20 > 0 %}text-qcm-purple{% else %}text-muted{% endif %}">
                     {% if s.nb_done > 0 %}{{ s.note_20 }}{% else %}—{% endif %}
                   </span>
                 </td>
                 <td class="text-center">
-                  <span class="text-warning fw-bold">{{ s.nb_anchored }}</span>
+                  <span class="fw-bold">{{ s.nb_anchored }}</span>
                   {% if s.nb_available > 0 %}<small class="text-muted">/{{ s.nb_available }}</small>{% endif %}
                 </td>
               </tr>
@@ -184,7 +185,7 @@
 {{ chart_checks|json_script:"d-chart-checks" }}
 {{ chart_daily|json_script:"d-chart-daily" }}
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="{% static 'qcm/vendor/chartjs/chart.umd.min.js' %}"></script>
 <script>
 const chartLabels = JSON.parse(document.getElementById('d-chart-labels').textContent);
 const chartNotes  = JSON.parse(document.getElementById('d-chart-notes').textContent);
@@ -210,8 +211,8 @@ const chart = new Chart(document.getElementById('progressChart'), {
       {
         label: 'Questions',
         data: chartChecks,
-        borderColor: '#198754',
-        backgroundColor: 'rgba(25,135,84,0.1)',
+        borderColor: '#0d6efd',
+        backgroundColor: 'rgba(13,110,253,0.1)',
         tension: 0.3,
         fill: true,
         pointRadius: 4,

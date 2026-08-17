@@ -46,7 +46,7 @@
         </td>
         <td>
           {% if req.certificate %}
-          <a href="{{ req.certificate.url }}" target="_blank" class="btn btn-sm btn-outline-secondary">📄 Voir</a>
+          <a href="{{ req.certificate.url }}" target="_blank" class="btn btn-sm btn-outline-secondary"><svg class="bi"><use href="#bi-file-earmark-text"></use></svg> Voir</a>
           {% else %}
           <span class="text-muted small">—</span>
           {% endif %}
@@ -56,11 +56,11 @@
           <div class="d-flex gap-1">
             <form method="post" action="/admin-site/demandes/{{ req.pk }}/accepter/" class="m-0">
               {% csrf_token %}
-              <button type="submit" class="btn btn-sm btn-success">✅ Accepter</button>
+              <button type="submit" class="btn btn-sm btn-success"><svg class="bi"><use href="#bi-check-circle-fill"></use></svg> Accepter</button>
             </form>
             <form method="post" action="/admin-site/demandes/{{ req.pk }}/refuser/" class="m-0">
               {% csrf_token %}
-              <button type="submit" class="btn btn-sm btn-outline-danger">✗ Refuser</button>
+              <button type="submit" class="btn btn-sm btn-outline-danger"><svg class="bi"><use href="#bi-x-lg"></use></svg> Refuser</button>
             </form>
           </div>
           {% elif req.message %}

@@ -7,8 +7,8 @@
   <form method="get" class="d-flex gap-2">
     <input type="text" name="q" value="{{ search }}" class="form-control form-control-sm"
            placeholder="Rechercher…" style="max-width:220px;">
-    <button type="submit" class="btn btn-sm btn-outline-secondary">🔍</button>
-    {% if search %}<a href="/admin-site/utilisateurs/" class="btn btn-sm btn-outline-secondary">✕</a>{% endif %}
+    <button type="submit" class="btn btn-sm btn-outline-secondary"><svg class="bi"><use href="#bi-search"></use></svg></button>
+    {% if search %}<a href="/admin-site/utilisateurs/" class="btn btn-sm btn-outline-secondary"><svg class="bi"><use href="#bi-x-lg"></use></svg></a>{% endif %}
   </form>
 </div>
 
@@ -55,7 +55,7 @@
               </option>
               {% endfor %}
             </select>
-            <button type="submit" class="btn btn-sm btn-outline-secondary" title="Changer les inscriptions">💾</button>
+            <button type="submit" class="btn btn-sm btn-outline-secondary" title="Changer les inscriptions"><svg class="bi"><use href="#bi-save-fill"></use></svg></button>
           </form>
         </td>
         <td>{% if u.is_staff %}<span class="badge bg-primary">Staff</span>{% endif %}</td>
@@ -75,7 +75,7 @@
               <button type="submit"
                       class="btn btn-sm {% if u.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}"
                       title="{% if u.is_active %}Désactiver{% else %}Réactiver{% endif %}">
-                {% if u.is_active %}⏸{% else %}▶{% endif %}
+                {% if u.is_active %}<svg class="bi"><use href="#bi-pause-fill"></use></svg>{% else %}<svg class="bi"><use href="#bi-play-fill"></use></svg>{% endif %}
               </button>
             </form>
             <!-- Supprimer avec confirmation -->
@@ -86,7 +86,7 @@
                     data-bs-target="#deleteModal"
                     data-user-pk="{{ u.pk }}"
                     data-user-name="{{ u.get_full_name|default:u.username }}">
-              🗑
+              <svg class="bi"><use href="#bi-trash"></use></svg>
             </button>
             {% else %}
             <span class="text-muted small">(vous)</span>
@@ -105,7 +105,7 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title text-danger">⚠ Confirmer la suppression</h5>
+        <h5 class="modal-title text-danger"><svg class="bi"><use href="#bi-exclamation-triangle-fill"></use></svg> Confirmer la suppression</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">

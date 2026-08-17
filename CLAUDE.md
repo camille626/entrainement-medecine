@@ -11,7 +11,7 @@ Plateforme web de QCMs interactifs pour l'apprentissage des cours de médecine (
 - **Environnement de développement**: VS Code Dev Container
 - **Qualité de Code**: pre-commit hooks avec ruff, mypy (avec django-stubs)
 - **Tests**: pytest + pytest-django
-- **Frontend**: Bootstrap 5 + HTMX (CDN, pas de build step)
+- **Frontend**: Bootstrap 5 + HTMX (dépendances auto-hébergées sous `qcm/static/qcm/vendor/`, pas de build step). Icônes : sprite SVG inline (`qcm/templates/qcm/_icon_sprite.html`), pas de police d'icônes externe.
 - **Documentation**: MkDocs & mkdocs-material
 
 ## Structure du Projet

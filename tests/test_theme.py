@@ -131,7 +131,7 @@ class TestHomeDashboardDarkMode:
 
         expected = {
             "/entrainement/": "btn-outline-primary",
-            "/statistiques/": "btn-outline-warning",
+            "/statistiques/": "btn-outline-qcm-purple",
             "/historique/": "btn-outline-secondary",
         }
         for href, outline_class in expected.items():

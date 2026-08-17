@@ -166,6 +166,12 @@ class TestConfigurationView:
         response = client.get("/entrainement/")
         assert f"/entrainement/session/{session.pk}/".encode() not in response.content
 
+    def test_empty_semester_not_shown(self, client, course, study_year):
+        """Un semestre sans cours ne doit pas afficher d'en-tête vide (issue #113)."""
+        Semester.objects.create(study_year=study_year, name="S9", order=9)
+        response = client.get("/entrainement/")
+        assert b"S9" not in response.content
+
 
 # ---------------------------------------------------------------------------
 # Tests de la page de question

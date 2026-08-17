@@ -31,7 +31,7 @@
     <input type="hidden" name="qroc_text" value="{{ qroc_text }}">
     <input type="hidden" name="self_eval" value="correct">
     <button type="submit" class="btn btn-success">
-      ✓ J'avais bon
+      <svg class="bi"><use href="#bi-check-lg"></use></svg> J'avais bon
     </button>
   </form>
 
@@ -44,7 +44,7 @@
     <input type="hidden" name="qroc_text" value="{{ qroc_text }}">
     <input type="hidden" name="self_eval" value="incorrect">
     <button type="submit" class="btn btn-danger">
-      ✗ J'avais faux
+      <svg class="bi"><use href="#bi-x-lg"></use></svg> J'avais faux
     </button>
   </form>
 </div>
@@ -56,7 +56,7 @@
           hx-get="/errata/question/{{ question.pk }}/?qroc_text={{ qroc_text|urlencode }}&prefill_type=qroc_answer"
           hx-target="#errata-form-{{ question.pk }}"
           hx-swap="innerHTML">
-    ⚠&#xFE0E; Suggérer cette réponse comme variante acceptée
+    <svg class="bi"><use href="#bi-exclamation-triangle-fill"></use></svg> Suggérer cette réponse comme variante acceptée
   </button>
   <div id="errata-form-{{ question.pk }}" class="mt-2"></div>
 </div>
