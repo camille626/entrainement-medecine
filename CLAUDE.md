@@ -153,6 +153,14 @@ uv run --active python manage.py seed_trophies
 # déploiement, ex: NAS) — à lancer une seule fois sur une base vierge
 uv run --active python manage.py import_fixture --fixture fixture.json [--media-zip media.zip]
 
+# Fusionner/convertir/retirer des tags EC, scopé à un seul cours (idempotent, --dry-run
+# pour prévisualiser). Actions : merge (fusionne deux tags EC), convert-to-chapter
+# (bascule un tag EC en tag chapitre rattaché à un EC parent), remove (retire un tag
+# des questions d'un cours sans le supprimer globalement).
+uv run --active python manage.py merge_tags merge --course "système cardiovasculaire" --from-tag semio --to-tag "semio cardio" [--dry-run]
+uv run --active python manage.py merge_tags convert-to-chapter --course "système cardiovasculaire" --tag radio --parent-ec "semio cardio" [--dry-run]
+uv run --active python manage.py merge_tags remove --course "système cardiovasculaire" --tag physio [--dry-run]
+
 # URLs de l'application
 # /                          → accueil (cours par semestre)
 # /entrainement/             → configuration d'une session
