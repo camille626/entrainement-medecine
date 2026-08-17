@@ -1,7 +1,7 @@
 {% if existing %}
 <div class="alert alert-warning small mb-3 py-2">
   <strong>⚠ Signalement existant</strong> — <em>{{ existing.reported_by.username }}</em> a déjà signalé :
-  <blockquote class="mb-1 mt-1 fst-italic">{{ existing.description|truncatewords:30 }}</blockquote>
+  <blockquote class="mb-1 mt-1 fst-italic">{{ existing.description|truncatewords:30|linebreaksbr }}</blockquote>
   <div class="d-flex gap-2 mt-1">
     <button class="btn btn-sm btn-outline-secondary"
             onclick="document.getElementById('errata-form-{{ question.pk }}').innerHTML=''">

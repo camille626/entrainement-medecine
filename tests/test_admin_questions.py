@@ -220,6 +220,25 @@ class TestAdminQuestionsPreviewView:
         assert response.status_code == 302
         assert "/questions/upload/" in response["Location"]
 
+    def test_inline_br_split_for_editing(self, client, staff_user):
+        """Un <br> interne à un <p> doit rester lisible dans Quill (issue #111)."""
+        client.force_login(staff_user)
+        session = client.session
+        session["upload_questions"] = [
+            {
+                "text": "<p>Q1</p>",
+                "feedback": "<p>Correction : A. VRAI<br>B. FAUX</p>",
+                "answers": [
+                    {"text": "A", "fraction": 1.0},
+                    {"text": "B", "fraction": -1.0},
+                ],
+            }
+        ]
+        session.save()
+        response = client.get("/questions/upload/preview/")
+        content = response.content.decode()
+        assert "<p>Correction : A. VRAI</p><p>B. FAUX</p>" in content
+
 
 @pytest.mark.django_db
 class TestAdminQuestionsConfirmView:

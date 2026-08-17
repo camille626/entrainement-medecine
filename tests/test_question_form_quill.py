@@ -101,3 +101,37 @@ class TestQuestionFormQuill:
         """Le HTML du champ feedback doit être présent dans la page (pas strippé)."""
         content = self._get(client, staff_user, question_with_html)
         assert "<br>" in content
+
+
+@pytest.fixture
+def question_with_inline_br(course):
+    return Question.objects.create(
+        text="<p>Énoncé : A. VRAI<br>B. FAUX</p>",
+        feedback="<p>Correction : A. VRAI<br>B. FAUX<br>C. VRAI</p>",
+        course=course,
+        qtype="multichoice",
+        moodle_id=2002,
+    )
+
+
+@pytest.mark.django_db
+class TestQuestionFormQuillLineBreaks:
+    """Un <br> interne à un <p> doit rester lisible une fois chargé dans Quill (issue #111)."""
+
+    def _get(self, client, staff_user, question):
+        client.force_login(staff_user)
+        response = client.get(f"/admin-site/questions/{question.pk}/modifier/")
+        assert response.status_code == 200
+        return response.content.decode()
+
+    def test_feedback_inline_br_split_for_editing(
+        self, client, staff_user, question_with_inline_br
+    ):
+        content = self._get(client, staff_user, question_with_inline_br)
+        assert "<p>Correction : A. VRAI</p><p>B. FAUX</p><p>C. VRAI</p>" in content
+
+    def test_text_inline_br_split_for_editing(
+        self, client, staff_user, question_with_inline_br
+    ):
+        content = self._get(client, staff_user, question_with_inline_br)
+        assert "<p>Énoncé : A. VRAI</p><p>B. FAUX</p>" in content

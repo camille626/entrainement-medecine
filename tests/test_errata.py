@@ -189,6 +189,56 @@ class TestErrataListPage:
 
 
 @pytest.mark.django_db
+class TestErrataDescriptionLineBreaks:
+    """Les retours à la ligne saisis dans un signalement doivent rester visibles (issue #111)."""
+
+    def test_description_line_breaks_rendered_as_br(self, client, user, question):
+        Errata.objects.create(
+            question=question,
+            reported_by=user,
+            error_type="autre",
+            description="Ligne 1\nLigne 2",
+        )
+        client.force_login(user)
+        response = client.get("/errata/")
+        content = response.content.decode()
+        assert "Ligne 1<br>Ligne 2" in content
+
+    def test_admin_note_line_breaks_rendered_as_br(self, client, user, question):
+        errata = Errata.objects.create(
+            question=question,
+            reported_by=user,
+            error_type="autre",
+            description="Signalement",
+            status=Errata.REJECTED,
+            admin_note="Motif 1\nMotif 2",
+        )
+        client.force_login(user)
+        response = client.get(f"/errata/?status={errata.status}")
+        content = response.content.decode()
+        assert "Motif 1<br>Motif 2" in content
+
+
+@pytest.mark.django_db
+class TestErrataFeedbackQuillLineBreaks:
+    """La correction générale (Quill) affichée dans /errata/ doit rester lisible (issue #111)."""
+
+    def test_feedback_inline_br_split_for_editing(self, client, user, question):
+        question.feedback = "<p>Correction : A. VRAI<br>B. FAUX<br>C. VRAI</p>"
+        question.save()
+        Errata.objects.create(
+            question=question,
+            reported_by=user,
+            error_type="autre",
+            description="Signalement test",
+        )
+        client.force_login(user)
+        response = client.get("/errata/")
+        content = response.content.decode()
+        assert "<p>Correction : A. VRAI</p><p>B. FAUX</p><p>C. VRAI</p>" in content
+
+
+@pytest.mark.django_db
 class TestErrataAdminActions:
     @pytest.fixture
     def admin(self, db):

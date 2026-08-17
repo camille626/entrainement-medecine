@@ -1,4 +1,5 @@
 {% extends "qcm/base.html" %}
+{% load qcm_extras %}
 {% block title %}Prévisualisation — StudyMed{% endblock %}
 
 {% block extra_head %}
@@ -60,14 +61,14 @@
               <div class="mb-3">
                 <label class="form-label fw-semibold small">Énoncé</label>
                 <div id="quill-text-{{ n }}" class="bg-white"></div>
-                <template id="text-tpl-{{ n }}">{{ q.text|safe }}</template>
+                <template id="text-tpl-{{ n }}">{{ q.text|quillify }}</template>
               </div>
 
               <!-- Feedback (Quill) -->
               <div class="mb-3">
                 <label class="form-label fw-semibold small">Correction générale <span class="text-muted fw-normal">(optionnel)</span></label>
                 <div id="quill-feedback-{{ n }}" class="bg-white"></div>
-                <template id="feedback-tpl-{{ n }}">{{ q.feedback|safe }}</template>
+                <template id="feedback-tpl-{{ n }}">{{ q.feedback|quillify }}</template>
               </div>
 
               <!-- Propositions -->

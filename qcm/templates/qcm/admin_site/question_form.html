@@ -72,7 +72,7 @@
         <label class="form-label fw-semibold small">
           Énoncé <span class="text-danger">*</span>
         </label>
-        <template id="text-tpl">{% if question %}{{ question.text|safe }}{% endif %}</template>
+        <template id="text-tpl">{% if question %}{{ question.text|quillify }}{% endif %}</template>
         <div id="quill-text" class="bg-white border rounded" style="min-height:100px;"></div>
         <input type="hidden" name="text" id="quill-text-input">
       </div>
@@ -81,7 +81,7 @@
         <label class="form-label fw-semibold small">
           Correction générale <span class="text-muted fw-normal small">(optionnel)</span>
         </label>
-        <template id="feedback-tpl">{% if question %}{{ question.feedback|safe }}{% endif %}</template>
+        <template id="feedback-tpl">{% if question %}{{ question.feedback|quillify }}{% endif %}</template>
         <div id="quill-feedback" class="bg-white border rounded" style="min-height:80px;"></div>
         <input type="hidden" name="feedback" id="quill-feedback-input">
       </div>

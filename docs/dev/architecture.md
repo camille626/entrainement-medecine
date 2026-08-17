@@ -35,6 +35,25 @@ Une section staff-only `/admin-site/` permet de gérer les données sans passer 
 
 La logique d'acceptation d'inscription (`accept_registration`) est centralisée dans `views_admin.py` et réutilisée par `admin.py`.
 
+### Édition de l'énoncé et de la correction (Quill)
+
+`Question.text` et `Question.feedback` stockent du HTML (produit par l'éditeur
+riche Quill), pas du texte brut. Ils ne sont éditables que via l'éditeur Quill
+custom, présent à trois endroits : `/admin-site/questions/<id>/modifier/`, la
+prévisualisation d'import (`/questions/upload/preview/`) et la correction
+générale éditable depuis `/errata/`. Dans le Django Admin natif (`/admin/`),
+`text`/`feedback` sont en lecture seule (`QuestionAdmin.readonly_fields`) pour
+éviter un chemin d'édition en `<textarea>` brut incompatible avec le HTML
+stocké.
+
+Le filtre de template `quillify` (`qcm/templatetags/qcm_extras.py`) scinde,
+uniquement à l'affichage dans ces trois éditeurs, tout `<p>` contenant un
+`<br>` interne en plusieurs `<p>` (un par ligne) : Quill ne restitue pas
+visuellement un `<br>` au milieu d'un `<p>`, sa représentation native du texte
+multi-ligne étant un `<p>` par ligne. La donnée en base n'est pas modifiée par
+ce filtre ; le format se normalise de lui-même à la prochaine sauvegarde via
+Quill.
+
 ## Modèles de données
 
 ### Hiérarchie des contenus
