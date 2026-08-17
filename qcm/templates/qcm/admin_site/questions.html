@@ -6,7 +6,7 @@
   <h2 class="mb-0">Questions <span class="fs-6 text-muted fw-normal">({{ total }} résultats)</span></h2>
   <div class="d-flex gap-2">
     <a href="/admin-site/questions/ajouter/" class="btn btn-outline-success"><span style="font-size:1.2em; line-height:1;">+</span> Ajouter</a>
-    <a href="/admin-site/questions/ajouter/?qtype=ddimageortext" class="btn btn-outline-primary">+ Nouvelle question légende</a>
+    <a href="/admin-site/questions/ajouter/?qtype=ddimageortext" class="btn btn-outline-success">+ Nouvelle question légende</a>
   </div>
 </div>
 
@@ -36,7 +36,7 @@
     <div class="input-group input-group-sm">
       <input type="text" name="q" value="{{ search }}" class="form-control"
              placeholder="Rechercher dans l'énoncé…" style="max-width:220px;">
-      <button type="submit" class="btn btn-outline-secondary">🔍</button>
+      <button type="submit" class="btn btn-outline-secondary"><svg class="bi"><use href="#bi-search"></use></svg></button>
     </div>
   </div>
 
@@ -129,7 +129,7 @@
   </div>
   {% if search or selected_course or selected_qtype or selected_tag_ids or selected_exclude_tag_ids or selected_exclude_course_ids or no_chapitre or no_ec %}
   <div class="col-auto">
-    <a href="/admin-site/questions/" class="btn btn-sm btn-outline-secondary">✕ Réinitialiser</a>
+    <a href="/admin-site/questions/" class="btn btn-sm btn-outline-secondary"><svg class="bi"><use href="#bi-x-lg"></use></svg> Réinitialiser</a>
   </div>
   {% endif %}
 </form>
@@ -138,13 +138,13 @@
   <span class="small text-muted"><span id="bulkSelectedCount">0</span> question(s) sélectionnée(s)</span>
   <button type="button" id="bulkDeleteBtn" class="btn btn-sm btn-outline-danger" disabled
           data-bs-toggle="modal" data-bs-target="#bulkDeleteModal">
-    🗑 Supprimer la sélection
+    <svg class="bi"><use href="#bi-trash"></use></svg> Supprimer la sélection
   </button>
 </div>
 
 {% if questions %}
 <div class="table-responsive">
-  <table class="table table-hover table-sm align-middle">
+  <table class="table table-hover table-sm table-striped align-middle">
     <thead class="table-light">
       <tr>
         <th style="width:2rem;">
@@ -188,14 +188,14 @@
         <td>
           <div class="d-flex gap-1">
             <a href="/admin-site/questions/{{ q.pk }}/modifier/?back={{ request.get_full_path|urlencode }}"
-               class="btn btn-sm btn-outline-secondary">✏️ Modifier</a>
+               class="btn btn-sm btn-outline-secondary"><svg class="bi"><use href="#bi-pencil-square"></use></svg> Modifier</a>
             <button type="button"
                     class="btn btn-sm btn-outline-danger"
                     data-bs-toggle="modal"
                     data-bs-target="#deleteQModal"
                     data-q-pk="{{ q.pk }}"
                     data-q-text="{{ q.text|striptags|truncatewords:8 }}">
-              🗑
+              <svg class="bi"><use href="#bi-trash"></use></svg>
             </button>
           </div>
         </td>
@@ -235,7 +235,7 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title text-danger">⚠ Confirmer la suppression</h5>
+        <h5 class="modal-title text-danger"><svg class="bi"><use href="#bi-exclamation-triangle-fill"></use></svg> Confirmer la suppression</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
@@ -259,7 +259,7 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title text-danger">⚠ Confirmer la suppression multiple</h5>
+        <h5 class="modal-title text-danger"><svg class="bi"><use href="#bi-exclamation-triangle-fill"></use></svg> Confirmer la suppression multiple</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">

@@ -4,11 +4,11 @@
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-lg-8">
-    <h2 class="mb-4">👤 Mon profil</h2>
+    <h2 class="mb-4"><svg class="bi"><use href="#bi-person"></use></svg> Mon profil</h2>
 
     {% if saved %}
     <div class="alert alert-success alert-dismissible fade show" role="alert">
-      ✅ Modifications enregistrées avec succès.
+      <svg class="bi"><use href="#bi-check-circle-fill"></use></svg> Modifications enregistrées avec succès.
       <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
     {% endif %}
@@ -18,13 +18,13 @@
       <li class="nav-item" role="presentation">
         <button class="nav-link active" id="informations-tab" data-bs-toggle="tab"
                 data-bs-target="#informations" type="button" role="tab">
-          📋 Informations
+          <svg class="bi"><use href="#bi-clipboard"></use></svg> Informations
         </button>
       </li>
       <li class="nav-item" role="presentation">
         <button class="nav-link" id="trophees-tab" data-bs-toggle="tab"
                 data-bs-target="#trophees" type="button" role="tab">
-          🏆 Trophées
+          <svg class="bi"><use href="#bi-trophy-fill"></use></svg> Trophées
         </button>
       </li>
     </ul>
@@ -146,15 +146,15 @@
           <div class="card-header fw-semibold">Sécurité</div>
           <div class="card-body">
             <a href="{% url 'password_change' %}" class="btn btn-outline-secondary">
-              🔒 Changer le mot de passe
+              <svg class="bi"><use href="#bi-lock-fill"></use></svg> Changer le mot de passe
             </a>
           </div>
         </div>
 
         <!-- Liens rapides -->
         <div class="d-flex gap-2 flex-wrap">
-          <a href="{% url 'qcm:stats' %}" class="btn btn-sm btn-outline-primary">📊 Voir mes statistiques détaillées</a>
-          <a href="{% url 'qcm:history' %}" class="btn btn-sm btn-outline-secondary">📋 Historique des sessions</a>
+          <a href="{% url 'qcm:stats' %}" class="btn btn-sm btn-outline-primary"><svg class="bi"><use href="#bi-bar-chart-fill"></use></svg> Voir mes statistiques détaillées</a>
+          <a href="{% url 'qcm:history' %}" class="btn btn-sm btn-outline-secondary"><svg class="bi"><use href="#bi-clipboard"></use></svg> Historique des sessions</a>
         </div>
 
       </div><!-- /onglet Informations -->
@@ -223,10 +223,10 @@
                   <!-- Date déblocage ou verrou -->
                   {% if entry.earned and entry.earned_at %}
                   <div class="text-success mt-2" style="font-size:.7rem;">
-                    ✅ {{ entry.earned_at|date:"d/m/Y" }}
+                    <svg class="bi"><use href="#bi-check-circle-fill"></use></svg> {{ entry.earned_at|date:"d/m/Y" }}
                   </div>
                   {% elif not entry.earned %}
-                  <div class="text-muted mt-2" style="font-size:.7rem;">🔒</div>
+                  <div class="text-muted mt-2" style="font-size:.7rem;"><svg class="bi"><use href="#bi-lock-fill"></use></svg></div>
                   {% endif %}
 
                   <!-- % étudiants -->

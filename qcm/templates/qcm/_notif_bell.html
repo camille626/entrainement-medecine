@@ -2,7 +2,7 @@
 <div class="dropdown" id="notif-bell-zone">
   <button class="btn btn-sm btn-outline-secondary position-relative dropdown-toggle"
           type="button" data-bs-toggle="dropdown" id="notif-btn">
-    🔔
+    <svg class="bi"><use href="#bi-bell-fill"></use></svg>
     {% if unread_notif_count %}
     <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
           style="font-size:0.55rem;">
@@ -22,7 +22,7 @@
                 hx-target="#notif-bell-zone"
                 hx-swap="outerHTML"
                 hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
-          ✓
+          <svg class="bi"><use href="#bi-check-lg"></use></svg>
         </button>
         {% endif %}
       </div>

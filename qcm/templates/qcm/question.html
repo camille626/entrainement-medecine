@@ -13,17 +13,17 @@
     color: #555 !important;
   }
   .nav-q-not-answered { background: #f0f0f0; }
-  .nav-q-correct      { background: #d1f0d8; border-color: #a8ddb5; }
-  .nav-q-partial      { background: #fff3cd; border-color: #ffe083; }
-  .nav-q-incorrect    { background: #fde8ea; border-color: #f5b8bc; }
+  .nav-q-correct      { background: #dde9fb; border-color: #a8c5f5; }
+  .nav-q-partial      { background: #e9ecef; border-color: #ced4da; }
+  .nav-q-incorrect    { background: #f3dfe6; border-color: #d9a8ba; }
   .nav-q-current      { outline: 2px solid #0d6efd; outline-offset: 1px; }
   .nav-q:hover        { opacity: 0.8; }
 
   [data-bs-theme="dark"] .nav-q             { color: #e9ecef !important; border-color: rgba(255,255,255,0.15); }
   [data-bs-theme="dark"] .nav-q-not-answered { background: #3a3d40; }
-  [data-bs-theme="dark"] .nav-q-correct      { background: #1e4a2a; border-color: #3a7a4c; }
-  [data-bs-theme="dark"] .nav-q-partial      { background: #4a3b12; border-color: #a67c00; }
-  [data-bs-theme="dark"] .nav-q-incorrect    { background: #4a1f24; border-color: #8a3b42; }
+  [data-bs-theme="dark"] .nav-q-correct      { background: #17304d; border-color: #3a6ea5; }
+  [data-bs-theme="dark"] .nav-q-partial      { background: #3a3d40; border-color: #6c757d; }
+  [data-bs-theme="dark"] .nav-q-incorrect    { background: #3d2530; border-color: #8a5568; }
 </style>
 {% endblock %}
 
@@ -38,7 +38,7 @@
         <p class="text-muted small mb-1">{{ total }} questions au total</p>
         <hr class="my-2">
         <p class="small mb-1">
-          <span id="status-label" class="{% if is_answered %}{% if status == 'correct' %}text-success fw-bold{% elif status == 'partial' %}text-warning fw-bold{% else %}text-danger fw-bold{% endif %}{% else %}text-secondary{% endif %}">
+          <span id="status-label" class="{% if is_answered %}{% if status == 'correct' %}text-primary fw-bold{% elif status == 'partial' %}text-secondary fw-bold{% else %}text-qcm-purple fw-bold{% endif %}{% else %}text-secondary{% endif %}">
             {% if is_answered %}{% if status == 'correct' %}Correct{% elif status == 'partial' %}Partiel{% else %}Incorrect{% endif %}{% else %}Non répondue{% endif %}
           </span>
         </p>
@@ -112,44 +112,45 @@
             </div>
             {% endfor %}
             {% if mode == "training" %}
-            <button type="submit" class="btn btn-secondary mt-3" id="check-btn" disabled>Check</button>
+            <button type="submit" class="btn btn-secondary mt-3" id="check-btn" disabled>Vérifier</button>
             {% endif %}
           </form>
           {% endif %}
-        </div>
 
-        {% if mode != "training" and not is_answered %}
-        <div class="mt-3 text-end">
-          <a href="/entrainement/session/{{ session.pk }}/" class="btn btn-primary">Page suivante →</a>
+          {% if mode != "training" and not is_answered %}
+          <div class="mt-3 text-end">
+            <a href="/entrainement/session/{{ session.pk }}/" class="btn btn-primary">Page suivante →</a>
+          </div>
+          {% endif %}
+
+          <!-- Boutons précédent / suivant (uniquement si non répondue — sinon ils sont dans _correction.html).
+               Rendus à l'intérieur de #answers-zone pour être remplacés par le swap HTMX lors de la
+               correction, et éviter qu'ils restent affichés en double une fois la question répondue. -->
+          {% if not is_answered %}
+          <div class="d-flex justify-content-between mt-2">
+            {% if prev_order %}
+            <a href="/entrainement/session/{{ session.pk }}/?q={{ prev_order }}"
+               class="btn btn-outline-secondary btn-sm">← Précédente</a>
+            {% else %}<span></span>{% endif %}
+            {% if next_order %}
+            <a href="/entrainement/session/{{ session.pk }}/?q={{ next_order }}"
+               class="btn btn-outline-primary btn-sm">Suivante →</a>
+            {% endif %}
+          </div>
+          {% endif %}
         </div>
-        {% endif %}
       </div>
     </div>
-
-    <!-- Boutons précédent / suivant (uniquement si non répondue — sinon ils sont dans _correction.html) -->
-    {% if not is_answered %}
-    <div class="d-flex justify-content-between mt-2">
-      {% if prev_order %}
-      <a href="/entrainement/session/{{ session.pk }}/?q={{ prev_order }}"
-         class="btn btn-outline-secondary btn-sm">← Précédente</a>
-      {% else %}<span></span>{% endif %}
-      {% if next_order %}
-      <a href="/entrainement/session/{{ session.pk }}/?q={{ next_order }}"
-         class="btn btn-outline-primary btn-sm">Suivante →</a>
-      {% endif %}
-    </div>
-    {% endif %}
   </div>
 
   <!-- ── Navigateur (panneau droit collapsable) ── -->
   <div id="question-nav" class="col-md-3">
     <div class="card position-sticky" style="top: 1rem;">
+      <div class="card-header fw-bold d-flex justify-content-between align-items-center py-2">
+        <span><svg class="bi"><use href="#bi-compass"></use></svg> Navigation</span>
+        <button class="btn btn-sm btn-link p-0 text-muted lh-1" style="text-decoration:none;" onclick="toggleNav()" title="Masquer"><svg class="bi"><use href="#bi-x-lg"></use></svg></button>
+      </div>
       <div class="card-body p-2">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <span class="fw-semibold small">🧭 Navigation</span>
-          <button class="btn btn-sm btn-link p-0 text-muted lh-1" style="text-decoration:none;" onclick="toggleNav()" title="Masquer">✕</button>
-        </div>
-
         <div class="d-flex flex-wrap gap-1">
           {% for sq in sq_list %}
           <a href="/entrainement/session/{{ session.pk }}/?q={{ sq.order }}"
@@ -175,7 +176,7 @@
         class="btn btn-outline-secondary btn-sm position-fixed d-none"
         style="right:1rem; top:5rem; z-index:100;"
         title="Afficher le navigateur">
-  🧭
+  <svg class="bi"><use href="#bi-compass"></use></svg>
 </button>
 
 <script>

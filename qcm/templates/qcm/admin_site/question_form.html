@@ -134,7 +134,7 @@
                    style="max-height:120px; max-width:100%; border-radius:4px;">
               <div class="mt-1">
                 <button type="button" class="btn btn-sm btn-outline-danger"
-                        onclick="clearImagePreview()">✕ Annuler</button>
+                        onclick="clearImagePreview()"><svg class="bi"><use href="#bi-x-lg"></use></svg> Annuler</button>
               </div>
             </div>
           </div>
@@ -285,7 +285,7 @@
             </div>
             <div class="col-auto">
               <div class="form-check" style="display:none;">{{ form.DELETE }}</div>
-              <button type="button" class="btn btn-sm btn-outline-danger" onclick="ddiRemoveZoneRow(this)">✕</button>
+              <button type="button" class="btn btn-sm btn-outline-danger" onclick="ddiRemoveZoneRow(this)"><svg class="bi"><use href="#bi-x-lg"></use></svg></button>
             </div>
           </div>
         </div>
@@ -304,7 +304,7 @@
           {% if form.instance.pk %}{{ form.id }}{% endif %}
           {{ form.label }}
           <div style="display:none;">{{ form.DELETE }}</div>
-          <button type="button" class="btn btn-sm btn-outline-danger" onclick="ddiRemoveDragRow(this)">✕</button>
+          <button type="button" class="btn btn-sm btn-outline-danger" onclick="ddiRemoveDragRow(this)"><svg class="bi"><use href="#bi-x-lg"></use></svg></button>
         </div>
         {% endfor %}
       </div>
@@ -356,12 +356,12 @@
   <input type="hidden" name="back_url" value="{{ back_url|default:'/admin-site/questions/' }}">
   <div class="d-flex gap-2">
     <button type="submit" class="btn btn-primary">
-      {% if action == 'edit' %}💾 Enregistrer{% else %}✅ Créer la question{% endif %}
+      {% if action == 'edit' %}<svg class="bi"><use href="#bi-save-fill"></use></svg> Enregistrer{% else %}<svg class="bi"><use href="#bi-check-circle-fill"></use></svg> Créer la question{% endif %}
     </button>
     <a href="{{ back_url|default:'/admin-site/questions/' }}" class="btn btn-outline-secondary">Annuler</a>
     {% if action == 'edit' %}
     <button type="button" class="btn btn-outline-danger ms-auto" data-bs-toggle="modal" data-bs-target="#deleteQModal">
-      🗑 Supprimer la question
+      <svg class="bi"><use href="#bi-trash"></use></svg> Supprimer la question
     </button>
     {% endif %}
   </div>
@@ -373,7 +373,7 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title text-danger">⚠ Confirmer la suppression</h5>
+        <h5 class="modal-title text-danger"><svg class="bi"><use href="#bi-exclamation-triangle-fill"></use></svg> Confirmer la suppression</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
@@ -427,7 +427,7 @@ function addAnswer() {
              class="form-control form-control-sm text-end">
     </div>
     <button type="button" class="btn btn-sm btn-outline-danger"
-            onclick="this.closest('.answer-row').remove(); updateTotalForms()">✕</button>
+            onclick="this.closest('.answer-row').remove(); updateTotalForms()"><svg class="bi"><use href="#bi-x-lg"></use></svg></button>
   `;
   container.appendChild(row);
   total.value = idx + 1;
@@ -612,7 +612,7 @@ function ddiAddZoneRow(xleft, ytop) {
         <input type="text" name="${prefix}-alts" class="form-control form-control-sm" placeholder="ex : sclere; sclerotic">
       </div>
       <div class="col-auto">
-        <button type="button" class="btn btn-sm btn-outline-danger" onclick="ddiRemoveZoneRow(this)">✕</button>
+        <button type="button" class="btn btn-sm btn-outline-danger" onclick="ddiRemoveZoneRow(this)"><svg class="bi"><use href="#bi-x-lg"></use></svg></button>
       </div>
     </div>
   `;
@@ -685,7 +685,7 @@ function addDragItem() {
   row.dataset.prefix = prefix;
   row.innerHTML = `
     <input type="text" name="${prefix}-label" class="form-control form-control-sm" placeholder="Étiquette…">
-    <button type="button" class="btn btn-sm btn-outline-danger" onclick="ddiRemoveDragRow(this)">✕</button>
+    <button type="button" class="btn btn-sm btn-outline-danger" onclick="ddiRemoveDragRow(this)"><svg class="bi"><use href="#bi-x-lg"></use></svg></button>
   `;
   container.appendChild(row);
   total.value = idx + 1;

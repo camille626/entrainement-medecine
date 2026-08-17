@@ -87,12 +87,12 @@
         {% endfor %}
       </select>
       {% if category_filter %}
-      <a href="/admin-site/tags/" class="btn btn-sm btn-outline-secondary">✕</a>
+      <a href="/admin-site/tags/" class="btn btn-sm btn-outline-secondary"><svg class="bi"><use href="#bi-x-lg"></use></svg></a>
       {% endif %}
     </form>
 
     <div class="table-responsive">
-      <table class="table table-sm table-hover align-middle">
+      <table class="table table-sm table-hover table-striped align-middle">
         <thead class="table-light">
           <tr>
             <th>Nom</th>
@@ -125,10 +125,10 @@
               <form method="post" action="/admin-site/tags/{{ tag.pk }}/supprimer/" class="m-0">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-sm btn-outline-danger"
-                        onclick="return confirm('Supprimer ce tag ?')">🗑</button>
+                        onclick="return confirm('Supprimer ce tag ?')"><svg class="bi"><use href="#bi-trash"></use></svg></button>
               </form>
               {% else %}
-              <span class="text-muted small" title="Tag Moodle — non supprimable ici">🔒</span>
+              <span class="text-muted small" title="Tag Moodle — non supprimable ici"><svg class="bi"><use href="#bi-lock-fill"></use></svg></span>
               {% endif %}
             </td>
           </tr>

@@ -4,17 +4,17 @@
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-lg-7">
-    <h2 class="mb-4">📥 Importer des questions</h2>
+    <h2 class="mb-4"><svg class="bi"><use href="#bi-upload"></use></svg> Importer des questions</h2>
 
     {% if success is not None %}
     <div class="alert alert-success alert-dismissible fade show">
-      ✅ <strong>{{ success }} question{{ success|pluralize }}</strong> importée{{ success|pluralize }} avec succès.
+      <svg class="bi"><use href="#bi-check-circle-fill"></use></svg> <strong>{{ success }} question{{ success|pluralize }}</strong> importée{{ success|pluralize }} avec succès.
       <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
     {% endif %}
 
     {% if error %}
-    <div class="alert alert-danger">⚠ {{ error }}</div>
+    <div class="alert alert-danger"><svg class="bi"><use href="#bi-exclamation-triangle-fill"></use></svg> {{ error }}</div>
     {% endif %}
 
     <div class="card">
@@ -34,7 +34,7 @@
           </div>
 
           <button type="submit" class="btn btn-primary">
-            🔍 Analyser et prévisualiser
+            <svg class="bi"><use href="#bi-search"></use></svg> Analyser et prévisualiser
           </button>
         </form>
       </div>

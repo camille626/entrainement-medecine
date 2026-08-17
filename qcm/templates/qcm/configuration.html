@@ -37,6 +37,7 @@
              hx-target="#tags-zone"
              hx-include="[name='courses']">
           {% for semester in semesters %}
+          {% if semester.courses.all %}
           <h6 class="text-primary">{{ semester.study_year.name }} — {{ semester.name }}</h6>
           <div class="row row-cols-1 row-cols-md-2 mb-3">
             {% for course in semester.courses.all %}
@@ -53,6 +54,7 @@
             </div>
             {% endfor %}
           </div>
+          {% endif %}
           {% endfor %}
           {% if form.courses.errors %}
           <div class="text-danger">{{ form.courses.errors }}</div>
@@ -105,7 +107,7 @@
             <input class="form-check-input" type="radio" name="question_filter" value="review"
                    id="filter_review">
             <label class="form-check-label" for="filter_review">
-              <strong>🔄 Mode révision</strong>
+              <strong><svg class="bi"><use href="#bi-arrow-repeat"></use></svg> Mode révision</strong>
               <span class="text-muted small d-block">Priorise les questions ratées ou jamais faites (taux de réussite &lt; 50%)</span>
             </label>
           </div>
@@ -113,7 +115,7 @@
             <input class="form-check-input" type="radio" name="question_filter" value="never"
                    id="filter_never">
             <label class="form-check-label" for="filter_never">
-              <strong>✨ Questions nouvelles</strong>
+              <strong><svg class="bi"><use href="#bi-stars"></use></svg> Questions nouvelles</strong>
               <span class="text-muted small d-block">Uniquement les questions que vous n'avez jamais faites</span>
             </label>
           </div>
@@ -121,7 +123,7 @@
             <input class="form-check-input" type="radio" name="question_filter" value="anchor"
                    id="filter_anchor">
             <label class="form-check-label" for="filter_anchor">
-              <strong>⚓ Mode ancrage</strong>
+              <strong><svg class="bi"><use href="#bi-anchor"></use></svg> Mode ancrage</strong>
               <span class="text-muted small d-block">Questions non encore ancrées (moins de 3 réussites complètes)</span>
             </label>
           </div>

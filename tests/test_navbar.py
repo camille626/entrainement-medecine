@@ -78,14 +78,17 @@ class TestNavbarResponsive:
         client.force_login(user)
         response = client.get("/")
         content = response.content.decode()
-        assert "navbar-expand-lg" in content
+        # xl (et non lg) : à lg, les liens + la zone utilisateur ne tenaient pas
+        # sur une ligne entre ~992px et ~1200px, provoquant un débordement
+        # horizontal de toute la page (issue #113).
+        assert "navbar-expand-xl" in content
 
     def test_navbar_does_not_use_bare_expand_class(self, client, user):
         client.force_login(user)
         response = client.get("/")
         content = response.content.decode()
         # "navbar-expand" seul (sans breakpoint) ne doit plus apparaître comme
-        # classe isolée sur la balise <nav> : seul "navbar-expand-lg" doit rester.
+        # classe isolée sur la balise <nav> : seul "navbar-expand-xl" doit rester.
         assert "navbar-expand navbar-light" not in content
         assert 'class="navbar navbar-expand ' not in content
 
@@ -118,7 +121,7 @@ class TestNavbarResponsive:
 
     def test_nav_links_use_navbar_nav_class_for_vertical_stacking(self, client, user):
         # La classe "navbar-nav" (native Bootstrap 5) fait passer la liste de
-        # liens en flex-direction: column sous le breakpoint navbar-expand-lg,
+        # liens en flex-direction: column sous le breakpoint navbar-expand-xl,
         # donc les options s'affichent les unes en dessous des autres une fois
         # le menu hamburger déplié sur mobile.
         client.force_login(user)

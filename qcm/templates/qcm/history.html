@@ -4,7 +4,7 @@
 {% block content %}
 <div class="row">
   <div class="col-12">
-    <h2 class="mb-4">📋 Historique des tentatives</h2>
+    <h2 class="mb-4"><svg class="bi"><use href="#bi-clipboard"></use></svg> Historique des tentatives</h2>
 
     <!-- Filtre par cours -->
     <form method="get" class="mb-3 d-flex gap-2 align-items-center">
@@ -18,7 +18,7 @@
         {% endfor %}
       </select>
       {% if selected_course %}
-      <a href="/historique/" class="btn btn-sm btn-outline-secondary">✕ Réinitialiser</a>
+      <a href="/historique/" class="btn btn-sm btn-outline-secondary"><svg class="bi"><use href="#bi-x-lg"></use></svg> Réinitialiser</a>
       {% endif %}
     </form>
 
@@ -66,12 +66,12 @@
             <td class="text-center small pe-4">
               {{ item.nb_answered_distinct }}/{{ item.nb_questions }}
               {% if not item.is_complete %}
-              <span class="badge bg-warning text-dark ms-1" style="font-size:0.65rem;">En cours</span>
+              <span class="badge bg-qcm-purple ms-1" style="font-size:0.65rem;">En cours</span>
               {% endif %}
             </td>
             <td class="text-center">
               {% if item.is_complete and item.note_20 is not None %}
-              <span class="fw-bold {% if item.note_20 >= 14 %}text-success{% elif item.note_20 >= 10 %}text-warning{% else %}text-danger{% endif %}">
+              <span class="fw-bold {% if item.note_20 >= 14 %}text-primary{% elif item.note_20 >= 10 %}text-secondary{% else %}text-qcm-purple{% endif %}">
                 {{ item.note_20 }}
               </span>
               {% else %}
@@ -82,10 +82,10 @@
               <div class="d-flex align-items-center gap-1">
                 {% if not item.is_complete %}
                 <a href="/entrainement/session/{{ item.session.pk }}/"
-                   class="btn btn-sm btn-outline-primary">▶ Reprendre</a>
+                   class="btn btn-sm btn-outline-primary"><svg class="bi"><use href="#bi-play-fill"></use></svg> Reprendre</a>
                 {% elif item.nb_answered_distinct > 0 %}
                 <a href="/historique/session/{{ item.session.pk }}/"
-                   class="btn btn-sm btn-outline-primary">🔍 Relecture</a>
+                   class="btn btn-sm btn-outline-primary"><svg class="bi"><use href="#bi-search"></use></svg> Relecture</a>
                 {% endif %}
                 <div class="dropdown">
                   <button type="button" class="btn btn-sm btn-outline-secondary"
@@ -122,7 +122,7 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title text-danger">⚠ Confirmer la suppression</h5>
+        <h5 class="modal-title text-danger"><svg class="bi"><use href="#bi-exclamation-triangle-fill"></use></svg> Confirmer la suppression</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">

@@ -15,7 +15,7 @@
 <div class="row">
   <div class="col-12">
     <div class="d-flex align-items-center gap-3 mb-4">
-      <h2 class="mb-0">📋 Prévisualisation — {{ questions|length }} question{{ questions|length|pluralize }}</h2>
+      <h2 class="mb-0"><svg class="bi"><use href="#bi-clipboard"></use></svg> Prévisualisation — {{ questions|length }} question{{ questions|length|pluralize }}</h2>
       <a href="/questions/upload/" class="btn btn-sm btn-outline-secondary">← Recommencer</a>
     </div>
 
@@ -88,7 +88,7 @@
                       <option value="{{ val }}" {% if ans.fraction_str == val %}selected{% endif %}>{{ label }}</option>
                       {% endfor %}
                     </select>
-                    <button type="button" class="btn btn-sm btn-outline-danger remove-answer" title="Supprimer">✕</button>
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-answer" title="Supprimer"><svg class="bi"><use href="#bi-x-lg"></use></svg></button>
                   </div>
                   {% endfor %}
                 </div>
@@ -116,7 +116,7 @@
                   {% if tag_groups %}
                   <button type="button" class="btn btn-sm btn-link p-0 ms-1 small"
                           onclick="document.getElementById('tag-edit-{{ n }}').style.display = document.getElementById('tag-edit-{{ n }}').style.display === 'none' ? '' : 'none';">
-                    ✏️ Changer les tags
+                    <svg class="bi"><use href="#bi-pencil-square"></use></svg> Changer les tags
                   </button>
                   {% endif %}
                 </div>
@@ -155,7 +155,7 @@
       <!-- Confirmer -->
       <div class="d-flex gap-3 align-items-center">
         <button type="submit" class="btn btn-success btn-lg">
-          ✅ Confirmer l'import ({{ questions|length }} question{{ questions|length|pluralize }})
+          <svg class="bi"><use href="#bi-check-circle-fill"></use></svg> Confirmer l'import ({{ questions|length }} question{{ questions|length|pluralize }})
         </button>
         <a href="/questions/upload/" class="btn btn-outline-secondary">Annuler</a>
       </div>
@@ -232,7 +232,7 @@ document.querySelectorAll('.add-answer').forEach(function(btn) {
       `<select class="form-select form-select-sm" style="max-width:210px;">` +
       FRACTION_OPTIONS.map(([v, l]) => `<option value="${v}">${l}</option>`).join('') +
       `</select>` +
-      `<button type="button" class="btn btn-sm btn-outline-danger remove-answer" title="Supprimer">✕</button>`;
+      `<button type="button" class="btn btn-sm btn-outline-danger remove-answer" title="Supprimer"><svg class="bi"><use href="#bi-x-lg"></use></svg></button>`;
     container.appendChild(row);
     row.querySelector('.remove-answer').addEventListener('click', function() {
       row.remove(); rebuildAnswerNames(container);

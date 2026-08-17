@@ -1,4 +1,5 @@
 {% extends "qcm/base.html" %}
+{% load static %}
 {% block title %}{{ course.name }} — Statistiques — StudyMed{% endblock %}
 
 {% block content %}
@@ -16,9 +17,9 @@
     <!-- Résumé du cours -->
     <div class="row g-3 mb-4">
       <div class="col-md-3">
-        <div class="card text-center border-primary">
+        <div class="card text-center">
           <div class="card-body">
-            <div class="display-6 fw-bold text-primary">{{ course_block.note_20 }}<small class="fs-5">/20</small></div>
+            <div class="display-6 fw-bold">{{ course_block.note_20 }}<small class="fs-5">/20</small></div>
             <div class="small text-muted">Note moyenne</div>
           </div>
         </div>
@@ -35,17 +36,17 @@
         </div>
       </div>
       <div class="col-md-3">
-        <div class="card text-center border-warning">
+        <div class="card text-center">
           <div class="card-body">
-            <div class="display-6 fw-bold text-warning">{{ course_block.nb_anchored }}</div>
-            <div class="small text-muted">Ancrées ⚓</div>
+            <div class="display-6 fw-bold">{{ course_block.nb_anchored }}</div>
+            <div class="small text-muted">Ancrées <svg class="bi"><use href="#bi-anchor"></use></svg></div>
           </div>
         </div>
       </div>
       <div class="col-md-3">
-        <div class="card text-center border-success">
+        <div class="card text-center">
           <div class="card-body">
-            <div class="display-6 fw-bold text-success">{{ course_block.pct_correct }}%</div>
+            <div class="display-6 fw-bold">{{ course_block.pct_correct }}%</div>
             <div class="small text-muted">Correctes</div>
           </div>
         </div>
@@ -85,7 +86,7 @@
                     <div class="fw-bold" style="font-size:1rem;">{{ s.pct_anchored }}%</div>
                   </div>
                 </div>
-                <div class="small text-muted mt-1">Ancrage ⚓</div>
+                <div class="small text-muted mt-1">Ancrage <svg class="bi"><use href="#bi-anchor"></use></svg></div>
                 <div class="small">{{ s.nb_anchored }}/{{ s.nb_available }}</div>
               </div>
             </div>
@@ -98,7 +99,7 @@
             </div>
             <div class="d-flex justify-content-between small text-muted">
               <span>Note moyenne</span>
-              <span class="fw-bold {% if s.note_20 >= 14 %}text-success{% elif s.note_20 >= 10 %}text-warning{% elif s.note_20 > 0 %}text-danger{% else %}text-muted{% endif %}">
+              <span class="fw-bold {% if s.note_20 >= 14 %}text-primary{% elif s.note_20 >= 10 %}text-secondary{% elif s.note_20 > 0 %}text-qcm-purple{% else %}text-muted{% endif %}">
                 {% if s.nb_done > 0 %}{{ s.note_20 }}/20{% else %}—{% endif %}
               </span>
             </div>
@@ -126,13 +127,13 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="{% static 'qcm/vendor/chartjs/chart.umd.min.js' %}"></script>
 <script>
 const ecData = JSON.parse(document.getElementById('ec-data').textContent);
-const GREEN = 'rgba(144,238,144,0.75)';
-const RED   = 'rgba(255,182,193,0.75)';
-const BORDER_GREEN = 'rgba(100,180,100,0.9)';
-const BORDER_RED   = 'rgba(220,130,140,0.9)';
+const BLUE = 'rgba(13,110,253,0.55)';
+const PURPLE = 'rgba(156,79,110,0.55)';
+const BORDER_BLUE = 'rgba(13,110,253,0.9)';
+const BORDER_PURPLE = 'rgba(156,79,110,0.9)';
 
 const tooltipDefaults = {
   backgroundColor: 'rgba(30,30,30,0.92)',
@@ -155,8 +156,8 @@ ecData.forEach((ec, i) => {
       labels: ['Réalisées', 'Restantes'],
       datasets: [{
         data: [ec.nb_done, progNotDone > 0 ? progNotDone : 0],
-        backgroundColor: [GREEN, RED],
-        borderColor: [BORDER_GREEN, BORDER_RED],
+        backgroundColor: [BLUE, PURPLE],
+        borderColor: [BORDER_BLUE, BORDER_PURPLE],
         borderWidth: 1,
       }]
     },
@@ -183,8 +184,8 @@ ecData.forEach((ec, i) => {
       labels: ['Ancrées', 'Non ancrées'],
       datasets: [{
         data: [ec.nb_anchored, ancNotAnchored > 0 ? ancNotAnchored : 0],
-        backgroundColor: [GREEN, RED],
-        borderColor: [BORDER_GREEN, BORDER_RED],
+        backgroundColor: [BLUE, PURPLE],
+        borderColor: [BORDER_BLUE, BORDER_PURPLE],
         borderWidth: 1,
       }]
     },

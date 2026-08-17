@@ -19,9 +19,9 @@
   </script>
   <title>{% block title %}StudyMed{% endblock %}</title>
   <link rel="icon" type="image/svg+xml" href="{% static 'qcm/img/favicon.svg' %}">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="{% static 'qcm/vendor/bootstrap/bootstrap.min.css' %}" rel="stylesheet">
   {% block extra_head %}{% endblock %}
-  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="{% static 'qcm/vendor/htmx/htmx.min.js' %}"></script>
   <style>
     :root {
       --qcm-info-bg: #e8f4f8;
@@ -89,6 +89,59 @@
       border-color: var(--bs-secondary-border-subtle);
     }
 
+    /* Violet maison — absent de la palette de couleurs Bootstrap (pas de
+       classes .text-purple / .bg-purple / .btn-outline-purple générées). */
+    :root {
+      --qcm-purple: #9c4f6e;
+    }
+
+    [data-bs-theme="dark"] {
+      --qcm-purple: #d99cb3;
+    }
+
+    .text-qcm-purple {
+      color: var(--qcm-purple) !important;
+    }
+
+    .border-qcm-purple {
+      border-color: var(--qcm-purple) !important;
+    }
+
+    .bg-qcm-purple {
+      background-color: var(--qcm-purple) !important;
+      color: #fff;
+    }
+
+    /* Variante pâle (même esprit que les bg-*-subtle natifs de Bootstrap) pour
+       les fonds de type "réponse incorrecte" — bg-qcm-purple + bg-opacity-10 ne
+       fonctionne pas : le !important ci-dessus écrase la variable d'opacité. */
+    .bg-qcm-purple-subtle {
+      background-color: #f3dfe6;
+    }
+
+    [data-bs-theme="dark"] .bg-qcm-purple-subtle {
+      background-color: #3d2530;
+    }
+
+    .btn-outline-qcm-purple {
+      color: var(--qcm-purple);
+      border-color: var(--qcm-purple);
+    }
+
+    .btn-outline-qcm-purple:hover,
+    .btn-outline-qcm-purple:focus,
+    .btn-outline-qcm-purple:active {
+      color: #fff;
+      background-color: var(--qcm-purple);
+      border-color: var(--qcm-purple);
+    }
+
+    [data-bs-theme="dark"] .qcm-cta-btn.btn-outline-qcm-purple {
+      background-color: rgba(156, 79, 110, 0.25);
+      color: var(--qcm-purple);
+      border-color: rgba(156, 79, 110, 0.5);
+    }
+
     .nav-tabs .nav-link {
       color: #495057;
       font-weight: 500;
@@ -141,14 +194,34 @@
 
     .main-content {
       padding-top: 1.5rem;
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+
+    /* Le bouton natif "Choisir un fichier" n'hérite pas automatiquement du
+       thème Bootstrap — on l'aligne sur les couleurs du thème sombre. */
+    [data-bs-theme="dark"] .form-control::file-selector-button {
+      background-color: var(--bs-tertiary-bg);
+      color: var(--bs-body-color);
+    }
+
+    /* Icônes : références vers le sprite SVG inliné juste après <body>
+       (voir qcm/templates/qcm/_icon_sprite.html) — pas de police/CDN externe. */
+    svg.bi {
+      display: inline-block;
+      width: 1em;
+      height: 1em;
+      vertical-align: -0.125em;
+      fill: currentColor;
     }
   </style>
 </head>
 
 <body>
+  {% include "qcm/_icon_sprite.html" %}
   <!-- Top navbar -->
-  <nav class="navbar navbar-expand-lg bg-body border-bottom shadow-sm px-3">
-    <a class="navbar-brand text-primary me-4" href="/">🩺 StudyMed</a>
+  <nav class="navbar navbar-expand-xl bg-body border-bottom shadow-sm px-3">
+    <a class="navbar-brand text-primary me-4" href="/"><svg class="bi"><use href="#bi-heart-pulse"></use></svg> StudyMed</a>
 
     <!-- Right side: notifications + user (toujours visible, hors du menu repliable) -->
     {% if user.is_authenticated %}
@@ -158,12 +231,12 @@
         aria-label="Activer le mode sombre"
         onclick="document.documentElement.setAttribute('data-bs-theme', 'dark')"
         hx-post="{% url 'qcm:theme_toggle' %}" hx-vals='{"theme": "dark"}' hx-swap="none"
-        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>🌙</button>
+        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'><svg class="bi"><use href="#bi-moon-stars-fill"></use></svg></button>
       <button type="button" class="btn btn-sm btn-outline-secondary theme-btn theme-btn-to-light"
         aria-label="Activer le mode clair"
         onclick="document.documentElement.setAttribute('data-bs-theme', 'light')"
         hx-post="{% url 'qcm:theme_toggle' %}" hx-vals='{"theme": "light"}' hx-swap="none"
-        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>☀️</button>
+        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'><svg class="bi"><use href="#bi-sun-fill"></use></svg></button>
 
       <!-- Notification bell -->
       {% include "qcm/_notif_bell.html" %}
@@ -176,12 +249,10 @@
           <img src="{{ user.profile.photo.url }}" alt=""
                class="rounded-circle" style="width:20px;height:20px;object-fit:cover;">
           {% else %}
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-person-circle"
-            viewBox="0 0 16 16">
-            <path d="M11 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0" />
-            <path fill-rule="evenodd"
-              d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8m8-7a7 7 0 0 0-5.468 11.37C3.242 11.226 4.805 10 8 10s4.757 1.225 5.468 2.37A7 7 0 0 0 8 1" />
-          </svg>
+          <span class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center fw-bold"
+                style="width:20px;height:20px;font-size:0.65rem;line-height:1;">
+            {{ user.first_name|first|default:user.username|first|upper }}
+          </span>
           {% endif %}
           <span class="d-none d-md-inline">{{ user.get_full_name|default:user.username }}</span>
         </button>
@@ -190,11 +261,11 @@
           <li>
             <hr class="dropdown-divider">
           </li>
-          <li><a class="dropdown-item" href="{% url 'qcm:profile' %}">👤 Profil</a></li>
+          <li><a class="dropdown-item" href="{% url 'qcm:profile' %}"><svg class="bi"><use href="#bi-person"></use></svg> Profil</a></li>
           <li>
             <form method="post" action="/logout/" class="m-0">
               {% csrf_token %}
-              <button type="submit" class="dropdown-item text-danger">🚪 Déconnexion</button>
+              <button type="submit" class="dropdown-item text-danger"><svg class="bi"><use href="#bi-box-arrow-right"></use></svg> Déconnexion</button>
             </form>
           </li>
         </ul>
@@ -227,8 +298,8 @@
         <a class="nav-link dropdown-toggle {% if '/questions' in request.path %}active{% endif %}" href="#"
           role="button" data-bs-toggle="dropdown">Questions</a>
         <ul class="dropdown-menu">
-          <li><a class="dropdown-item" href="/questions/upload/">📤 Importer (XML Moodle)</a></li>
-          <li><a class="dropdown-item" href="/admin-site/questions/">📋 Gérer les questions</a></li>
+          <li><a class="dropdown-item" href="/questions/upload/"><svg class="bi"><use href="#bi-upload"></use></svg> Importer (XML Moodle)</a></li>
+          <li><a class="dropdown-item" href="/admin-site/questions/"><svg class="bi"><use href="#bi-clipboard"></use></svg> Gérer les questions</a></li>
           <li><a class="dropdown-item" href="/admin-site/questions/ajouter/">+ Ajouter une question</a></li>
         </ul>
       </li>
@@ -264,7 +335,7 @@
     {% block content %}{% endblock %}
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="{% static 'qcm/vendor/bootstrap/bootstrap.bundle.min.js' %}"></script>
   <script>
     // Enable Bootstrap tooltips
     document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
@@ -281,7 +352,7 @@
          data-bs-delay="3000">
       <div class="d-flex">
         <div class="toast-body">
-          <div class="fw-semibold mb-1">🏆 Trophée débloqué !</div>
+          <div class="fw-semibold mb-1"><svg class="bi"><use href="#bi-trophy-fill"></use></svg> Trophée débloqué !</div>
           <div>{{ message.message }}</div>
         </div>
         <button type="button" class="btn-close btn-close-white me-2 m-auto"
