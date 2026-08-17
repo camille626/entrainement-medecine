@@ -59,6 +59,10 @@ class QuestionAdmin(admin.ModelAdmin):
     raw_id_fields = ["course"]
     filter_horizontal = ["tags"]
     inlines = [QuestionImageInline]
+    # text/feedback stockent du HTML produit par l'éditeur Quill custom
+    # (/admin-site/questions/...) ; les éditer ici via un <textarea> brut
+    # ferait perdre la mise en forme (retours à la ligne) à l'affichage.
+    readonly_fields = ["text", "feedback"]
 
 
 @admin.register(Answer)

@@ -329,7 +329,7 @@
             {% if e.description and e.error_type != 'image' %}
             <div class="mb-2">
               <span class="fw-semibold small">Description :</span>
-              <span class="small">{{ e.description }}</span>
+              <span class="small">{{ e.description|linebreaksbr }}</span>
             </div>
             {% endif %}
 
@@ -389,7 +389,7 @@
               </form>
             </div>
             {% elif e.status != 'pending' and e.admin_note %}
-            <div class="mt-2 small text-muted fst-italic">Note admin : {{ e.admin_note }}</div>
+            <div class="mt-2 small text-muted fst-italic">Note admin : {{ e.admin_note|linebreaksbr }}</div>
             {% endif %}
 
             {% endif %}{# end branches #}
@@ -405,7 +405,7 @@
                 <span class="text-muted fw-normal">(affichée aux étudiants après réponse)</span>
               </label>
               <div id="quill-{{ e.pk }}" class="bg-white"></div>
-              <template id="feedback-tpl-{{ e.pk }}">{{ e.question.feedback|safe }}</template>
+              <template id="feedback-tpl-{{ e.pk }}">{{ e.question.feedback|quillify }}</template>
             </div>
             <form id="feedback-form-{{ e.pk }}" method="post" action="/errata/{{ e.pk }}/feedback/" class="mt-2">
               {% csrf_token %}

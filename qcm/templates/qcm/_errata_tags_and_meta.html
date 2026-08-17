@@ -20,6 +20,6 @@
 {% if e.description and e.error_type != 'image' %}
 <div class="mb-2">
   <span class="fw-semibold small">Description signalée :</span>
-  <span class="small text-muted">{{ e.description }}</span>
+  <span class="small text-muted">{{ e.description|linebreaksbr }}</span>
 </div>
 {% endif %}
