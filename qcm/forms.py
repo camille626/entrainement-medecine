@@ -38,13 +38,13 @@ class SessionConfigForm(forms.Form):
     )
     include_qroc = forms.BooleanField(
         required=False,
-        initial=False,
+        initial=True,
         label="Inclure les QROC (réponses ouvertes courtes)",
         help_text="Les questions QROC nécessitent de taper une réponse libre.",
     )
     include_ddimageortext = forms.BooleanField(
         required=False,
-        initial=False,
+        initial=True,
         label="Inclure les légendes interactives (image à annoter)",
         help_text="Questions où il faut placer des étiquettes sur une image.",
     )

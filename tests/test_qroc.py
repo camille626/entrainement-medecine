@@ -421,11 +421,11 @@ class TestSessionConfigFormQROC:
         form = SessionConfigForm(user=user)
         assert "include_qroc" in form.fields
 
-    def test_include_qroc_default_false(self, user):
+    def test_include_qroc_default_true(self, user):
         from qcm.forms import SessionConfigForm
 
         form = SessionConfigForm(user=user)
-        assert form.fields["include_qroc"].initial is False
+        assert form.fields["include_qroc"].initial is True
 
 
 # ── ConfigurationView — sessions avec QROC ───────────────────────────────────
@@ -460,10 +460,10 @@ class TestConfigurationViewQROC:
         qtypes = set(sess.questions.values_list("qtype", flat=True))
         assert "shortanswer" in qtypes
 
-    def test_session_excludes_qroc_by_default(
+    def test_session_excludes_qroc_when_unchecked(
         self, client, user, course, qroc_question
     ):
-        """Sans include_qroc, les questions shortanswer sont exclues."""
+        """Si include_qroc est décoché (absent du POST), les shortanswer sont exclues."""
         # Ajouter aussi une question multichoice pour que la session soit valide
         q_mc = Question.objects.create(
             text="<p>Question multichoix</p>", course=course, qtype="multichoice"
