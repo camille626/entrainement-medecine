@@ -3,7 +3,8 @@
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from qcm.models import Course, Question, Tag, TagCategory
+from qcm.models import Course, Question, Tag
+from qcm.tag_merging import TagMergeError, convert_tag_to_chapter, merge_course_tags
 
 
 REQUIRED_OPTIONS = {
@@ -82,46 +83,39 @@ class Command(BaseCommand):
             raise CommandError(f"L'action '{action}' nécessite : {', '.join(missing)}.")
 
         dry_run = options["dry_run"]
-        if action == "merge":
-            self._merge(course, options["from_tag"], options["to_tag"], dry_run)
-        elif action == "convert-to-chapter":
-            self._convert_to_chapter(
-                course, options["tag"], options["parent_ec"], dry_run
-            )
-        else:
-            self._remove(course, options["tag"], dry_run)
+        try:
+            if action == "merge":
+                self._merge(course, options["from_tag"], options["to_tag"], dry_run)
+            elif action == "convert-to-chapter":
+                self._convert_to_chapter(
+                    course, options["tag"], options["parent_ec"], dry_run
+                )
+            else:
+                self._remove(course, options["tag"], dry_run)
+        except TagMergeError as exc:
+            raise CommandError(str(exc)) from exc
 
     def _merge(self, course, from_tag_name, to_tag_name, dry_run):
         from_tag = _resolve_tag(from_tag_name)
         to_tag = _resolve_tag(to_tag_name)
-        if from_tag.pk == to_tag.pk:
-            raise CommandError("--from-tag et --to-tag doivent être différents.")
 
-        questions = list(Question.objects.filter(course=course, tags=from_tag))
-        reparent_tags = Tag.objects.filter(course=course, parent_ec=from_tag)
-        reparent_names = list(reparent_tags.values_list("name", flat=True))
+        result = merge_course_tags(course, from_tag, to_tag, dry_run=dry_run)
 
         if dry_run:
             self.stdout.write(
                 self.style.WARNING(
                     f"[dry-run] merge '{from_tag.name}' -> '{to_tag.name}' "
-                    f"({course.name}) : {len(questions)} question(s), "
-                    f"reparent {reparent_names}"
+                    f"({course.name}) : {result.questions_migrated} question(s), "
+                    f"reparent {result.reparented_tags}"
                 )
             )
             return
 
-        with transaction.atomic():
-            for q in questions:
-                q.tags.add(to_tag)
-                q.tags.remove(from_tag)
-            updated = reparent_tags.update(parent_ec=to_tag)
-
         self.stdout.write(
             self.style.SUCCESS(
                 f"merge '{from_tag.name}' -> '{to_tag.name}' ({course.name}) : "
-                f"{len(questions)} question(s) migrée(s), "
-                f"{updated} tag(s)-chapitres reparenté(s)."
+                f"{result.questions_migrated} question(s) migrée(s), "
+                f"{len(result.reparented_tags)} tag(s)-chapitres reparenté(s)."
             )
         )
 
@@ -129,44 +123,24 @@ class Command(BaseCommand):
         tag = _resolve_tag(tag_name)
         parent_tag = _resolve_tag(parent_ec_name)
 
-        if (
-            not parent_tag.category
-            or parent_tag.category.tag_type != TagCategory.SOUSCATEGORIE
-        ):
-            raise CommandError(
-                f"'{parent_tag.name}' n'est pas un tag EC (souscategorie)."
-            )
-
-        chapter_category = TagCategory.objects.filter(
-            tag_type=TagCategory.CHAPITRE, course__isnull=True
-        ).first()
-        if chapter_category is None:
-            raise CommandError("Catégorie globale 'Chapitre' introuvable en base.")
-
-        questions = list(Question.objects.filter(course=course, tags=tag))
+        result = convert_tag_to_chapter(course, tag, parent_tag, dry_run=dry_run)
 
         if dry_run:
             self.stdout.write(
                 self.style.WARNING(
                     f"[dry-run] convert-to-chapter '{tag.name}' ({course.name}), "
-                    f"parent_ec='{parent_tag.name}' : {len(questions)} question(s) "
-                    f"recevraient '{parent_tag.name}'."
+                    f"parent_ec='{parent_tag.name}' : "
+                    f"{result.questions_updated} question(s) recevraient "
+                    f"'{parent_tag.name}'."
                 )
             )
             return
 
-        with transaction.atomic():
-            tag.category = chapter_category
-            tag.parent_ec = parent_tag
-            tag.course = course
-            tag.save(update_fields=["category", "parent_ec", "course"])
-            for q in questions:
-                q.tags.add(parent_tag)
-
         self.stdout.write(
             self.style.SUCCESS(
                 f"'{tag.name}' converti en chapitre de '{parent_tag.name}' "
-                f"({course.name}) : {len(questions)} question(s) mise(s) à jour."
+                f"({course.name}) : {result.questions_updated} question(s) "
+                "mise(s) à jour."
             )
         )
 

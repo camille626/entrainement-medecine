@@ -687,3 +687,36 @@ class LoginEvent(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user.username} — {self.logged_at.date()}"
+
+
+class TagMergeLog(models.Model):
+    MERGE = "merge"
+    CONVERT_TO_CHAPTER = "convert_to_chapter"
+    ACTION_CHOICES = [
+        (MERGE, "Fusion"),
+        (CONVERT_TO_CHAPTER, "Conversion en chapitre"),
+    ]
+
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    course = models.ForeignKey(
+        "Course", on_delete=models.CASCADE, related_name="tag_merge_logs"
+    )
+    summary = models.CharField(max_length=255)
+    snapshot = models.JSONField()
+    performed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tag_merge_logs",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    undone_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Historique de fusion de tags"
+        verbose_name_plural = "Historique des fusions de tags"
+
+    def __str__(self) -> str:
+        return self.summary

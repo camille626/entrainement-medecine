@@ -1,0 +1,39 @@
+<div class="border rounded p-3 mb-3">
+  <div class="p-2 mb-2 rounded small" style="background:#f0f7ff; border-left:3px solid #93c5fd;">
+    {{ q.render_text|safe }}
+  </div>
+
+  {% if q.qtype == "ddimageortext" %}
+  <p class="text-muted small mb-2">Légende interactive — aperçu des propositions non disponible ici.</p>
+  {% else %}
+  <div class="mb-2">
+    {% for answer in q.answers.all %}
+    <div class="d-flex align-items-start mb-1 p-1 rounded small
+      {% if answer.is_correct %}border border-success bg-success bg-opacity-10
+      {% elif answer.fraction < 0 %}border border-danger bg-danger bg-opacity-10
+      {% else %}border border-light{% endif %}">
+      <span class="me-2 fw-bold" style="min-width:1.2em;">
+        {% if answer.is_correct %}<svg class="bi"><use href="#bi-check-lg"></use></svg>{% elif answer.fraction < 0 %}<svg class="bi"><use href="#bi-x-lg"></use></svg>{% else %}○{% endif %}
+      </span>
+      <span class="flex-grow-1">{{ answer.text|safe|striptags }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="small border-top pt-2">
+    <div>
+      <span class="fw-semibold">Tags actuels :</span>
+      {% for tag in q.tags.all %}
+      <span class="badge {% if tag == removed_tag %}bg-secondary text-decoration-line-through{% else %}bg-secondary{% endif %} me-1">{{ tag.name }}</span>
+      {% endfor %}
+    </div>
+    <div>
+      <span class="fw-semibold">Tags après :</span>
+      {% for tag in q.tags.all %}{% if tag != removed_tag and tag != new_tags %}
+      <span class="badge bg-secondary me-1">{{ tag.name }}</span>
+      {% endif %}{% endfor %}
+      <span class="badge bg-success me-1">{{ new_tags.name }}</span>
+    </div>
+  </div>
+</div>

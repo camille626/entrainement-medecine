@@ -1,0 +1,95 @@
+{% if error %}
+<div class="alert alert-danger small py-2 mb-0">{{ error }}</div>
+
+{% elif action == "merge" %}
+<div class="border rounded p-3">
+  <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
+    <div>
+      <strong>{{ result.questions_migrated }} question(s)</strong> seront migrée(s) de
+      « {{ from_tag.name }} » vers « {{ to_tag.name }} » ({{ course.name }}).
+      {% if result.reparented_tags %}
+      <br><span class="small text-muted">Tags-chapitres reparentés : {{ result.reparented_tags|join:", " }}.</span>
+      {% endif %}
+    </div>
+    <div class="d-flex gap-2 flex-shrink-0">
+      <button type="button" class="btn btn-outline-secondary"
+              onclick="document.getElementById('merge-preview-zone').innerHTML=''">
+        Annuler
+      </button>
+      <form method="post" action="{% url 'qcm:admin_tag_merge' %}" class="m-0">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="merge">
+        <input type="hidden" name="course" value="{{ course.pk }}">
+        <input type="hidden" name="from_tag" value="{{ from_tag.pk }}">
+        <input type="hidden" name="to_tag" value="{{ to_tag.pk }}">
+        <button type="submit" class="btn btn-danger"
+                onclick="return confirm('Confirmer la fusion ? Cette action modifie les questions du cours.')">
+          Confirmer la fusion
+        </button>
+      </form>
+    </div>
+  </div>
+
+  {% for q in preview_questions %}
+  {% include "qcm/admin_site/_tag_merge_preview_question.html" with q=q new_tags=to_tag removed_tag=from_tag %}
+  {% endfor %}
+  {% if remaining %}
+  <form hx-post="{% url 'qcm:admin_tag_merge_preview' %}" hx-target="#merge-preview-zone" hx-swap="innerHTML">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="merge">
+    <input type="hidden" name="course" value="{{ course.pk }}">
+    <input type="hidden" name="from_tag" value="{{ from_tag.pk }}">
+    <input type="hidden" name="to_tag" value="{{ to_tag.pk }}">
+    <input type="hidden" name="show_all" value="1">
+    <button type="submit" class="btn btn-sm btn-outline-secondary">
+      Voir les {{ remaining }} question(s) restante(s)
+    </button>
+  </form>
+  {% endif %}
+</div>
+
+{% elif action == "convert-to-chapter" %}
+<div class="border rounded p-3">
+  <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
+    <div>
+      <strong>{{ result.questions_updated }} question(s)</strong> recevront le tag
+      « {{ parent_ec.name }} » en plus de « {{ tag.name }} » ({{ course.name }}), qui
+      deviendra un tag chapitre rattaché à « {{ parent_ec.name }} ».
+    </div>
+    <div class="d-flex gap-2 flex-shrink-0">
+      <button type="button" class="btn btn-outline-secondary"
+              onclick="document.getElementById('convert-preview-zone').innerHTML=''">
+        Annuler
+      </button>
+      <form method="post" action="{% url 'qcm:admin_tag_merge' %}" class="m-0">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="convert-to-chapter">
+        <input type="hidden" name="course" value="{{ course.pk }}">
+        <input type="hidden" name="tag" value="{{ tag.pk }}">
+        <input type="hidden" name="parent_ec" value="{{ parent_ec.pk }}">
+        <button type="submit" class="btn btn-danger"
+                onclick="return confirm('Confirmer la conversion ? Cette action modifie les questions du cours.')">
+          Confirmer la conversion
+        </button>
+      </form>
+    </div>
+  </div>
+
+  {% for q in preview_questions %}
+  {% include "qcm/admin_site/_tag_merge_preview_question.html" with q=q new_tags=parent_ec %}
+  {% endfor %}
+  {% if remaining %}
+  <form hx-post="{% url 'qcm:admin_tag_merge_preview' %}" hx-target="#convert-preview-zone" hx-swap="innerHTML">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="convert-to-chapter">
+    <input type="hidden" name="course" value="{{ course.pk }}">
+    <input type="hidden" name="tag" value="{{ tag.pk }}">
+    <input type="hidden" name="parent_ec" value="{{ parent_ec.pk }}">
+    <input type="hidden" name="show_all" value="1">
+    <button type="submit" class="btn btn-sm btn-outline-secondary">
+      Voir les {{ remaining }} question(s) restante(s)
+    </button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}

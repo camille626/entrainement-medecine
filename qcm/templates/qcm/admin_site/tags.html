@@ -4,6 +4,9 @@
 {% block admin_content %}
 <h2 class="mb-4">Tags</h2>
 
+<div id="merge-preview-zone" class="mb-3"></div>
+<div id="convert-preview-zone" class="mb-3"></div>
+
 <div class="row g-4">
   <!-- Colonne gauche : formulaire d'ajout -->
   <div class="col-md-4">
@@ -69,6 +72,112 @@
         <b>Annale</b> : année d'annale (ex: 2024 S1)<br>
         <b>EC</b> : sous-catégorie de cours<br>
         <b>Chapitre</b> : chapitre d'un EC → nécessite un cours + une EC parente
+      </div>
+    </div>
+
+    <!-- Fusionner / convertir des tags -->
+    <div class="card mt-3">
+      <div class="card-header fw-bold">
+        <svg class="bi"><use href="#bi-arrow-repeat"></use></svg>
+        Fusionner / convertir des tags
+      </div>
+      <div class="card-body">
+        <form hx-post="{% url 'qcm:admin_tag_merge_preview' %}" hx-target="#merge-preview-zone" hx-swap="innerHTML" class="mb-4">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="merge">
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Fusionner deux tags EC</label>
+            <select name="course" class="form-select form-select-sm mb-1" required
+                    onchange="filterTagOptions(this.value, ['merge-from-tag', 'merge-to-tag'])">
+              <option value="">— Cours —</option>
+              {% for c in courses %}
+              <option value="{{ c.pk }}">{{ c.name }}</option>
+              {% endfor %}
+            </select>
+            <select name="from_tag" id="merge-from-tag" class="form-select form-select-sm mb-1" required>
+              <option value="">— Tag source —</option>
+              {% for tag in ec_tags %}
+              <option value="{{ tag.pk }}">{{ tag.name }}</option>
+              {% endfor %}
+            </select>
+            <select name="to_tag" id="merge-to-tag" class="form-select form-select-sm" required>
+              <option value="">— Tag cible —</option>
+              {% for tag in ec_tags %}
+              <option value="{{ tag.pk }}">{{ tag.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-outline-primary btn-sm w-100">
+            Prévisualiser la fusion
+          </button>
+        </form>
+
+        <hr>
+
+        <form hx-post="{% url 'qcm:admin_tag_merge_preview' %}" hx-target="#convert-preview-zone" hx-swap="innerHTML">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="convert-to-chapter">
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Convertir un tag EC en chapitre</label>
+            <select name="course" class="form-select form-select-sm mb-1" required
+                    onchange="filterTagOptions(this.value, ['convert-tag', 'convert-parent-ec'])">
+              <option value="">— Cours —</option>
+              {% for c in courses %}
+              <option value="{{ c.pk }}">{{ c.name }}</option>
+              {% endfor %}
+            </select>
+            <select name="tag" id="convert-tag" class="form-select form-select-sm mb-1" required>
+              <option value="">— Tag à convertir —</option>
+              {% for tag in ec_tags %}
+              <option value="{{ tag.pk }}">{{ tag.name }}</option>
+              {% endfor %}
+            </select>
+            <select name="parent_ec" id="convert-parent-ec" class="form-select form-select-sm" required>
+              <option value="">— EC parente —</option>
+              {% for tag in ec_tags %}
+              <option value="{{ tag.pk }}">{{ tag.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-outline-primary btn-sm w-100">
+            Prévisualiser la conversion
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Historique des fusions -->
+    <div class="card mt-3">
+      <div class="card-header fw-bold">
+        <svg class="bi"><use href="#bi-clipboard"></use></svg>
+        Historique des fusions
+      </div>
+      <div class="card-body p-0">
+        {% if merge_logs %}
+        <ul class="list-group list-group-flush">
+          {% for log in merge_logs %}
+          <li class="list-group-item small d-flex justify-content-between align-items-center gap-2">
+            <span>
+              {{ log.created_at|date:"d/m/Y H:i" }} — {{ log.summary }}
+              {% if log.performed_by %}<span class="text-muted">({{ log.performed_by.username }})</span>{% endif %}
+            </span>
+            {% if log.undone_at %}
+            <span class="badge bg-secondary">Annulée</span>
+            {% else %}
+            <form method="post" action="{% url 'qcm:admin_tag_merge_undo' log.pk %}" class="m-0">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-warning"
+                      onclick="return confirm('Annuler cette opération ?')">
+                Annuler
+              </button>
+            </form>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted small p-3 mb-0">Aucune fusion effectuée pour l'instant.</p>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -139,6 +248,7 @@
   </div>
 </div>
 
+<script type="application/json" id="course-ec-tags-data">{{ course_ec_tags_json|safe }}</script>
 <script>
 function updateTagFields(selectedPk) {
   const select = document.getElementById('tag_category_select');
@@ -149,5 +259,31 @@ function updateTagFields(selectedPk) {
   document.getElementById('field-ec').style.display =
     (type === 'chapitre') ? '' : 'none';
 }
+
+const courseEcTags = JSON.parse(document.getElementById('course-ec-tags-data').textContent);
+
+function filterTagOptions(courseId, selectIds) {
+  const tags = courseEcTags[courseId] || [];
+  selectIds.forEach(function (selectId) {
+    const select = document.getElementById(selectId);
+    const placeholder = select.options[0];
+    select.innerHTML = '';
+    select.appendChild(placeholder);
+    tags.forEach(function (tag) {
+      const opt = document.createElement('option');
+      opt.value = tag.id;
+      opt.textContent = tag.name;
+      select.appendChild(opt);
+    });
+  });
+}
+
+document.body.addEventListener('htmx:afterSwap', function (evt) {
+  if (evt.target.id === 'merge-preview-zone' || evt.target.id === 'convert-preview-zone') {
+    if (evt.target.innerHTML.trim()) {
+      evt.target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+});
 </script>
 {% endblock %}

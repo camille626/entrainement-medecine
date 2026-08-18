@@ -995,3 +995,394 @@ class TestAdminCourses:
         )
         course.refresh_from_db()
         assert course.semester == semester
+
+
+@pytest.mark.django_db
+class TestAdminTagMerge:
+    @pytest.fixture
+    def ec_category(self):
+        from qcm.models import TagCategory
+
+        return TagCategory.objects.create(name="EC", tag_type=TagCategory.SOUSCATEGORIE)
+
+    @pytest.fixture
+    def chapter_category(self):
+        from qcm.models import TagCategory
+
+        return TagCategory.objects.create(
+            name="Chapitre", tag_type=TagCategory.CHAPITRE
+        )
+
+    @pytest.fixture
+    def semio(self, ec_category):
+        from qcm.models import Tag
+
+        return Tag.objects.create(name="semio", moodle_id=900, category=ec_category)
+
+    @pytest.fixture
+    def semio_cardio(self, ec_category):
+        from qcm.models import Tag
+
+        return Tag.objects.create(
+            name="semio cardio", moodle_id=901, category=ec_category
+        )
+
+    def test_requires_staff(self, client, regular_user, course, semio, semio_cardio):
+        client.force_login(regular_user)
+        response = client.post(
+            "/admin-site/tags/fusionner/",
+            {
+                "action": "merge",
+                "course": course.pk,
+                "from_tag": semio.pk,
+                "to_tag": semio_cardio.pk,
+            },
+        )
+        assert response.status_code == 302
+        assert response.url == "/"
+
+    def test_merge_success(
+        self, client, staff_user, course, question, semio, semio_cardio
+    ):
+        question.tags.add(semio)
+        client.force_login(staff_user)
+
+        response = client.post(
+            "/admin-site/tags/fusionner/",
+            {
+                "action": "merge",
+                "course": course.pk,
+                "from_tag": semio.pk,
+                "to_tag": semio_cardio.pk,
+            },
+            follow=True,
+        )
+
+        question.refresh_from_db()
+        assert list(question.tags.values_list("name", flat=True)) == ["semio cardio"]
+        assert response.status_code == 200
+        assert "1 question" in response.content.decode()
+
+    def test_convert_to_chapter_success(
+        self, client, staff_user, course, question, chapter_category, ec_category
+    ):
+        from qcm.models import Tag
+
+        radio = Tag.objects.create(name="radio", moodle_id=902, category=ec_category)
+        semio_cardio = Tag.objects.create(
+            name="semio cardio", moodle_id=903, category=ec_category
+        )
+        question.tags.add(radio)
+        client.force_login(staff_user)
+
+        response = client.post(
+            "/admin-site/tags/fusionner/",
+            {
+                "action": "convert-to-chapter",
+                "course": course.pk,
+                "tag": radio.pk,
+                "parent_ec": semio_cardio.pk,
+            },
+            follow=True,
+        )
+
+        radio.refresh_from_db()
+        assert radio.category == chapter_category
+        assert radio.parent_ec == semio_cardio
+        assert response.status_code == 200
+
+    def test_merge_same_tag_shows_error_without_500(
+        self, client, staff_user, course, semio
+    ):
+        client.force_login(staff_user)
+
+        response = client.post(
+            "/admin-site/tags/fusionner/",
+            {
+                "action": "merge",
+                "course": course.pk,
+                "from_tag": semio.pk,
+                "to_tag": semio.pk,
+            },
+            follow=True,
+        )
+
+        assert response.status_code == 200
+        assert "alert-danger" in response.content.decode()
+
+    def test_unknown_tag_pk_returns_404(self, client, staff_user, course, semio):
+        client.force_login(staff_user)
+
+        response = client.post(
+            "/admin-site/tags/fusionner/",
+            {
+                "action": "merge",
+                "course": course.pk,
+                "from_tag": semio.pk,
+                "to_tag": 999999,
+            },
+        )
+
+        assert response.status_code == 404
+
+    def test_merge_records_performed_by(
+        self, client, staff_user, course, question, semio, semio_cardio
+    ):
+        from qcm.models import TagMergeLog
+
+        question.tags.add(semio)
+        client.force_login(staff_user)
+
+        client.post(
+            "/admin-site/tags/fusionner/",
+            {
+                "action": "merge",
+                "course": course.pk,
+                "from_tag": semio.pk,
+                "to_tag": semio_cardio.pk,
+            },
+        )
+
+        log = TagMergeLog.objects.get()
+        assert log.performed_by == staff_user
+
+    def test_tags_page_shows_merge_history(
+        self, client, staff_user, course, question, semio, semio_cardio
+    ):
+        client.force_login(staff_user)
+        client.post(
+            "/admin-site/tags/fusionner/",
+            {
+                "action": "merge",
+                "course": course.pk,
+                "from_tag": semio.pk,
+                "to_tag": semio_cardio.pk,
+            },
+        )
+
+        response = client.get("/admin-site/tags/")
+
+        content = response.content.decode()
+        assert "semio" in content and "semio cardio" in content
+        assert "Annuler" in content
+
+    def test_preview_merge_shows_affected_question_without_mutating(
+        self, client, staff_user, course, question, semio, semio_cardio
+    ):
+        question.tags.add(semio)
+        client.force_login(staff_user)
+
+        response = client.post(
+            "/admin-site/tags/fusionner/apercu/",
+            {
+                "action": "merge",
+                "course": course.pk,
+                "from_tag": semio.pk,
+                "to_tag": semio_cardio.pk,
+            },
+        )
+
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "1" in content
+        assert "Question test admin" in content
+
+        question.refresh_from_db()
+        assert list(question.tags.values_list("name", flat=True)) == ["semio"]
+
+    def test_preview_merge_caps_and_shows_remaining_link(
+        self, client, staff_user, course, semio, semio_cardio
+    ):
+        from qcm.models import Question
+
+        for i in range(12):
+            q = Question.objects.create(
+                text=f"<p>Q{i}</p>", course=course, qtype="multichoice"
+            )
+            q.tags.add(semio)
+        client.force_login(staff_user)
+
+        response = client.post(
+            "/admin-site/tags/fusionner/apercu/",
+            {
+                "action": "merge",
+                "course": course.pk,
+                "from_tag": semio.pk,
+                "to_tag": semio_cardio.pk,
+            },
+        )
+
+        content = response.content.decode()
+        assert content.count("<p>Q") == 10
+        assert "2" in content
+        assert 'name="show_all"' in content
+
+    def test_preview_merge_show_all_lists_every_question(
+        self, client, staff_user, course, semio, semio_cardio
+    ):
+        from qcm.models import Question
+
+        for i in range(12):
+            q = Question.objects.create(
+                text=f"<p>Q{i}</p>", course=course, qtype="multichoice"
+            )
+            q.tags.add(semio)
+        client.force_login(staff_user)
+
+        response = client.post(
+            "/admin-site/tags/fusionner/apercu/",
+            {
+                "action": "merge",
+                "course": course.pk,
+                "from_tag": semio.pk,
+                "to_tag": semio_cardio.pk,
+                "show_all": "1",
+            },
+        )
+
+        content = response.content.decode()
+        assert content.count("<p>Q") == 12
+        assert 'name="show_all"' not in content
+
+    def test_preview_convert_to_chapter_shows_affected_question(
+        self, client, staff_user, course, question, chapter_category, ec_category
+    ):
+        from qcm.models import Tag
+
+        radio = Tag.objects.create(name="radio", moodle_id=902, category=ec_category)
+        semio_cardio = Tag.objects.create(
+            name="semio cardio", moodle_id=903, category=ec_category
+        )
+        question.tags.add(radio)
+        client.force_login(staff_user)
+
+        response = client.post(
+            "/admin-site/tags/fusionner/apercu/",
+            {
+                "action": "convert-to-chapter",
+                "course": course.pk,
+                "tag": radio.pk,
+                "parent_ec": semio_cardio.pk,
+            },
+        )
+
+        assert response.status_code == 200
+        assert "Question test admin" in response.content.decode()
+
+        radio.refresh_from_db()
+        assert radio.category == ec_category
+
+    def test_undo_restores_tags(
+        self, client, staff_user, course, question, semio, semio_cardio
+    ):
+        from qcm.models import TagMergeLog
+
+        question.tags.add(semio)
+        client.force_login(staff_user)
+        client.post(
+            "/admin-site/tags/fusionner/",
+            {
+                "action": "merge",
+                "course": course.pk,
+                "from_tag": semio.pk,
+                "to_tag": semio_cardio.pk,
+            },
+        )
+        log = TagMergeLog.objects.get()
+
+        response = client.post(
+            f"/admin-site/tags/fusions/{log.pk}/annuler/", follow=True
+        )
+
+        question.refresh_from_db()
+        assert list(question.tags.values_list("name", flat=True)) == ["semio"]
+        assert response.status_code == 200
+        assert "alert-success" in response.content.decode()
+
+    def test_double_undo_shows_error_without_500(
+        self, client, staff_user, course, question, semio, semio_cardio
+    ):
+        from qcm.models import TagMergeLog
+
+        question.tags.add(semio)
+        client.force_login(staff_user)
+        client.post(
+            "/admin-site/tags/fusionner/",
+            {
+                "action": "merge",
+                "course": course.pk,
+                "from_tag": semio.pk,
+                "to_tag": semio_cardio.pk,
+            },
+        )
+        log = TagMergeLog.objects.get()
+        client.post(f"/admin-site/tags/fusions/{log.pk}/annuler/")
+
+        response = client.post(
+            f"/admin-site/tags/fusions/{log.pk}/annuler/", follow=True
+        )
+
+        assert response.status_code == 200
+        assert "alert-danger" in response.content.decode()
+
+    def test_undo_requires_staff(
+        self, client, regular_user, course, semio, semio_cardio
+    ):
+        from qcm.models import TagMergeLog
+
+        log = TagMergeLog.objects.create(
+            action=TagMergeLog.MERGE,
+            course=course,
+            summary="test",
+            snapshot={
+                "from_tag_id": semio.pk,
+                "to_tag_id": semio_cardio.pk,
+                "question_ids": [],
+                "already_had_to_tag_ids": [],
+                "reparented_tag_ids": [],
+            },
+        )
+        client.force_login(regular_user)
+
+        response = client.post(f"/admin-site/tags/fusions/{log.pk}/annuler/")
+
+        assert response.status_code == 302
+        assert response.url == "/"
+
+    def test_course_ec_tags_scoped_correctly(
+        self, client, staff_user, course, semester, semio, semio_cardio
+    ):
+        import json
+        import re
+
+        from qcm.models import Course, Question
+
+        other_course = Course.objects.create(
+            name="P2 - autre cours", short_name="autre", moodle_id=999
+        )
+        q1 = Question.objects.create(
+            text="<p>Q1</p>", course=course, qtype="multichoice"
+        )
+        q1.tags.add(semio)
+        q2 = Question.objects.create(
+            text="<p>Q2</p>", course=other_course, qtype="multichoice"
+        )
+        q2.tags.add(semio_cardio)
+
+        client.force_login(staff_user)
+        response = client.get("/admin-site/tags/")
+
+        assert response.status_code == 200
+        content = response.content.decode()
+        match = re.search(
+            r'<script type="application/json" id="course-ec-tags-data">(.*?)</script>',
+            content,
+            re.DOTALL,
+        )
+        assert match is not None
+        data = json.loads(match.group(1))
+
+        course_tag_names = {t["name"] for t in data.get(str(course.pk), [])}
+        other_tag_names = {t["name"] for t in data.get(str(other_course.pk), [])}
+        assert course_tag_names == {"semio"}
+        assert other_tag_names == {"semio cardio"}
