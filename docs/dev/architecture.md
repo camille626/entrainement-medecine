@@ -31,7 +31,7 @@ Une section staff-only `/admin-site/` permet de gérer les données sans passer 
 | `/admin-site/utilisateurs/` | Liste, activer/désactiver, supprimer, changer d'année |
 | `/admin-site/questions/` | Liste paginée, filtrable (cours, type, texte, tags à inclure/exclure, cours à exclure, sans tag chapitre/EC), triable par date de modification ; modifier, supprimer, sélection multiple (avec shift-clic pour sélectionner une plage) et suppression en masse |
 | `/admin-site/cours/` | Ajouter un cours, assigner un semestre |
-| `/admin-site/tags/` | Ajouter des tags EC/chapitre avec leur appartenance ; fusionner deux tags EC ou convertir un tag EC en tag chapitre, scopé à un cours (`AdminTagMergeView`, `qcm/tag_merging.py`) |
+| `/admin-site/tags/` | Ajouter des tags EC/chapitre avec leur appartenance ; fusionner deux tags EC ou convertir un tag EC en tag chapitre, scopé à un cours (`AdminTagMergeView`, `qcm/tag_merging.py`), avec aperçu préalable des questions concernées (`AdminTagMergePreviewView`) et annulation a posteriori (`AdminTagMergeUndoView`, historique `TagMergeLog`) |
 
 La logique d'acceptation d'inscription (`accept_registration`) est centralisée dans `views_admin.py` et réutilisée par `admin.py`.
 

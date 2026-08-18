@@ -741,7 +741,10 @@ class AdminTagsView(StaffRequiredMixin, View):
     template_name = "qcm/admin_site/tags.html"
 
     def get(self, request):
-        from .models import Tag, TagCategory
+        import json
+        from collections import defaultdict
+
+        from .models import Tag, TagCategory, TagMergeLog
 
         category_filter = request.GET.get("category_type")
         tags_qs = Tag.objects.select_related(
@@ -749,6 +752,21 @@ class AdminTagsView(StaffRequiredMixin, View):
         ).order_by("category__tag_type", "name")
         if category_filter:
             tags_qs = tags_qs.filter(category__tag_type=category_filter)
+
+        course_ec_tags: dict[str, list[dict]] = defaultdict(list)
+        rows = (
+            Tag.objects.filter(
+                category__tag_type=TagCategory.SOUSCATEGORIE,
+                questions__course__isnull=False,
+            )
+            .values("pk", "name", "questions__course_id")
+            .distinct()
+            .order_by("name")
+        )
+        for row in rows:
+            course_ec_tags[str(row["questions__course_id"])].append(
+                {"id": row["pk"], "name": row["name"]}
+            )
 
         return render(
             request,
@@ -762,6 +780,10 @@ class AdminTagsView(StaffRequiredMixin, View):
                 ).order_by("name"),
                 "category_filter": category_filter,
                 "tag_type_choices": TagCategory.TYPE_CHOICES,
+                "merge_logs": TagMergeLog.objects.select_related(
+                    "course", "performed_by"
+                )[:20],
+                "course_ec_tags_json": json.dumps(course_ec_tags),
             },
         )
 
@@ -817,7 +839,9 @@ class AdminTagMergeView(StaffRequiredMixin, View):
             if action == "merge":
                 from_tag = get_object_or_404(Tag, pk=request.POST.get("from_tag"))
                 to_tag = get_object_or_404(Tag, pk=request.POST.get("to_tag"))
-                result = merge_course_tags(course, from_tag, to_tag)
+                result = merge_course_tags(
+                    course, from_tag, to_tag, performed_by=request.user
+                )
                 messages.success(
                     request,
                     f"Fusion « {from_tag.name} » → « {to_tag.name} » ({course.name}) : "
@@ -827,7 +851,9 @@ class AdminTagMergeView(StaffRequiredMixin, View):
             elif action == "convert-to-chapter":
                 tag = get_object_or_404(Tag, pk=request.POST.get("tag"))
                 parent_ec = get_object_or_404(Tag, pk=request.POST.get("parent_ec"))
-                result = convert_tag_to_chapter(course, tag, parent_ec)
+                result = convert_tag_to_chapter(
+                    course, tag, parent_ec, performed_by=request.user
+                )
                 messages.success(
                     request,
                     f"« {tag.name} » converti en chapitre de « {parent_ec.name} » "
@@ -836,6 +862,92 @@ class AdminTagMergeView(StaffRequiredMixin, View):
                 )
             else:
                 messages.error(request, f"Action inconnue : « {action} ».")
+        except TagMergeError as exc:
+            messages.error(request, str(exc))
+
+        return redirect("qcm:admin_tags")
+
+
+class AdminTagMergePreviewView(StaffRequiredMixin, View):
+    """Aperçu (dry-run) d'une fusion/conversion avant confirmation (issue #115)."""
+
+    PREVIEW_LIMIT = 10
+    SHOW_ALL_LIMIT = 500
+
+    def post(self, request):
+        from .models import Question, Tag
+        from .tag_merging import (
+            TagMergeError,
+            convert_tag_to_chapter,
+            merge_course_tags,
+        )
+
+        action = request.POST.get("action")
+        course = get_object_or_404(Course, pk=request.POST.get("course"))
+        show_all = request.POST.get("show_all") == "1"
+        limit = self.SHOW_ALL_LIMIT if show_all else self.PREVIEW_LIMIT
+        context = {"action": action, "course": course, "show_all": show_all}
+
+        try:
+            if action == "merge":
+                from_tag = get_object_or_404(Tag, pk=request.POST.get("from_tag"))
+                to_tag = get_object_or_404(Tag, pk=request.POST.get("to_tag"))
+                result = merge_course_tags(course, from_tag, to_tag, dry_run=True)
+                preview_questions = list(
+                    Question.objects.filter(course=course, tags=from_tag)
+                    .prefetch_related("tags", "answers", "images")
+                    .select_related("course")[:limit]
+                )
+                context.update(
+                    {
+                        "from_tag": from_tag,
+                        "to_tag": to_tag,
+                        "result": result,
+                        "preview_questions": preview_questions,
+                        "remaining": max(
+                            0, result.questions_migrated - len(preview_questions)
+                        ),
+                    }
+                )
+            elif action == "convert-to-chapter":
+                tag = get_object_or_404(Tag, pk=request.POST.get("tag"))
+                parent_ec = get_object_or_404(Tag, pk=request.POST.get("parent_ec"))
+                result = convert_tag_to_chapter(course, tag, parent_ec, dry_run=True)
+                preview_questions = list(
+                    Question.objects.filter(course=course, tags=tag)
+                    .prefetch_related("tags", "answers", "images")
+                    .select_related("course")[:limit]
+                )
+                context.update(
+                    {
+                        "tag": tag,
+                        "parent_ec": parent_ec,
+                        "result": result,
+                        "preview_questions": preview_questions,
+                        "remaining": max(
+                            0, result.questions_updated - len(preview_questions)
+                        ),
+                    }
+                )
+            else:
+                context["error"] = f"Action inconnue : « {action} »."
+        except TagMergeError as exc:
+            context["error"] = str(exc)
+
+        return render(request, "qcm/admin_site/_tag_merge_preview.html", context)
+
+
+class AdminTagMergeUndoView(StaffRequiredMixin, View):
+    """Annule une fusion/conversion de tags déjà exécutée (issue #115)."""
+
+    def post(self, request, pk):
+        from .models import TagMergeLog
+        from .tag_merging import TagMergeError, undo_tag_merge_log
+
+        log = get_object_or_404(TagMergeLog, pk=pk)
+        try:
+            undo_tag_merge_log(log)
+            messages.success(request, f"Fusion annulée : {log.summary}")
         except TagMergeError as exc:
             messages.error(request, str(exc))
 

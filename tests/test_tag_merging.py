@@ -1,10 +1,12 @@
 import pytest
+from django.contrib.auth.models import User
 
-from qcm.models import Course, Question, Tag, TagCategory
+from qcm.models import Course, Question, Tag, TagCategory, TagMergeLog
 from qcm.tag_merging import (
     TagMergeError,
     convert_tag_to_chapter,
     merge_course_tags,
+    undo_tag_merge_log,
 )
 
 
@@ -195,6 +197,172 @@ class TestConvertTagToChapter:
 
         for _ in range(2):
             convert_tag_to_chapter(course_cardio, radio, semio_cardio)
+
+        q.refresh_from_db()
+        assert set(q.tags.values_list("name", flat=True)) == {"radio", "semio cardio"}
+
+
+@pytest.fixture
+def staff_user(db):
+    return User.objects.create_user(
+        username="staff_test",
+        password="pass",  # pragma: allowlist secret
+        is_staff=True,
+    )
+
+
+@pytest.mark.django_db
+class TestMergeLogging:
+    def test_merge_creates_log(self, course_cardio, semio, semio_cardio, staff_user):
+        _question(course_cardio, 1, semio)
+
+        result = merge_course_tags(
+            course_cardio, semio, semio_cardio, performed_by=staff_user
+        )
+
+        assert result.log_id is not None
+        log = TagMergeLog.objects.get(pk=result.log_id)
+        assert log.action == TagMergeLog.MERGE
+        assert log.course == course_cardio
+        assert log.performed_by == staff_user
+        assert log.undone_at is None
+        assert log.snapshot["from_tag_id"] == semio.pk
+        assert log.snapshot["to_tag_id"] == semio_cardio.pk
+
+    def test_dry_run_does_not_create_log(self, course_cardio, semio, semio_cardio):
+        _question(course_cardio, 1, semio)
+
+        result = merge_course_tags(course_cardio, semio, semio_cardio, dry_run=True)
+
+        assert result.log_id is None
+        assert TagMergeLog.objects.count() == 0
+
+    def test_convert_to_chapter_creates_log(
+        self, course_cardio, chapter_category, semio_cardio
+    ):
+        ec_category = semio_cardio.category
+        radio = Tag.objects.create(name="radio", moodle_id=500, category=ec_category)
+
+        result = convert_tag_to_chapter(course_cardio, radio, semio_cardio)
+
+        assert result.log_id is not None
+        log = TagMergeLog.objects.get(pk=result.log_id)
+        assert log.action == TagMergeLog.CONVERT_TO_CHAPTER
+        assert log.snapshot["tag_id"] == radio.pk
+        assert log.snapshot["parent_ec_id"] == semio_cardio.pk
+
+
+@pytest.mark.django_db
+class TestUndoMerge:
+    def test_undo_restores_from_tag_and_removes_to_tag(
+        self, course_cardio, semio, semio_cardio
+    ):
+        q = _question(course_cardio, 1, semio)
+        result = merge_course_tags(course_cardio, semio, semio_cardio)
+        log = TagMergeLog.objects.get(pk=result.log_id)
+
+        undo_tag_merge_log(log)
+
+        q.refresh_from_db()
+        assert list(q.tags.values_list("name", flat=True)) == ["semio"]
+
+    def test_undo_keeps_to_tag_if_question_already_had_it(
+        self, course_cardio, semio, semio_cardio
+    ):
+        q = _question(course_cardio, 1, semio, semio_cardio)
+        result = merge_course_tags(course_cardio, semio, semio_cardio)
+        log = TagMergeLog.objects.get(pk=result.log_id)
+
+        undo_tag_merge_log(log)
+
+        q.refresh_from_db()
+        assert set(q.tags.values_list("name", flat=True)) == {"semio", "semio cardio"}
+
+    def test_undo_reparents_chapter_tags_back(
+        self, course_cardio, chapter_category, semio, semio_cardio
+    ):
+        ecg = Tag.objects.create(
+            name="ECG",
+            moodle_id=600,
+            category=chapter_category,
+            parent_ec=semio,
+            course=course_cardio,
+        )
+        result = merge_course_tags(course_cardio, semio, semio_cardio)
+        log = TagMergeLog.objects.get(pk=result.log_id)
+
+        undo_tag_merge_log(log)
+
+        ecg.refresh_from_db()
+        assert ecg.parent_ec == semio
+
+    def test_undo_marks_log_undone_at(self, course_cardio, semio, semio_cardio):
+        result = merge_course_tags(course_cardio, semio, semio_cardio)
+        log = TagMergeLog.objects.get(pk=result.log_id)
+
+        undo_tag_merge_log(log)
+
+        log.refresh_from_db()
+        assert log.undone_at is not None
+
+    def test_double_undo_raises_tag_merge_error(
+        self, course_cardio, semio, semio_cardio
+    ):
+        result = merge_course_tags(course_cardio, semio, semio_cardio)
+        log = TagMergeLog.objects.get(pk=result.log_id)
+        undo_tag_merge_log(log)
+
+        with pytest.raises(TagMergeError):
+            undo_tag_merge_log(log)
+
+    def test_undo_raises_if_tag_deleted_since(self, course_cardio, semio, semio_cardio):
+        result = merge_course_tags(course_cardio, semio, semio_cardio)
+        log = TagMergeLog.objects.get(pk=result.log_id)
+        semio.delete()
+
+        with pytest.raises(TagMergeError):
+            undo_tag_merge_log(log)
+
+
+@pytest.mark.django_db
+class TestUndoConvertToChapter:
+    @pytest.fixture
+    def radio(self, ec_category):
+        return Tag.objects.create(name="radio", moodle_id=700, category=ec_category)
+
+    def test_undo_restores_previous_tag_fields(
+        self, course_cardio, chapter_category, ec_category, radio, semio_cardio
+    ):
+        result = convert_tag_to_chapter(course_cardio, radio, semio_cardio)
+        log = TagMergeLog.objects.get(pk=result.log_id)
+
+        undo_tag_merge_log(log)
+
+        radio.refresh_from_db()
+        assert radio.category == ec_category
+        assert radio.parent_ec is None
+        assert radio.course is None
+
+    def test_undo_removes_parent_ec_tag_from_question(
+        self, course_cardio, chapter_category, radio, semio_cardio
+    ):
+        q = _question(course_cardio, 1, radio)
+        result = convert_tag_to_chapter(course_cardio, radio, semio_cardio)
+        log = TagMergeLog.objects.get(pk=result.log_id)
+
+        undo_tag_merge_log(log)
+
+        q.refresh_from_db()
+        assert list(q.tags.values_list("name", flat=True)) == ["radio"]
+
+    def test_undo_keeps_parent_ec_if_question_already_had_it(
+        self, course_cardio, chapter_category, radio, semio_cardio
+    ):
+        q = _question(course_cardio, 1, radio, semio_cardio)
+        result = convert_tag_to_chapter(course_cardio, radio, semio_cardio)
+        log = TagMergeLog.objects.get(pk=result.log_id)
+
+        undo_tag_merge_log(log)
 
         q.refresh_from_db()
         assert set(q.tags.values_list("name", flat=True)) == {"radio", "semio cardio"}

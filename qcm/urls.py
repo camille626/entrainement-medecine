@@ -197,4 +197,14 @@ urlpatterns = [
         views_admin.AdminTagMergeView.as_view(),
         name="admin_tag_merge",
     ),
+    path(
+        "admin-site/tags/fusionner/apercu/",
+        views_admin.AdminTagMergePreviewView.as_view(),
+        name="admin_tag_merge_preview",
+    ),
+    path(
+        "admin-site/tags/fusions/<int:pk>/annuler/",
+        views_admin.AdminTagMergeUndoView.as_view(),
+        name="admin_tag_merge_undo",
+    ),
 ]

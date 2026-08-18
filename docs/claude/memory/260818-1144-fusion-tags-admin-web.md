@@ -62,26 +62,92 @@ est installé depuis le début. Ajouts :
   **hors tag `trophy`** (toast trophée inchangé). Réutilisable par toute future
   vue admin qui voudrait utiliser `django.contrib.messages`.
 
+### Compléments demandés après la première itération : undo, aperçu, filtrage par cours
+
+Trois demandes utilisateur après un premier test de l'UI : (1) pouvoir annuler
+une fusion déjà exécutée, (2) prévisualiser les questions concernées et leurs
+nouveaux tags avant de confirmer, (3) filtrer les `<select>` de tags pour ne
+montrer que les tags utilisés dans le cours choisi.
+
+**Historique + undo** : nouveau modèle `TagMergeLog` (`qcm/models.py`, migration
+`0038_tagmergelog.py`) — `action`, `course`, `summary`, `snapshot` (JSONField),
+`performed_by`, `created_at`, `undone_at`. `merge_course_tags`/
+`convert_tag_to_chapter` (`qcm/tag_merging.py`) créent ce log dans la même
+`transaction.atomic()` que la mutation (sauf en `dry_run`), avec tout le
+nécessaire pour annuler dans `snapshot` : `question_ids` migrées, et surtout
+`already_had_to_tag_ids`/`already_had_parent_ec_ids` — l'ensemble des questions
+qui possédaient **déjà** le tag cible/parent avant l'opération, calculé **avant**
+mutation. C'est l'edge case critique de l'undo : une question qui avait déjà les
+deux tags avant la fusion ne doit **pas** perdre le tag cible à l'annulation
+(vérifié en conditions réelles, cf. plus bas). Nouvelle fonction
+`undo_tag_merge_log(log)` : lève `TagMergeError` si déjà annulé ou si un tag/une
+question référencé(e) n'existe plus (`DoesNotExist` capturé). Vue
+`AdminTagMergeUndoView` (POST, pk) + route `admin-site/tags/fusions/<pk>/annuler/`.
+Carte "Historique des fusions" dans `tags.html` (20 dernières entrées globales,
+badge "Annulée" ou bouton "Annuler").
+
+**Aperçu avant confirmation** : d'abord un aperçu texte minimal (liste tronquée),
+jugé insuffisant par l'utilisateur — refait sur le modèle exact de
+`qcm/templates/qcm/errata_list.html` (énoncé via `question.render_text|safe`
+qui résout les images `@@PLUGINFILE@@`, propositions en lecture seule avec
+icône check/x/cercle selon `answer.is_correct`/`fraction`, voir
+`errata_list.html:280-299` pour le pattern source). Nouveau partial
+`_tag_merge_preview_question.html` (une carte par question, tags "actuels"/
+"après" en badges) inclus par `_tag_merge_preview.html` depuis
+`AdminTagMergePreviewView` (POST, dry-run + échantillon de questions
+`prefetch_related("tags", "answers", "images")`). Questions `ddimageortext` :
+pas d'adaptation du pattern zones interactives (`_ddi_zones_readonly.html`,
+qui attend un objet errata `e.pk`/`e.question`, pas directement réutilisable
+ici) — juste l'énoncé + une note, scope volontairement limité.
+
+Itérations UX après premiers retours utilisateur :
+- **Placement** : la zone d'aperçu était en bas de page après le tableau des
+  tags (potentiellement long) → invisible sans scroller alors que la requête
+  HTMX aboutissait bien (confirmé par les logs serveur, 200 avec contenu réel).
+  Déplacée en haut de page + `htmx:afterSwap` déclenchant un `scrollIntoView`.
+- **Pagination** : capé à 10 questions (`PREVIEW_LIMIT`) avec un bouton
+  "Voir les N question(s) restante(s)" (`show_all=1` en POST, re-rendu complet
+  de la même zone via HTMX, plafond de sécurité `SHOW_ALL_LIMIT=500`) plutôt
+  qu'un simple texte "... et N autres" non actionnable.
+- **Annulation de l'aperçu** (avant confirmation, distinct de l'undo post-hoc) :
+  bouton "Annuler" à côté de "Confirmer la fusion", vide simplement la zone en
+  JS (`onclick="document.getElementById(...).innerHTML=''"`), pattern déjà
+  utilisé dans `_errata_form.html`.
+
+**Filtrage des tags par cours** : `AdminTagsView.get()` calcule un mapping
+`course_ec_tags` (tags EC réellement utilisés par au moins une question de
+chaque cours, via `Tag.objects.filter(category__tag_type=SOUSCATEGORIE,
+questions__course_id=...).distinct()`), sérialisé en JSON dans un
+`<script type="application/json">`. JS vanilla dans `tags.html`
+(`filterTagOptions`), sur le modèle de `updateTagFields()` déjà présent dans ce
+template — **décision volontaire de ne pas utiliser HTMX + `hx-swap-oob`** (non
+utilisé ailleurs dans le projet) pour ce besoin : volume de données petit
+(~30 tags/13 cours), tout se fait côté client sans aller-retour serveur.
+
 ### Tests
 
-- `tests/test_tag_merging.py` (nouveau, 13 tests) : tests directs des fonctions
-  du service (migration M2M, non-impact autres cours, reparenting, `dry_run`,
-  `TagMergeError` sur tags identiques/parent non-EC/catégorie chapitre absente,
-  idempotence).
-- `tests/test_admin_site.py::TestAdminTagMerge` (nouveau, 5 tests) : accès
-  staff-only (redirect), succès merge (M2M + message affiché), succès
-  convert-to-chapter, erreur métier → `alert-danger` sans 500, PK inconnu → 404.
-- Suite complète : 610 tests passent (592 pré-existants + 13 + 5).
+- `tests/test_tag_merging.py` (25 tests) : service de base + création de log
+  (présent seulement si `dry_run=False`) + undo (merge, reparenting, edge case
+  "avait déjà le tag", convert-to-chapter, double-undo, tag supprimé entretemps).
+- `tests/test_admin_site.py::TestAdminTagMerge` (15 tests) : accès staff-only,
+  succès merge/convert (+ `performed_by`), erreur sans 500, 404 sur PK inconnu,
+  historique affiché, aperçu sans mutation DB (merge et convert-to-chapter),
+  undo via la vue + double-undo, pagination `show_all`, scoping JSON par cours.
+- Suite complète : 632 tests passent.
 
 ### Vérification manuelle (serveur de dev réel, pas seulement le client de test Django)
 
 `chromium-cli`/Playwright/node absents du conteneur → tests via `curl` contre le
 vrai serveur `runserver` avec un utilisateur staff jetable et des données de test
-dédiées (cours "QA TEST fusion tags", tags `qa-test-tag-a/b/c`), nettoyées après
-coup. Confirmé en conditions réelles : fusion réussie + message succès (et
-idempotence sur un second run : "0 question(s) migrée(s)"), conversion EC→chapitre
-réussie (`category`/`parent_ec`/`course` corrects en DB), erreur "tags identiques"
-→ `alert-danger` affiché, statut 200 (pas de 500).
+dédiées, nettoyées après coup. Confirmé en conditions réelles à deux reprises
+(fonctionnalité initiale, puis compléments) : fusion réussie + message succès
+(idempotence sur un second run), conversion EC→chapitre réussie, erreur "tags
+identiques" → `alert-danger`, **undo avec l'edge case critique validé en base**
+(question ayant déjà les deux tags avant fusion → garde les deux après
+annulation, l'autre question perd bien le tag cible), badge "Annulée" affiché
+après usage. Puis, après retour utilisateur sur l'UX de l'aperçu, re-vérifié
+avec le nouveau design (énoncé/propositions/tags avant-après) directement par
+l'utilisateur dans son navigateur.
 
 **Point d'attention pour de futurs tests manuels via `curl`** : le token CSRF
 Django est un double-submit masqué qui change à **chaque** rendu de page — il faut
@@ -100,3 +166,12 @@ token missing" même avec un cookie de session valide.
   hors scope — c'est un prérequis direct.
 - `remove` volontairement non exposé en UI (scope explicitement limité par
   l'utilisateur à `merge` + `convert-to-chapter`).
+- `TagMergeLog.snapshot` en JSONField plutôt que des FK dédiées par cas d'usage :
+  un seul modèle sert aux deux actions (`merge`/`convert_to_chapter`), le contenu
+  du JSON diffère selon `action`. Compromis assumé entre simplicité de schéma et
+  validation faible (pas de contrainte DB sur la forme du JSON).
+- Toujours vérifier l'UI réellement rendue après un changement (le placement de
+  la zone d'aperçu "fonctionnait" côté serveur — logs 200 avec contenu — mais
+  était invisible pour l'utilisateur ; les tests automatisés ne l'auraient pas
+  détecté puisqu'ils vérifient le contenu de la réponse, pas sa position visuelle
+  sur la page rendue).

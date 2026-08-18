@@ -41,7 +41,7 @@ Plateforme web de QCMs interactifs pour l'apprentissage des cours de médecine (
 │   ├── migrations/        # Migrations de base de données
 │   ├── admin.py           # Interface d'administration
 │   ├── apps.py
-│   ├── models.py          # Course, Question, Answer, Errata, QuizSession, UserAnswer, UserProfile, ImageDragItem, ImageDropZone, ImageDropZoneLabel, Trophy, UserTrophy, LoginEvent
+│   ├── models.py          # Course, Question, Answer, Errata, QuizSession, UserAnswer, UserProfile, ImageDragItem, ImageDropZone, ImageDropZoneLabel, Trophy, UserTrophy, LoginEvent, TagMergeLog
 │   └── trophies.py        # Service d'attribution des trophées (check_and_award_trophies, award_login_trophies)
 ├── src/                   # Code source Python (utilitaires, scripts)
 ├── tests/                 # Tests unitaires et d'intégration
@@ -176,6 +176,8 @@ uv run --active python manage.py merge_tags remove --course "système cardiovasc
 # /admin-site/cours/         → gestion des cours et semestres
 # /admin-site/tags/          → gestion des tags
 # /admin-site/tags/fusionner/ → fusionner deux tags EC ou convertir un tag EC en tag chapitre (POST, staff)
+# /admin-site/tags/fusionner/apercu/ → aperçu (dry-run) des questions concernées avant confirmation (POST, HTMX, staff)
+# /admin-site/tags/fusions/<pk>/annuler/ → annuler une fusion/conversion déjà exécutée (POST, staff)
 # /errata/<pk>/upload-image/ → upload image pour un errata type IMAGE (POST, staff)
 # /profil/                  → page profil utilisateur (GET/POST : infos + photo + onglet trophées)
 # /profil/mot-de-passe/     → changement de mot de passe (Django PasswordChangeView)
