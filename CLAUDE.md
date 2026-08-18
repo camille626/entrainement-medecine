@@ -175,6 +175,7 @@ uv run --active python manage.py merge_tags remove --course "système cardiovasc
 # /admin-site/questions/     → liste/modification/suppression des questions
 # /admin-site/cours/         → gestion des cours et semestres
 # /admin-site/tags/          → gestion des tags
+# /admin-site/tags/fusionner/ → fusionner deux tags EC ou convertir un tag EC en tag chapitre (POST, staff)
 # /errata/<pk>/upload-image/ → upload image pour un errata type IMAGE (POST, staff)
 # /profil/                  → page profil utilisateur (GET/POST : infos + photo + onglet trophées)
 # /profil/mot-de-passe/     → changement de mot de passe (Django PasswordChangeView)

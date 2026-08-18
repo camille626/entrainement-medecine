@@ -3,6 +3,7 @@
 import secrets
 import string
 
+from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import User
 from django.core.mail import send_mail
@@ -795,4 +796,47 @@ class AdminTagDeleteView(StaffRequiredMixin, View):
 
         tag = get_object_or_404(Tag, pk=pk)
         tag.delete()
+        return redirect("qcm:admin_tags")
+
+
+class AdminTagMergeView(StaffRequiredMixin, View):
+    """Fusionne deux tags EC ou convertit un tag EC en tag chapitre (issue #115)."""
+
+    def post(self, request):
+        from .models import Tag
+        from .tag_merging import (
+            TagMergeError,
+            convert_tag_to_chapter,
+            merge_course_tags,
+        )
+
+        action = request.POST.get("action")
+        course = get_object_or_404(Course, pk=request.POST.get("course"))
+
+        try:
+            if action == "merge":
+                from_tag = get_object_or_404(Tag, pk=request.POST.get("from_tag"))
+                to_tag = get_object_or_404(Tag, pk=request.POST.get("to_tag"))
+                result = merge_course_tags(course, from_tag, to_tag)
+                messages.success(
+                    request,
+                    f"Fusion « {from_tag.name} » → « {to_tag.name} » ({course.name}) : "
+                    f"{result.questions_migrated} question(s) migrée(s), "
+                    f"{len(result.reparented_tags)} tag(s)-chapitres reparenté(s).",
+                )
+            elif action == "convert-to-chapter":
+                tag = get_object_or_404(Tag, pk=request.POST.get("tag"))
+                parent_ec = get_object_or_404(Tag, pk=request.POST.get("parent_ec"))
+                result = convert_tag_to_chapter(course, tag, parent_ec)
+                messages.success(
+                    request,
+                    f"« {tag.name} » converti en chapitre de « {parent_ec.name} » "
+                    f"({course.name}) : {result.questions_updated} question(s) "
+                    "mise(s) à jour.",
+                )
+            else:
+                messages.error(request, f"Action inconnue : « {action} ».")
+        except TagMergeError as exc:
+            messages.error(request, str(exc))
+
         return redirect("qcm:admin_tags")

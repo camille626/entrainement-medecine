@@ -995,3 +995,132 @@ class TestAdminCourses:
         )
         course.refresh_from_db()
         assert course.semester == semester
+
+
+@pytest.mark.django_db
+class TestAdminTagMerge:
+    @pytest.fixture
+    def ec_category(self):
+        from qcm.models import TagCategory
+
+        return TagCategory.objects.create(name="EC", tag_type=TagCategory.SOUSCATEGORIE)
+
+    @pytest.fixture
+    def chapter_category(self):
+        from qcm.models import TagCategory
+
+        return TagCategory.objects.create(
+            name="Chapitre", tag_type=TagCategory.CHAPITRE
+        )
+
+    @pytest.fixture
+    def semio(self, ec_category):
+        from qcm.models import Tag
+
+        return Tag.objects.create(name="semio", moodle_id=900, category=ec_category)
+
+    @pytest.fixture
+    def semio_cardio(self, ec_category):
+        from qcm.models import Tag
+
+        return Tag.objects.create(
+            name="semio cardio", moodle_id=901, category=ec_category
+        )
+
+    def test_requires_staff(self, client, regular_user, course, semio, semio_cardio):
+        client.force_login(regular_user)
+        response = client.post(
+            "/admin-site/tags/fusionner/",
+            {
+                "action": "merge",
+                "course": course.pk,
+                "from_tag": semio.pk,
+                "to_tag": semio_cardio.pk,
+            },
+        )
+        assert response.status_code == 302
+        assert response.url == "/"
+
+    def test_merge_success(
+        self, client, staff_user, course, question, semio, semio_cardio
+    ):
+        question.tags.add(semio)
+        client.force_login(staff_user)
+
+        response = client.post(
+            "/admin-site/tags/fusionner/",
+            {
+                "action": "merge",
+                "course": course.pk,
+                "from_tag": semio.pk,
+                "to_tag": semio_cardio.pk,
+            },
+            follow=True,
+        )
+
+        question.refresh_from_db()
+        assert list(question.tags.values_list("name", flat=True)) == ["semio cardio"]
+        assert response.status_code == 200
+        assert "1 question" in response.content.decode()
+
+    def test_convert_to_chapter_success(
+        self, client, staff_user, course, question, chapter_category, ec_category
+    ):
+        from qcm.models import Tag
+
+        radio = Tag.objects.create(name="radio", moodle_id=902, category=ec_category)
+        semio_cardio = Tag.objects.create(
+            name="semio cardio", moodle_id=903, category=ec_category
+        )
+        question.tags.add(radio)
+        client.force_login(staff_user)
+
+        response = client.post(
+            "/admin-site/tags/fusionner/",
+            {
+                "action": "convert-to-chapter",
+                "course": course.pk,
+                "tag": radio.pk,
+                "parent_ec": semio_cardio.pk,
+            },
+            follow=True,
+        )
+
+        radio.refresh_from_db()
+        assert radio.category == chapter_category
+        assert radio.parent_ec == semio_cardio
+        assert response.status_code == 200
+
+    def test_merge_same_tag_shows_error_without_500(
+        self, client, staff_user, course, semio
+    ):
+        client.force_login(staff_user)
+
+        response = client.post(
+            "/admin-site/tags/fusionner/",
+            {
+                "action": "merge",
+                "course": course.pk,
+                "from_tag": semio.pk,
+                "to_tag": semio.pk,
+            },
+            follow=True,
+        )
+
+        assert response.status_code == 200
+        assert "alert-danger" in response.content.decode()
+
+    def test_unknown_tag_pk_returns_404(self, client, staff_user, course, semio):
+        client.force_login(staff_user)
+
+        response = client.post(
+            "/admin-site/tags/fusionner/",
+            {
+                "action": "merge",
+                "course": course.pk,
+                "from_tag": semio.pk,
+                "to_tag": 999999,
+            },
+        )
+
+        assert response.status_code == 404

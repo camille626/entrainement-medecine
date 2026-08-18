@@ -192,4 +192,9 @@ urlpatterns = [
         views_admin.AdminTagDeleteView.as_view(),
         name="admin_tag_delete",
     ),
+    path(
+        "admin-site/tags/fusionner/",
+        views_admin.AdminTagMergeView.as_view(),
+        name="admin_tag_merge",
+    ),
 ]

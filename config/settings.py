@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+from django.contrib.messages import constants as messages_constants
 from dotenv import load_dotenv
 
 
@@ -102,6 +103,8 @@ LANGUAGE_CODE = "fr-fr"
 TIME_ZONE = "Europe/Paris"
 USE_I18N = True
 USE_TZ = True
+
+MESSAGE_TAGS = {messages_constants.ERROR: "danger"}
 
 LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/"

@@ -71,6 +71,77 @@
         <b>Chapitre</b> : chapitre d'un EC → nécessite un cours + une EC parente
       </div>
     </div>
+
+    <!-- Fusionner / convertir des tags -->
+    <div class="card mt-3">
+      <div class="card-header fw-bold">
+        <svg class="bi"><use href="#bi-arrow-repeat"></use></svg>
+        Fusionner / convertir des tags
+      </div>
+      <div class="card-body">
+        <form method="post" action="{% url 'qcm:admin_tag_merge' %}" class="mb-4">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="merge">
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Fusionner deux tags EC</label>
+            <select name="course" class="form-select form-select-sm mb-1" required>
+              <option value="">— Cours —</option>
+              {% for c in courses %}
+              <option value="{{ c.pk }}">{{ c.name }}</option>
+              {% endfor %}
+            </select>
+            <select name="from_tag" class="form-select form-select-sm mb-1" required>
+              <option value="">— Tag source —</option>
+              {% for tag in ec_tags %}
+              <option value="{{ tag.pk }}">{{ tag.name }}</option>
+              {% endfor %}
+            </select>
+            <select name="to_tag" class="form-select form-select-sm" required>
+              <option value="">— Tag cible —</option>
+              {% for tag in ec_tags %}
+              <option value="{{ tag.pk }}">{{ tag.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-outline-primary btn-sm w-100"
+                  onclick="return confirm('Fusionner ces deux tags pour le cours sélectionné ? Cette action modifie les questions du cours.')">
+            Fusionner
+          </button>
+        </form>
+
+        <hr>
+
+        <form method="post" action="{% url 'qcm:admin_tag_merge' %}">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="convert-to-chapter">
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Convertir un tag EC en chapitre</label>
+            <select name="course" class="form-select form-select-sm mb-1" required>
+              <option value="">— Cours —</option>
+              {% for c in courses %}
+              <option value="{{ c.pk }}">{{ c.name }}</option>
+              {% endfor %}
+            </select>
+            <select name="tag" class="form-select form-select-sm mb-1" required>
+              <option value="">— Tag à convertir —</option>
+              {% for tag in ec_tags %}
+              <option value="{{ tag.pk }}">{{ tag.name }}</option>
+              {% endfor %}
+            </select>
+            <select name="parent_ec" class="form-select form-select-sm" required>
+              <option value="">— EC parente —</option>
+              {% for tag in ec_tags %}
+              <option value="{{ tag.pk }}">{{ tag.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-outline-primary btn-sm w-100"
+                  onclick="return confirm('Convertir ce tag en tag chapitre ? Cette action modifie les questions du cours.')">
+            Convertir en chapitre
+          </button>
+        </form>
+      </div>
+    </div>
   </div>
 
   <!-- Colonne droite : liste des tags -->
